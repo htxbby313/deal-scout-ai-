@@ -1,0 +1,303 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SystemMode {
+  RESEARCH
+  ACTIVE
+  PAUSED
+}
+
+enum LeadStatus {
+  NEW
+  VERIFYING
+  READY_TO_CONTACT
+  CONTACT_DAY_1
+  CONTACT_DAY_2
+  CONTACT_DAY_3
+  CONTACT_DAY_4
+  CONTACT_DAY_5
+  CONTACTED
+  INTAKE_REQUESTED
+  INTAKE_RECEIVED
+  EVALUATING
+  WAITING_ON_DEVELOPER
+  DEVELOPER_PRICE_RECEIVED
+  OFFER_DRAFTED
+  OFFER_SENT
+  NEGOTIATING
+  UNDER_CONTRACT
+  BUYER_CONFIRMED
+  CLOSING
+  CLOSED
+  LONG_TERM_FOLLOW_UP
+  FOREVER_FOLLOW_UP
+  DEAD
+  DO_NOT_CONTACT
+}
+
+model Property {
+  id             String        @id @default(cuid())
+  address        String
+  city           String
+  state          String
+  zipCode        String
+  county         String?
+  parcelNumber   String?
+  latitude       Float?
+  longitude      Float?
+  propertyType   String?
+  yearBuilt      Int?
+  bedrooms       Float?
+  bathrooms      Float?
+  squareFeet     Int?
+  lotSquareFeet  Int?
+  lotAcres       Float?
+  estimatedValue Int?
+  lastSalePrice  Int?
+  lastSaleDate   DateTime?
+  ownerId        String?
+  neighborhoodId String?
+  occupancyStatus String?
+  source         String?
+  sourceUrl      String?
+  status         String        @default("CANDIDATE")
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  owner          Owner?        @relation(fields: [ownerId], references: [id])
+  neighborhood   Neighborhood? @relation(fields: [neighborhoodId], references: [id])
+  leads          Lead[]
+}
+
+model Owner {
+  id             String     @id @default(cuid())
+  firstName      String?
+  lastName       String?
+  entityName     String?
+  ownerType      String?
+  mailingAddress String?
+  city           String?
+  state          String?
+  zipCode        String?
+  phone          String?
+  email          String?
+  phoneVerified  Boolean    @default(false)
+  emailVerified  Boolean    @default(false)
+  doNotContact   Boolean    @default(false)
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  properties     Property[]
+  leads          Lead[]
+}
+
+model Developer {
+  id                   String                  @id @default(cuid())
+  companyName          String
+  contactName          String?
+  phone                String?
+  email                String?
+  website              String?
+  targetCities         String[]
+  targetZipCodes       String[]
+  minimumLotSize       Int?
+  maximumLotSize       Int?
+  preferredLotWidth    Int?
+  cornerLotPreference  Boolean                 @default(false)
+  maximumPurchasePrice Int?
+  typicalBuildPrice    Int?
+  notes                String?
+  active               Boolean                 @default(true)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  projects             DeveloperProject[]
+  priceRequests        DeveloperPriceRequest[]
+}
+
+model DeveloperProject {
+  id                    String    @id @default(cuid())
+  developerId           String
+  address               String
+  city                  String
+  state                 String
+  zipCode               String
+  originalPurchasePrice Int?
+  originalPurchaseDate  DateTime?
+  originalYearBuilt     Int?
+  newBuildListPrice     Int?
+  newBuildSalePrice     Int?
+  newBuildSquareFeet    Int?
+  lotSquareFeet         Int?
+  sourceUrl             String?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  developer             Developer @relation(fields: [developerId], references: [id])
+}
+
+model Neighborhood {
+  id                       String     @id @default(cuid())
+  name                     String
+  city                     String
+  state                    String
+  zipCode                  String
+  newBuildCount            Int        @default(0)
+  averageNewBuildPrice     Int?
+  averageOriginalLotPrice  Int?
+  averageLotSize           Int?
+  developerActivityScore   Int        @default(0)
+  opportunityScore         Int        @default(0)
+  notes                    String?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+  properties               Property[]
+}
+
+model Lead {
+  id                     String                  @id @default(cuid())
+  propertyId             String
+  ownerId                String
+  status                 LeadStatus              @default(NEW)
+  priority               String                  @default("MEDIUM")
+  leadSource             String?
+  motivationScore        Int?
+  developerDemandScore   Int?
+  estimatedDeveloperPrice Int?
+  estimatedSellerPrice   Int?
+  estimatedAssignmentFee Int?
+  confidenceScore        Int?
+  lastContactAt          DateTime?
+  nextActionAt           DateTime?
+  nextActionType         String?
+  notes                  String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  property               Property                @relation(fields: [propertyId], references: [id])
+  owner                  Owner                   @relation(fields: [ownerId], references: [id])
+  activities             Activity[]
+  tasks                  Task[]
+  intake                 PropertyIntake?
+  priceRequests          DeveloperPriceRequest[]
+  evaluation             DealEvaluation?
+  offers                 Offer[]
+  deal                   Deal?
+}
+
+model Activity {
+  id         String   @id @default(cuid())
+  leadId     String
+  type       String
+  direction  String?
+  summary    String
+  content    String?
+  outcome    String?
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+  lead       Lead     @relation(fields: [leadId], references: [id])
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  leadId      String
+  type        String
+  title       String
+  description String?
+  priority    String    @default("MEDIUM")
+  status      String    @default("OPEN")
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lead        Lead      @relation(fields: [leadId], references: [id])
+}
+
+model PropertyIntake {
+  id                  String    @id @default(cuid())
+  leadId              String    @unique
+  occupancy           String?
+  condition           String?
+  repairsNeeded       String?
+  sellerMotivation    String?
+  sellerTimeline      String?
+  mortgageBalance     Int?
+  knownLiens          String?
+  desiredPrice        Int?
+  postOccupancyNeeded Boolean   @default(false)
+  additionalNotes     String?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  lead                Lead      @relation(fields: [leadId], references: [id])
+}
+
+model DeveloperPriceRequest {
+  id            String    @id @default(cuid())
+  leadId        String
+  developerId   String
+  messageDraft  String
+  status        String    @default("DRAFT")
+  priceResponse Int?
+  responseNotes String?
+  sentAt        DateTime?
+  respondedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lead          Lead      @relation(fields: [leadId], references: [id])
+  developer     Developer @relation(fields: [developerId], references: [id])
+}
+
+model DealEvaluation {
+  id                    String   @id @default(cuid())
+  leadId                String   @unique
+  developerPrice         Int?
+  sellerPrice            Int?
+  estimatedClosingCosts  Int?
+  estimatedAssignmentFee Int?
+  minimumTargetFee       Int?
+  riskScore              Int?
+  confidenceScore        Int?
+  recommendedStrategy    String?
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  lead                   Lead     @relation(fields: [leadId], references: [id])
+}
+
+model Offer {
+  id                 String   @id @default(cuid())
+  leadId             String
+  offerAmount        Int
+  earnestMoney       Int?
+  inspectionDays     Int?
+  closingDate        DateTime?
+  closingCostsPaidBy String?
+  status             String   @default("DRAFT")
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  lead               Lead     @relation(fields: [leadId], references: [id])
+}
+
+model Deal {
+  id                  String   @id @default(cuid())
+  leadId              String   @unique
+  sellerContractPrice Int
+  buyerPrice          Int
+  assignmentFee       Int
+  earnestMoney        Int?
+  inspectionDeadline  DateTime?
+  closingDate         DateTime?
+  dealType            String
+  status              String   @default("OPEN")
+  documentUrl         String?
+  attorneyReviewed    Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  lead                Lead     @relation(fields: [leadId], references: [id])
+}
