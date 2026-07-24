@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireOwner } from "@/lib/auth";
 
 import {
   attemptProviderSend,
@@ -11,6 +12,7 @@ import {
   createProperty,
   generateDeveloperPricingRequest,
   generateDraftApproval,
+  importForeclosureCsv,
   runFollowUpScheduler,
   scoreDeveloperMatches,
   setApprovalStatus,
@@ -21,7 +23,8 @@ function value(formData: FormData, key: string) {
 }
 
 export async function createPropertyAction(formData: FormData) {
-  createProperty({
+  await requireOwner();
+  await createProperty({
     address: value(formData, "address"),
     city: value(formData, "city"),
     state: value(formData, "state").toUpperCase(),
@@ -35,7 +38,8 @@ export async function createPropertyAction(formData: FormData) {
 }
 
 export async function createLeadAction(formData: FormData) {
-  createLead({
+  await requireOwner();
+  await createLead({
     propertyId: value(formData, "propertyId"),
     ownerName: value(formData, "ownerName"),
     status: value(formData, "status"),
@@ -49,7 +53,8 @@ export async function createLeadAction(formData: FormData) {
 }
 
 export async function createMessageTemplateAction(formData: FormData) {
-  createMessageTemplate({
+  await requireOwner();
+  await createMessageTemplate({
     type: value(formData, "type"),
     channel: value(formData, "channel") as "SMS" | "EMAIL" | "VOICE" | "INTERNAL",
     body: value(formData, "body"),
@@ -58,7 +63,8 @@ export async function createMessageTemplateAction(formData: FormData) {
 }
 
 export async function createDeveloperAction(formData: FormData) {
-  createDeveloper({
+  await requireOwner();
+  await createDeveloper({
     companyName: value(formData, "companyName"),
     contactName: value(formData, "contactName"),
     phone: value(formData, "phone"),
@@ -73,7 +79,8 @@ export async function createDeveloperAction(formData: FormData) {
 }
 
 export async function createDeveloperProjectAction(formData: FormData) {
-  createDeveloperProject({
+  await requireOwner();
+  await createDeveloperProject({
     developerId: value(formData, "developerId"),
     address: value(formData, "address"),
     city: value(formData, "city"),
@@ -88,36 +95,57 @@ export async function createDeveloperProjectAction(formData: FormData) {
 }
 
 export async function scoreDeveloperMatchesAction(formData: FormData) {
-  scoreDeveloperMatches(value(formData, "propertyId"));
+  await requireOwner();
+  await scoreDeveloperMatches(value(formData, "propertyId"));
   revalidatePath("/");
 }
 
 export async function generateDeveloperPricingRequestAction(formData: FormData) {
-  generateDeveloperPricingRequest(value(formData, "propertyId"), value(formData, "developerId"));
+  await requireOwner();
+  await generateDeveloperPricingRequest(value(formData, "propertyId"), value(formData, "developerId"));
   revalidatePath("/");
 }
 
 export async function generateDraftAction(formData: FormData) {
-  generateDraftApproval(value(formData, "templateId"), value(formData, "leadId"));
+  await requireOwner();
+  await generateDraftApproval(value(formData, "templateId"), value(formData, "leadId"));
   revalidatePath("/");
 }
 
 export async function approveMessageAction(formData: FormData) {
-  setApprovalStatus(value(formData, "approvalId"), "APPROVED");
+  await requireOwner();
+  await setApprovalStatus(value(formData, "approvalId"), "APPROVED");
   revalidatePath("/");
 }
 
 export async function rejectMessageAction(formData: FormData) {
-  setApprovalStatus(value(formData, "approvalId"), "REJECTED");
+  await requireOwner();
+  await setApprovalStatus(value(formData, "approvalId"), "REJECTED");
   revalidatePath("/");
 }
 
 export async function blockedSendAttemptAction(formData: FormData) {
-  attemptProviderSend(value(formData, "approvalId"));
+  await requireOwner();
+  await attemptProviderSend(value(formData, "approvalId"));
   revalidatePath("/");
 }
 
 export async function runSchedulerAction() {
-  runFollowUpScheduler();
+  await requireOwner();
+  await runFollowUpScheduler();
+  revalidatePath("/");
+}
+
+export async function importForeclosureCsvAction(formData: FormData) {
+  await requireOwner();
+  const file = formData.get("csvFile");
+  if (!(file instanceof File)) {
+    throw new Error("Choose a CSV file to import.");
+  }
+  const csvText = await file.text();
+  await importForeclosureCsv({
+    csvText,
+    sourceName: file.name || "Foreclosure CSV",
+  });
   revalidatePath("/");
 }

@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
-
 import { runFollowUpScheduler } from "@/lib/database";
+import { ownerIsAuthenticated } from "@/lib/auth";
 
 export async function POST() {
-  const result = runFollowUpScheduler();
-  return NextResponse.json({ ok: true, ...result });
+  if (!(await ownerIsAuthenticated())) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const result = await runFollowUpScheduler();
+  return Response.json({ ok: true, ...result });
 }
