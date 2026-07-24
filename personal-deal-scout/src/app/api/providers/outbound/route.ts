@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-
 import { attemptProviderSend } from "@/lib/database";
+import { ownerIsAuthenticated } from "@/lib/auth";
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
+  if (!(await ownerIsAuthenticated())) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const payload = (await request.json().catch(() => ({}))) as { approvalId?: string };
   if (!payload.approvalId) {
-    return NextResponse.json({ ok: false, error: "approvalId is required" }, { status: 400 });
+    return Response.json({ ok: false, error: "approvalId is required" }, { status: 400 });
   }
 
-  const approval = attemptProviderSend(payload.approvalId);
-  return NextResponse.json({
+  const approval = await attemptProviderSend(payload.approvalId);
+  return Response.json({
     ok: false,
     blocked: true,
     reason: "Outbound providers are disabled until explicitly configured and approved.",

@@ -1,7 +1,6 @@
 import {
   developers,
   developerProjects,
-  messageDrafts,
   metrics,
   money,
   neighborhoods,
@@ -16,11 +15,13 @@ import {
   createPropertyAction,
   generateDeveloperPricingRequestAction,
   generateDraftAction,
+  importForeclosureCsvAction,
   rejectMessageAction,
   runSchedulerAction,
   scoreDeveloperMatchesAction,
 } from "@/app/actions";
 import { databaseInfo, readDatabase, scoreDeveloperMatches } from "@/lib/database";
+import { requireOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -78,15 +79,16 @@ function SectionTitle({ title, detail }: { title: string; detail?: string }) {
 }
 
 export default async function Home() {
-  const db = readDatabase();
-  const info = databaseInfo();
+  await requireOwner();
+  const db = await readDatabase();
+  const info = await databaseInfo();
   const realLeads = db.leads;
   const realProperties = db.properties;
   const bestLead = realLeads[0];
   const leadProperties = new Map(realProperties.map((property) => [property.id, property]));
   const bestProperty = leadProperties.get(bestLead.propertyId);
   const selectedMatchProperty = realProperties[0];
-  const developerMatches = selectedMatchProperty ? scoreDeveloperMatches(selectedMatchProperty.id, false).slice(0, 5) : [];
+  const developerMatches = selectedMatchProperty ? (await scoreDeveloperMatches(selectedMatchProperty.id, false)).slice(0, 5) : [];
   const developerById = new Map(db.developers.map((developer) => [developer.id, developer]));
   const groupedTasks = db.tasks.reduce<Record<string, typeof db.tasks>>((acc, task) => {
     const group = task.priority === "Urgent" || task.priority === "High" ? "Must Do Today" : task.type === "SCHEDULED_FOLLOW_UP" ? "High-Value Follow-Ups" : "Research Tasks";
@@ -639,17 +641,37 @@ export default async function Home() {
 
             <Card id="settings" className="scroll-mt-32">
               <SectionTitle title="Settings" detail="Private MVP controls for mode, targets, scoring, providers, scheduler, and audit log." />
-              <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                <span>System mode: {info.systemMode}</span>
-                <span>Minimum target fee: {money(50000)}</span>
-                <span>Default inspection: 10 days</span>
-                <span>Outbound automation: disabled</span>
-                <span>Score weights: visible</span>
-                <span>Migration version: {info.migrationVersion}</span>
-                <span className="sm:col-span-2">Database: {info.path}</span>
-                <span>SMS provider: {db.meta.smsProviderEnabled ? "enabled" : "disabled"}</span>
-                <span>Email provider: {db.meta.emailProviderEnabled ? "enabled" : "disabled"}</span>
-                <span>Voice provider: {db.meta.voiceProviderEnabled ? "enabled" : "disabled"}</span>
+              <div className="grid gap-4 text-sm text-slate-600">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <span>System mode: {info.systemMode}</span>
+                  <span>Minimum target fee: {money(50000)}</span>
+                  <span>Default inspection: 10 days</span>
+                  <span>Outbound automation: disabled</span>
+                  <span>Score weights: visible</span>
+                  <span>Migration version: {info.migrationVersion}</span>
+                  <span className="sm:col-span-2">Database: {info.path}</span>
+                  <span>SMS provider: {db.meta.smsProviderEnabled ? "enabled" : "disabled"}</span>
+                  <span>Email provider: {db.meta.emailProviderEnabled ? "enabled" : "disabled"}</span>
+                  <span>Voice provider: {db.meta.voiceProviderEnabled ? "enabled" : "disabled"}</span>
+                </div>
+
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Import Foreclosure CSV</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    Accepts columns like Owner1 Full Name, Street Address, City, State, Zip Code, Year Built, Estimated Value, Mortgage Balance, Equity Percentage, Preforeclosure, Vacant, and Absentee Owner.
+                  </p>
+                  <form action={importForeclosureCsvAction} className="mt-3 grid gap-3" encType="multipart/form-data">
+                    <input
+                      accept=".csv,text/csv"
+                      className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm"
+                      name="csvFile"
+                      required
+                      type="file"
+                    />
+                    <button className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-blue-50">Import CSV Into Properties + Leads</button>
+                  </form>
+                </div>
+
                 <form action={runSchedulerAction}>
                   <button className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-blue-50">Run Follow-Up Scheduler</button>
                 </form>
