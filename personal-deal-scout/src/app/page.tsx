@@ -86,7 +86,7 @@ export default async function Home() {
   const realProperties = db.properties;
   const bestLead = realLeads[0];
   const leadProperties = new Map(realProperties.map((property) => [property.id, property]));
-  const bestProperty = leadProperties.get(bestLead.propertyId);
+  const bestProperty = bestLead ? leadProperties.get(bestLead.propertyId) : undefined;
   const selectedMatchProperty = realProperties[0];
   const developerMatches = selectedMatchProperty ? (await scoreDeveloperMatches(selectedMatchProperty.id, false)).slice(0, 5) : [];
   const developerById = new Map(db.developers.map((developer) => [developer.id, developer]));
@@ -143,38 +143,50 @@ export default async function Home() {
 
             <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
             <Card className="border-blue-300 bg-blue-50">
-              <div className="mb-3 flex items-center justify-between gap-4">
+              {bestLead ? (
+                <>
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-mono text-xs uppercase tracking-[0.2em] text-blue-700">Best Action Today</p>
+                      <h2 className="mt-2 text-2xl font-semibold text-slate-950">
+                        {bestLead.nextActionType} about {bestProperty?.address ?? "the top opportunity"}
+                      </h2>
+                    </div>
+                    <Badge tone="warn">{money(bestLead.estimatedAssignmentFee)}</Badge>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_260px]">
+                    <div>
+                      <p className="text-sm leading-6 text-slate-700">{bestLead.notes ?? "This is the highest-priority saved lead based on current task order."}</p>
+                      <ul className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                        <li>Seller: {bestLead.ownerName}</li>
+                        <li>Next action: {bestLead.nextActionAt}</li>
+                        <li>Priority: {bestLead.priority}</li>
+                        <li>Mode: {info.systemMode}</li>
+                      </ul>
+                    </div>
+                    <div className="grid gap-2">
+                      {["Open Lead", "Mark Complete", "Snooze", "Create Call Note"].map((label, index) => (
+                        <button
+                          className={`rounded-md px-4 py-2 text-sm font-medium ${
+                            index === 0 ? "bg-blue-700 text-blue-50" : "border border-blue-300 bg-blue-100 text-blue-800"
+                          }`}
+                          key={label}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
                 <div>
                   <p className="font-mono text-xs uppercase tracking-[0.2em] text-blue-700">Best Action Today</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-slate-950">
-                    {bestLead.nextActionType} about {bestProperty?.address ?? "the top opportunity"}
-                  </h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-slate-950">Add your first property and lead</h2>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700">
+                    This database is ready but has no leads yet. Add a candidate property below, then create a lead to generate the first prioritized action.
+                  </p>
                 </div>
-                <Badge tone="warn">{money(bestLead.estimatedAssignmentFee)}</Badge>
-              </div>
-              <div className="grid gap-4 md:grid-cols-[1fr_260px]">
-                <div>
-                  <p className="text-sm leading-6 text-slate-700">{bestLead.notes ?? "This is the highest-priority saved lead based on current task order."}</p>
-                  <ul className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-                    <li>Seller: {bestLead.ownerName}</li>
-                    <li>Next action: {bestLead.nextActionAt}</li>
-                    <li>Priority: {bestLead.priority}</li>
-                    <li>Mode: {info.systemMode}</li>
-                  </ul>
-                </div>
-                <div className="grid gap-2">
-                  {["Open Lead", "Mark Complete", "Snooze", "Create Call Note"].map((label, index) => (
-                    <button
-                      className={`rounded-md px-4 py-2 text-sm font-medium ${
-                        index === 0 ? "bg-blue-700 text-blue-50" : "border border-blue-300 bg-blue-100 text-blue-800"
-                      }`}
-                      key={label}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
             </Card>
 
             <Card>
