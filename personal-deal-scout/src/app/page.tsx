@@ -1,11 +1,4 @@
 import {
-  developers,
-  developerProjects,
-  metrics,
-  money,
-  neighborhoods,
-} from "@/lib/seed-data";
-import {
   approveMessageAction,
   blockedSendAttemptAction,
   createDeveloperAction,
@@ -43,6 +36,10 @@ const statusColumns = [
   "DEVELOPER_PRICE_RECEIVED",
   "UNDER_CONTRACT",
 ];
+
+function money(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+}
 
 function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "good" | "warn" | "danger" }) {
   const tones = {
@@ -90,6 +87,27 @@ export default async function Home() {
   const selectedMatchProperty = realProperties[0];
   const developerMatches = selectedMatchProperty ? (await scoreDeveloperMatches(selectedMatchProperty.id, false)).slice(0, 5) : [];
   const developerById = new Map(db.developers.map((developer) => [developer.id, developer]));
+  const metrics = {
+    potentialAssignmentRevenue: realLeads.reduce((total, lead) => total + lead.estimatedAssignmentFee, 0),
+    closedRevenue: realLeads
+      .filter((lead) => lead.status === "CLOSED")
+      .reduce((total, lead) => total + lead.estimatedAssignmentFee, 0),
+    dealsUnderContract: realLeads.filter((lead) => lead.status === "UNDER_CONTRACT").length,
+    offersBeingWorked: realLeads.filter((lead) => ["OFFER_DRAFTED", "OFFER_SENT", "NEGOTIATING"].includes(lead.status)).length,
+    newOpportunities: realLeads.filter((lead) => ["NEW", "VERIFYING", "READY_TO_CONTACT"].includes(lead.status)).length,
+    highPriorityLeads: realLeads.filter((lead) => ["High", "Urgent"].includes(lead.priority)).length,
+    followUpsDue: db.tasks.filter((task) => task.status === "OPEN").length,
+    developerRepliesNeeded: realLeads.filter((lead) => lead.status === "WAITING_ON_DEVELOPER").length,
+  };
+  const researchedAreas = Array.from(
+    realProperties.reduce((areas, property) => {
+      const key = `${property.city}|${property.state}|${property.zipCode}`;
+      const current = areas.get(key) ?? { city: property.city, state: property.state, zipCode: property.zipCode, properties: 0 };
+      current.properties += 1;
+      areas.set(key, current);
+      return areas;
+    }, new Map<string, { city: string; state: string; zipCode: string; properties: number }>()),
+  ).map(([, area]) => area);
   const groupedTasks = db.tasks.reduce<Record<string, typeof db.tasks>>((acc, task) => {
     const group = task.priority === "Urgent" || task.priority === "High" ? "Must Do Today" : task.type === "SCHEDULED_FOLLOW_UP" ? "High-Value Follow-Ups" : "Research Tasks";
     acc[group] = [...(acc[group] ?? []), task];
@@ -616,38 +634,36 @@ export default async function Home() {
             <Card id="research" className="scroll-mt-32">
               <SectionTitle title="Research" detail="Supporting notes for acquisition research. Core app data stays focused on properties, developers, deals, messages, and follow-up." />
               <div className="grid gap-3 md:grid-cols-3">
-                {neighborhoods.map((area) => (
-                  <div className="rounded-md border border-slate-300 bg-slate-200/70 p-3" key={area.name}>
+                {researchedAreas.map((area) => (
+                  <div className="rounded-md border border-slate-300 bg-slate-200/70 p-3" key={`${area.city}-${area.zipCode}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-medium text-slate-900">{area.name}</p>
-                        <p className="text-sm text-slate-600">{area.city} {area.zipCode}</p>
+                        <p className="font-medium text-slate-900">{area.city}, {area.state}</p>
+                        <p className="text-sm text-slate-600">{area.zipCode}</p>
                       </div>
-                      <Badge tone={area.opportunityScore >= 80 ? "good" : "neutral"}>{area.opportunityScore}/100</Badge>
-                    </div>
-                    <div className="mt-3 grid gap-2 text-xs text-slate-600">
-                      <span>{area.newBuildCount} known new builds</span>
-                      <span>{money(area.averageNewBuildPrice)} avg new build</span>
-                      <span>{area.developerActivityScore} developer activity</span>
+                      <Badge>{area.properties} saved</Badge>
                     </div>
                   </div>
                 ))}
+                {!researchedAreas.length ? (
+                  <p className="text-sm text-slate-600">No researched areas yet. Saved properties will appear here grouped by city and ZIP code.</p>
+                ) : null}
               </div>
             </Card>
           </section>
 
           <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
             <Card>
-              <SectionTitle title="Seed Data Coverage" detail="Current MVP seed set aligned to the required workflow test." />
+              <SectionTitle title="Database Coverage" detail="Counts below come directly from the connected PostgreSQL database." />
               <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
-                <span>{neighborhoods.length} neighborhoods</span>
+                <span>{researchedAreas.length} researched areas</span>
                 <span>{realProperties.length} candidate properties / owners</span>
-                <span>{developers.length} developers</span>
-                <span>{developerProjects.length} developer projects</span>
+                <span>{db.developers.length} developers</span>
+                <span>{db.developerProjects.length} developer projects</span>
                 <span>{realLeads.length} active leads</span>
-                <span>3 pricing responses modeled</span>
-                <span>2 offers modeled</span>
-                <span>1 under-contract deal</span>
+                <span>{db.messageApprovals.length} message approvals</span>
+                <span>{db.tasks.filter((task) => task.status === "OPEN").length} open tasks</span>
+                <span>{metrics.dealsUnderContract} under-contract deals</span>
               </div>
             </Card>
 
@@ -656,8 +672,8 @@ export default async function Home() {
               <div className="grid gap-4 text-sm text-slate-600">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <span>System mode: {info.systemMode}</span>
-                  <span>Minimum target fee: {money(50000)}</span>
-                  <span>Default inspection: 10 days</span>
+                  <span>Minimum target fee: Not configured</span>
+                  <span>Default inspection: Not configured</span>
                   <span>Outbound automation: disabled</span>
                   <span>Score weights: visible</span>
                   <span>Migration version: {info.migrationVersion}</span>
