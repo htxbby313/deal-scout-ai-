@@ -22,6 +22,11 @@ function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+function labeled(label: string, formData: FormData, key: string) {
+  const entry = value(formData, key);
+  return entry ? `${label}: ${entry}` : "";
+}
+
 export async function createPropertyAction(formData: FormData) {
   await requireOwner();
   await createProperty({
@@ -65,16 +70,31 @@ export async function createMessageTemplateAction(formData: FormData) {
 
 export async function createDeveloperAction(formData: FormData) {
   await requireOwner();
+  const crmNotes = [
+    labeled("Buying status", formData, "buyingStatus"),
+    labeled("Evidence level", formData, "evidenceLevel"),
+    labeled("Property types", formData, "propertyTypes"),
+    labeled("Target markets", formData, "targetMarkets"),
+    labeled("Acreage range", formData, "acreageRange"),
+    labeled("Entitlement preference", formData, "entitlementPreference"),
+    labeled("Utility requirements", formData, "utilityRequirements"),
+    labeled("Preferred deal structure", formData, "dealStructure"),
+    labeled("Buy box source", formData, "buyBoxSource"),
+    labeled("Last verified", formData, "lastVerified"),
+    labeled("Next follow-up", formData, "nextFollowUp"),
+    labeled("Additional notes", formData, "notes"),
+  ].filter(Boolean).join("\n");
+
   await createDeveloper({
     companyName: value(formData, "companyName"),
     contactName: value(formData, "contactName"),
     phone: value(formData, "phone"),
     email: value(formData, "email"),
     website: value(formData, "website"),
-    targetZipCodes: value(formData, "targetZipCodes"),
+    targetZipCodes: value(formData, "targetZipCodes") || "Unknown",
     maximumPurchasePrice: Number(value(formData, "maximumPurchasePrice") || 0),
     typicalBuildPrice: Number(value(formData, "typicalBuildPrice") || 0),
-    notes: value(formData, "notes"),
+    notes: crmNotes,
   });
   revalidatePath("/");
 }
