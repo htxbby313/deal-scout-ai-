@@ -32,6 +32,7 @@ export async function createPropertyAction(formData: FormData) {
     ownerName: value(formData, "ownerName"),
     yearBuilt: value(formData, "yearBuilt"),
     lotSize: value(formData, "lotSize"),
+    estimatedValue: Number(value(formData, "estimatedValue") || 0),
     notes: value(formData, "notes"),
   });
   revalidatePath("/");
