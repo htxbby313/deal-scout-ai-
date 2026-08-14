@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { PrismaClientKnownRequestError, type InputJsonValue } from "@prisma/client/runtime/library";
 import { z } from "zod";
 
 import { getPrisma } from "@/lib/prisma";
@@ -41,13 +42,13 @@ const optional = <T>(value: T | null) => value ?? undefined;
 function safeError(error: unknown, operation: string): never {
   console.error(`Database operation failed: ${operation}`, error);
   if (error instanceof z.ZodError) throw error;
-  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+  if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
     throw new Error("That record already exists.");
   }
   throw new Error(`Unable to ${operation}. Please try again.`);
 }
 async function audit(tx: Prisma.TransactionClient | PrismaClient, type: AuditType, summary: string, details?: Record<string, unknown>) {
-  await tx.auditLog.create({ data: { type, summary, details: details as Prisma.InputJsonValue | undefined } });
+  await tx.auditLog.create({ data: { type, summary, details: details as InputJsonValue | undefined } });
 }
 
 export async function readDatabase(): Promise<Database> {
