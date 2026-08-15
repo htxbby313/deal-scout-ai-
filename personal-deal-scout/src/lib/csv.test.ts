@@ -13,4 +13,8 @@ describe("CSV parsing", () => {
       Notes: "Buys land, cash",
     });
   });
+
+  it("retains extra cells from malformed rows for safe normalization", () => {
+    expect(__testables.parseCsvRows("Company,Criteria\nAcme,Land,Texas")[0]).toEqual({ Company: "Acme", Criteria: "Land", __extra_0: "Texas" });
+  });
 });
