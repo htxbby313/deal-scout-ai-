@@ -3,8 +3,11 @@ import {
   createDeveloperProjectAction,
   createPropertyAction,
   generateDeveloperPricingRequestAction,
+  importDevelopersCsvAction,
+  importPropertiesCsvAction,
   scoreDeveloperMatchesAction,
 } from "@/app/actions";
+import { CsvImportForm } from "@/app/csv-import-form";
 import { readDatabase, scoreDeveloperMatches } from "@/lib/database";
 import { requireOwner } from "@/lib/auth";
 
@@ -68,6 +71,14 @@ export default async function Home() {
               <p className="mt-1 text-sm text-slate-600">Every developer found belongs here, even when their buying status is still unknown.</p>
             </div>
             <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">Primary workflow</span>
+          </div>
+
+          <div className="mt-5">
+            <CsvImportForm
+              action={importDevelopersCsvAction}
+              buttonLabel="Import buyers"
+              helpText="Required: Company Name. Optional columns include Contact Name, Email, Phone, Website, Target ZIP Codes, Maximum Purchase Price, Buying Status, Evidence Level, Property Types, and Notes. Existing company names are skipped."
+            />
           </div>
 
           <form action={createDeveloperAction} className="mt-5 grid gap-3 md:grid-cols-3">
@@ -139,6 +150,13 @@ export default async function Home() {
 
         <Card id="property-search">
           <div className="flex items-end justify-between gap-4"><div><h2 className="text-xl font-semibold">Property search and intake</h2><p className="mt-1 text-sm text-slate-600">Secondary workflow: add properties only after the buyer network gives the search direction.</p></div><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Phase 2</span></div>
+          <div className="mt-5">
+            <CsvImportForm
+              action={importPropertiesCsvAction}
+              buttonLabel="Import properties"
+              helpText="Required: Address, City, two-letter State, and ZIP. Optional columns include Owner Name, Year Built, Lot Size, Estimated Value, Zoning, Utilities, Source, and Notes. Existing address-and-ZIP combinations are skipped."
+            />
+          </div>
           <form action={createPropertyAction} className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field name="address" placeholder="Street address" required /><Field name="ownerName" placeholder="Owner or listing contact" required /><Field name="city" placeholder="City" required /><Field name="state" placeholder="State" required /><Field name="zipCode" placeholder="ZIP" required /><Field name="estimatedValue" placeholder="Asking price" type="number" required /><Field name="lotSize" placeholder="Lot size or acreage" /><Field name="yearBuilt" placeholder="Year built" />
             <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2 lg:col-span-4" name="notes" placeholder="Zoning, utilities, frontage, restrictions, days on market, price changes, development angle, source link" />
