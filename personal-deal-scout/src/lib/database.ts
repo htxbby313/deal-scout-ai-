@@ -220,7 +220,10 @@ function parseCsvRows(csvText: string) {
   if (!headers.length || headers.every((header) => !header)) throw new Error("The CSV needs a header row.");
   return lines.slice(1).map((line) => {
     const values = parseCsvLine(line);
-    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+    return Object.fromEntries([
+      ...headers.map((header, index) => [header, values[index] ?? ""]),
+      ...values.slice(headers.length).map((value, index) => [`__extra_${index}`, value]),
+    ]);
   });
 }
 
@@ -244,36 +247,75 @@ function noteLines(entries: Array<[string, string]>) {
   return entries.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`).join("\n") || undefined;
 }
 
+function normalizeDeveloperRow(row: Record<string, string>) {
+  const uploadedFormat = "Company" in row && "Acquisition_Criteria_Summary" in row;
+  if (!uploadedFormat) return {
+    companyName: csvValue(row, "Company Name", "Company", "Developer Name", "Developer", "Buyer Name", "Buyer"),
+    contactName: csvValue(row, "Contact Name", "Acquisitions Contact"),
+    phone: csvValue(row, "Phone", "Phone Number"), email: csvValue(row, "Email", "Email Address"), website: csvValue(row, "Website", "URL"),
+    targetMarkets: csvValue(row, "Target Markets", "Markets", "Market"), propertyTypes: csvValue(row, "Property Types", "Property Type", "Asset Types", "Asset Type"),
+    acquisitionCriteria: csvValue(row, "Acquisition Criteria", "Acquisition Criteria Summary", "Buy Box"), activeSignal: csvValue(row, "Actively Seeking", "Active Buying Signal"),
+    source: csvValue(row, "Buy Box Source", "Source", "Source URL"),
+  };
+
+  const malformed = Object.keys(row).some((key) => key.startsWith("__extra_"));
+  const tail = Object.values(row).slice(4).filter((value) => value.trim());
+  const isUrl = (value: string) => /^https?:\/\//i.test(value) || /^[\w.-]+\.[a-z]{2,}(?:\/|$)/i.test(value);
+  const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const isPhone = (value: string) => /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/.test(value);
+  const urls = tail.filter(isUrl);
+  const firstUrl = tail.findIndex(isUrl);
+  const narrative = (firstUrl >= 0 ? tail.slice(0, firstUrl) : tail).filter((value) => !isEmail(value) && !isPhone(value));
+  const website = urls.find((value) => !/linkedin\.com/i.test(value)) ?? "";
+  const source = [...urls].reverse().find((value) => value !== website) ?? website;
+  const contact = tail.find((value) => /\b(founder|principal|acquisitions|director|president|owner|ceo)\b/i.test(value) && !isUrl(value)) ?? "";
+  return {
+    companyName: row.Company?.trim() ?? "",
+    contactName: malformed ? contact : csvValue(row, "Contact_Person"),
+    phone: malformed ? tail.find(isPhone) ?? "" : csvValue(row, "Phone"),
+    email: malformed ? tail.find(isEmail) ?? "" : csvValue(row, "Email"),
+    website: malformed ? website : csvValue(row, "Website"),
+    targetMarkets: [row.HQ_City, row.HQ_State].filter(Boolean).join(", "),
+    propertyTypes: row.Asset_Class_Focus?.trim() ?? "",
+    acquisitionCriteria: malformed ? narrative.join(", ") : csvValue(row, "Acquisition_Criteria_Summary"),
+    activeSignal: malformed ? "" : csvValue(row, "Actively_Seeking"),
+    source: malformed ? source : csvValue(row, "Source"),
+  };
+}
+
 export async function importDevelopersCsv(input: z.infer<typeof crmCsvImportSchema>) {
   const parsed = crmCsvImportSchema.parse(input);
   const rows = parseCsvRows(parsed.csvText);
   let created = 0; let skipped = 0;
   await getPrisma().$transaction(async (tx) => {
     for (const row of rows) {
-      const companyName = csvValue(row, "Company Name", "Company", "Developer Name", "Developer", "Buyer Name", "Buyer");
+      const normalized = normalizeDeveloperRow(row);
+      const companyName = normalized.companyName;
       if (!companyName) { skipped += 1; continue; }
       const existing = await tx.developer.findUnique({ where: { companyName } });
       if (existing) { skipped += 1; continue; }
       const targetZipCodes = csvValue(row, "Target ZIP Codes", "Target ZIPs", "ZIP Codes", "ZIPs", "Zip Code", "ZIP").split(/[;,]/).map((zip) => zip.trim()).filter(Boolean);
       await tx.developer.create({ data: {
         companyName,
-        contactName: csvValue(row, "Contact Name", "Acquisitions Contact") || undefined,
-        phone: csvValue(row, "Phone", "Phone Number") || undefined,
-        email: csvValue(row, "Email", "Email Address") || undefined,
-        website: csvValue(row, "Website", "URL") || undefined,
+        contactName: normalized.contactName || undefined,
+        phone: normalized.phone || undefined,
+        email: normalized.email || undefined,
+        website: normalized.website || undefined,
         targetZipCodes: targetZipCodes.length ? targetZipCodes : ["Unknown"],
         maximumPurchasePrice: csvNumber(csvValue(row, "Maximum Purchase Price", "Max Purchase Price", "Maximum Price", "Max Price")),
         typicalBuildPrice: csvNumber(csvValue(row, "Typical Build Price", "Typical Finished Value", "Finished Value")),
         notes: noteLines([
-          ["Buying status", csvValue(row, "Buying Status", "Status") || "Discovered"],
+          ["Buying status", csvValue(row, "Buying Status", "Status") || (normalized.activeSignal ? "Actively Buying" : "Researching")],
           ["Evidence level", csvValue(row, "Evidence Level", "Evidence") || "Unverified"],
-          ["Property types", csvValue(row, "Property Types", "Property Type", "Asset Types", "Asset Type")],
-          ["Target markets", csvValue(row, "Target Markets", "Markets", "Market")],
+          ["Property types", normalized.propertyTypes],
+          ["Target markets", normalized.targetMarkets],
+          ["Acquisition criteria", normalized.acquisitionCriteria],
+          ["Active acquisition signal", normalized.activeSignal],
           ["Acreage range", csvValue(row, "Acreage Range", "Acreage")],
           ["Entitlement preference", csvValue(row, "Entitlement Preference", "Entitlement")],
           ["Utility requirements", csvValue(row, "Utility Requirements", "Utilities")],
           ["Preferred deal structure", csvValue(row, "Deal Structure", "Preferred Deal Structure")],
-          ["Buy box source", csvValue(row, "Buy Box Source", "Source", "Source URL")],
+          ["Buy box source", normalized.source],
           ["Last verified", csvValue(row, "Last Verified", "Verified Date")],
           ["Next follow-up", csvValue(row, "Next Follow-up", "Next Follow Up", "Follow-up Date")],
           ["Additional notes", csvValue(row, "Notes", "Additional Notes")],
