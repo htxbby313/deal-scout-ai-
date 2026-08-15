@@ -12,7 +12,9 @@ import {
   createProperty,
   generateDeveloperPricingRequest,
   generateDraftApproval,
+  importDevelopersCsv,
   importForeclosureCsv,
+  importPropertiesCsv,
   runFollowUpScheduler,
   scoreDeveloperMatches,
   setApprovalStatus,
@@ -25,6 +27,15 @@ function value(formData: FormData, key: string) {
 function labeled(label: string, formData: FormData, key: string) {
   const entry = value(formData, key);
   return entry ? `${label}: ${entry}` : "";
+}
+
+export type CsvImportState = { status: "idle" | "success" | "error"; message: string };
+
+async function csvFile(formData: FormData) {
+  const file = formData.get("csvFile");
+  if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".csv")) throw new Error("Choose a .csv file to import.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("CSV files must be 5 MB or smaller.");
+  return { csvText: await file.text(), sourceName: file.name || "CSV import" };
 }
 
 export async function createPropertyAction(formData: FormData) {
@@ -40,7 +51,7 @@ export async function createPropertyAction(formData: FormData) {
     estimatedValue: Number(value(formData, "estimatedValue") || 0),
     notes: value(formData, "notes"),
   });
-  revalidatePath("/");
+  revalidatePath("/properties");
 }
 
 export async function createLeadAction(formData: FormData) {
@@ -75,6 +86,7 @@ export async function createDeveloperAction(formData: FormData) {
     labeled("Evidence level", formData, "evidenceLevel"),
     labeled("Property types", formData, "propertyTypes"),
     labeled("Target markets", formData, "targetMarkets"),
+    labeled("Acquisition criteria", formData, "acquisitionCriteria"),
     labeled("Acreage range", formData, "acreageRange"),
     labeled("Entitlement preference", formData, "entitlementPreference"),
     labeled("Utility requirements", formData, "utilityRequirements"),
@@ -82,7 +94,7 @@ export async function createDeveloperAction(formData: FormData) {
     labeled("Buy box source", formData, "buyBoxSource"),
     labeled("Last verified", formData, "lastVerified"),
     labeled("Next follow-up", formData, "nextFollowUp"),
-    labeled("Additional notes", formData, "notes"),
+    labeled("Acquisition criteria", formData, "notes"),
   ].filter(Boolean).join("\n");
 
   await createDeveloper({
@@ -96,7 +108,7 @@ export async function createDeveloperAction(formData: FormData) {
     typicalBuildPrice: Number(value(formData, "typicalBuildPrice") || 0),
     notes: crmNotes,
   });
-  revalidatePath("/");
+  revalidatePath("/developers");
 }
 
 export async function createDeveloperProjectAction(formData: FormData) {
@@ -112,7 +124,7 @@ export async function createDeveloperProjectAction(formData: FormData) {
     lotSquareFeet: Number(value(formData, "lotSquareFeet") || 0),
     notes: value(formData, "notes"),
   });
-  revalidatePath("/");
+  revalidatePath("/developers");
 }
 
 export async function scoreDeveloperMatchesAction(formData: FormData) {
@@ -169,4 +181,26 @@ export async function importForeclosureCsvAction(formData: FormData) {
     sourceName: file.name || "Foreclosure CSV",
   });
   revalidatePath("/");
+}
+
+export async function importDevelopersCsvAction(_previousState: CsvImportState, formData: FormData): Promise<CsvImportState> {
+  await requireOwner();
+  try {
+    const result = await importDevelopersCsv(await csvFile(formData));
+    revalidatePath("/developers");
+    return { status: "success", message: `Imported ${result.created} buyer(s). Skipped ${result.skipped} duplicate or incomplete row(s).` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "The developer CSV could not be imported." };
+  }
+}
+
+export async function importPropertiesCsvAction(_previousState: CsvImportState, formData: FormData): Promise<CsvImportState> {
+  await requireOwner();
+  try {
+    const result = await importPropertiesCsv(await csvFile(formData));
+    revalidatePath("/properties");
+    return { status: "success", message: `Imported ${result.created} propertie(s). Skipped ${result.skipped} duplicate or incomplete row(s).` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "The property CSV could not be imported." };
+  }
 }
