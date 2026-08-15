@@ -11,7 +11,8 @@ export type AuditType =
   | "database.migrated" | "property.created" | "lead.created" | "task.created" | "task.completed"
   | "message.template.created" | "message.draft.generated" | "message.approved" | "message.rejected"
   | "developer.created" | "developer.project.created" | "developer.matches.scored"
-  | "developer.pricing_request.created" | "csv.foreclosure_imported" | "provider.blocked"
+  | "developer.pricing_request.created" | "csv.foreclosure_imported" | "csv.developers_imported"
+  | "csv.properties_imported" | "provider.blocked"
   | "webhook.received" | "scheduler.followups";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SENT_BLOCKED";
 export type PropertyRecord = { id: string; address: string; city: string; state: string; zipCode: string; ownerName: string; yearBuilt?: string; lotSize?: string; estimatedValue?: number; notes?: string; createdAt: string; updatedAt: string };
@@ -36,6 +37,7 @@ export const templateInputSchema = z.object({ type: z.string().min(2), channel: 
 export const developerInputSchema = z.object({ companyName: z.string().min(2), contactName: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), website: z.string().optional(), targetZipCodes: z.string().min(5), maximumPurchasePrice: z.coerce.number().min(0).optional(), typicalBuildPrice: z.coerce.number().min(0).optional(), notes: z.string().optional() });
 export const developerProjectInputSchema = z.object({ developerId: z.string().min(1), address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), originalPurchasePrice: z.coerce.number().min(0).optional(), newBuildSalePrice: z.coerce.number().min(0).optional(), lotSquareFeet: z.coerce.number().min(0).optional(), notes: z.string().optional() });
 export const foreclosureCsvImportSchema = z.object({ csvText: z.string().min(10), sourceName: z.string().optional() });
+export const crmCsvImportSchema = z.object({ csvText: z.string().min(3), sourceName: z.string().optional() });
 
 const iso = (value: Date) => value.toISOString();
 const optional = <T>(value: T | null) => value ?? undefined;
@@ -195,9 +197,130 @@ export async function recordWebhook(type: "message" | "call", payload: Record<st
   try { await audit(getPrisma(), "webhook.received", `Received ${type} webhook.`, payload); } catch (error) { return safeError(error, "record webhook"); }
 }
 
-function parseCsvLine(line: string) { return line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)?.map((v) => v.replace(/^"|"$/g, "").replaceAll('""', '"').trim()) ?? []; }
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') { value += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (character === "," && !quoted) {
+      values.push(value.trim()); value = "";
+    } else value += character;
+  }
+  values.push(value.trim());
+  return values;
+}
+
+function parseCsvRows(csvText: string) {
+  const lines = csvText.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  const headers = parseCsvLine(lines[0] ?? "").map((header) => header.trim());
+  if (!headers.length || headers.every((header) => !header)) throw new Error("The CSV needs a header row.");
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+  });
+}
+
+function csvValue(row: Record<string, string>, ...headers: string[]) {
+  for (const header of headers) {
+    const direct = row[header]?.trim();
+    if (direct) return direct;
+    const match = Object.entries(row).find(([key, value]) => key.trim().toLowerCase() === header.toLowerCase() && value.trim());
+    if (match) return match[1].trim();
+  }
+  return "";
+}
+
+function csvNumber(value: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value.replace(/[$,\s]/g, ""));
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : undefined;
+}
+
+function noteLines(entries: Array<[string, string]>) {
+  return entries.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`).join("\n") || undefined;
+}
+
+export async function importDevelopersCsv(input: z.infer<typeof crmCsvImportSchema>) {
+  const parsed = crmCsvImportSchema.parse(input);
+  const rows = parseCsvRows(parsed.csvText);
+  let created = 0; let skipped = 0;
+  await getPrisma().$transaction(async (tx) => {
+    for (const row of rows) {
+      const companyName = csvValue(row, "Company Name", "Company", "Developer Name", "Developer", "Buyer Name", "Buyer");
+      if (!companyName) { skipped += 1; continue; }
+      const existing = await tx.developer.findUnique({ where: { companyName } });
+      if (existing) { skipped += 1; continue; }
+      const targetZipCodes = csvValue(row, "Target ZIP Codes", "Target ZIPs", "ZIP Codes", "ZIPs", "Zip Code", "ZIP").split(/[;,]/).map((zip) => zip.trim()).filter(Boolean);
+      await tx.developer.create({ data: {
+        companyName,
+        contactName: csvValue(row, "Contact Name", "Acquisitions Contact") || undefined,
+        phone: csvValue(row, "Phone", "Phone Number") || undefined,
+        email: csvValue(row, "Email", "Email Address") || undefined,
+        website: csvValue(row, "Website", "URL") || undefined,
+        targetZipCodes: targetZipCodes.length ? targetZipCodes : ["Unknown"],
+        maximumPurchasePrice: csvNumber(csvValue(row, "Maximum Purchase Price", "Max Purchase Price", "Maximum Price", "Max Price")),
+        typicalBuildPrice: csvNumber(csvValue(row, "Typical Build Price", "Typical Finished Value", "Finished Value")),
+        notes: noteLines([
+          ["Buying status", csvValue(row, "Buying Status", "Status") || "Discovered"],
+          ["Evidence level", csvValue(row, "Evidence Level", "Evidence") || "Unverified"],
+          ["Property types", csvValue(row, "Property Types", "Property Type", "Asset Types", "Asset Type")],
+          ["Target markets", csvValue(row, "Target Markets", "Markets", "Market")],
+          ["Acreage range", csvValue(row, "Acreage Range", "Acreage")],
+          ["Entitlement preference", csvValue(row, "Entitlement Preference", "Entitlement")],
+          ["Utility requirements", csvValue(row, "Utility Requirements", "Utilities")],
+          ["Preferred deal structure", csvValue(row, "Deal Structure", "Preferred Deal Structure")],
+          ["Buy box source", csvValue(row, "Buy Box Source", "Source", "Source URL")],
+          ["Last verified", csvValue(row, "Last Verified", "Verified Date")],
+          ["Next follow-up", csvValue(row, "Next Follow-up", "Next Follow Up", "Follow-up Date")],
+          ["Additional notes", csvValue(row, "Notes", "Additional Notes")],
+        ]),
+      } });
+      created += 1;
+    }
+    await audit(tx, "csv.developers_imported", `Imported developer CSV: ${created} buyer(s) created, ${skipped} row(s) skipped.`, { sourceName: parsed.sourceName, rows: rows.length, created, skipped });
+  });
+  return { rows: rows.length, created, skipped };
+}
+
+export async function importPropertiesCsv(input: z.infer<typeof crmCsvImportSchema>) {
+  const parsed = crmCsvImportSchema.parse(input);
+  const rows = parseCsvRows(parsed.csvText);
+  let created = 0; let skipped = 0;
+  await getPrisma().$transaction(async (tx) => {
+    for (const row of rows) {
+      const address = csvValue(row, "Street Address", "Property Address", "Address");
+      const city = csvValue(row, "City");
+      const state = csvValue(row, "State").toUpperCase();
+      const zipCode = csvValue(row, "Zip Code", "ZIP Code", "Zip", "ZIP");
+      if (!address || !city || state.length !== 2 || zipCode.length < 5) { skipped += 1; continue; }
+      const existing = await tx.property.findUnique({ where: { address_zipCode: { address, zipCode } } });
+      if (existing) { skipped += 1; continue; }
+      await tx.property.create({ data: {
+        address, city, state, zipCode,
+        ownerName: csvValue(row, "Owner1 Full Name", "Owner Full Name", "Owner Name", "Owner") || "Unknown Owner",
+        yearBuilt: csvValue(row, "Year Built", "Year") || undefined,
+        lotSize: csvValue(row, "Lot Size", "Acreage", "Acres") || undefined,
+        estimatedValue: csvNumber(csvValue(row, "Estimated Value", "Asking Price", "List Price", "Price")),
+        notes: noteLines([
+          ["Source", csvValue(row, "Source", "Source URL") || parsed.sourceName || "CSV import"],
+          ["Zoning", csvValue(row, "Zoning")],
+          ["Utilities", csvValue(row, "Utilities")],
+          ["Additional notes", csvValue(row, "Notes", "Additional Notes")],
+        ]),
+      } });
+      created += 1;
+    }
+    await audit(tx, "csv.properties_imported", `Imported property CSV: ${created} propertie(s) created, ${skipped} row(s) skipped.`, { sourceName: parsed.sourceName, rows: rows.length, created, skipped });
+  });
+  return { rows: rows.length, created, skipped };
+}
+
 export async function importForeclosureCsv(input: z.infer<typeof foreclosureCsvImportSchema>) {
-  const parsed = foreclosureCsvImportSchema.parse(input); const lines = parsed.csvText.split(/\r?\n/).filter(Boolean); const headers = parseCsvLine(lines[0] ?? ""); const rows = lines.slice(1).map((line) => Object.fromEntries(headers.map((h, i) => [h, parseCsvLine(line)[i] ?? ""])));
+  const parsed = foreclosureCsvImportSchema.parse(input); const rows = parseCsvRows(parsed.csvText);
   let propertiesCreated = 0; let leadsCreated = 0; let skipped = 0;
   await getPrisma().$transaction(async (tx) => {
     for (const row of rows) {
@@ -215,4 +338,4 @@ export async function importForeclosureCsv(input: z.infer<typeof foreclosureCsvI
   return { rows: rows.length, propertiesCreated, leadsCreated, skipped };
 }
 
-export const __testables = { calculateMatches };
+export const __testables = { calculateMatches, parseCsvLine, parseCsvRows };
