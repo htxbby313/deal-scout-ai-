@@ -205,3 +205,38 @@ model DeveloperMatch {
 
   @@unique([propertyId, developerId])
 }
+
+model GovernmentResearchRun {
+  id           String   @id @default(cuid())
+  source       String
+  status       String
+  period       String?
+  recordsFound Int      @default(0)
+  error        String?
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model MarketSignal {
+  id           String   @id @default(cuid())
+  source       String
+  fips         String
+  stateFips    String
+  countyFips   String
+  countyName   String
+  stateName    String
+  period       String
+  currentUnits Int
+  priorUnits   Int
+  growthPct    Float
+  currentValue BigInt
+  rank         Int
+  sourceUrl    String
+  capturedAt   DateTime @default(now())
+
+  @@unique([source, fips, period])
+  @@index([period, rank])
+}

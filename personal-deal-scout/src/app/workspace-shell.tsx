@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-const navigation = [{ href: "/developers", label: "Developers", icon: "D" }, { href: "/properties", label: "Properties", icon: "P" }];
+const navigation = [{ href: "/research", label: "Development Radar", icon: "R" }, { href: "/developers", label: "Developers", icon: "D" }, { href: "/properties", label: "Properties", icon: "P" }];
 
-export function WorkspaceShell({ active = "properties", children }: { active?: "developers" | "properties"; children: ReactNode }) {
+export function WorkspaceShell({ active = "properties", children }: { active?: "research" | "developers" | "properties"; children: ReactNode }) {
   return <div className="min-h-screen bg-[#f4f7fb] text-slate-950 lg:grid lg:grid-cols-[240px_1fr]">
     <aside className="border-b border-slate-200 bg-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between px-5 py-5 lg:block lg:px-6"><Link className="flex items-center gap-3" href="/developers"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-700 text-sm font-bold text-white">DS</span><span><span className="block text-lg font-bold">Deal Scout</span><span className="block text-xs text-slate-500">Acquisitions CRM</span></span></Link><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 lg:mt-6 lg:inline-block">Research mode</span></div>

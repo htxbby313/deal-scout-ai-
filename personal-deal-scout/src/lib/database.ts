@@ -13,7 +13,7 @@ export type AuditType =
   | "developer.created" | "developer.project.created" | "developer.matches.scored"
   | "developer.pricing_request.created" | "csv.foreclosure_imported" | "csv.developers_imported"
   | "csv.properties_imported" | "provider.blocked"
-  | "webhook.received" | "scheduler.followups";
+  | "webhook.received" | "scheduler.followups" | "research.census_permits";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SENT_BLOCKED";
 export type QualificationStatus = "RESEARCH_NEEDED" | "LIMITED_CONTACT" | "QUALIFIED" | "PRIORITY" | "REJECTED";
 export type OpportunityStatus = "NEEDS_VERIFICATION" | "DEVELOPMENT_SIGNAL" | "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE" | "REJECTED";
