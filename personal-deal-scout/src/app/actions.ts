@@ -50,6 +50,10 @@ export async function createPropertyAction(formData: FormData) {
     lotSize: value(formData, "lotSize"),
     estimatedValue: Number(value(formData, "estimatedValue") || 0),
     notes: value(formData, "notes"),
+    opportunityStatus: value(formData, "opportunityStatus") as "NEEDS_VERIFICATION" | "DEVELOPMENT_SIGNAL" | "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE" | "REJECTED",
+    contactName: value(formData, "contactName"),
+    contactPhone: value(formData, "contactPhone"),
+    contactEmail: value(formData, "contactEmail"),
   });
   revalidatePath("/properties");
 }
@@ -65,6 +69,10 @@ export async function createLeadAction(formData: FormData) {
     nextActionAt: value(formData, "nextActionAt"),
     estimatedAssignmentFee: Number(value(formData, "estimatedAssignmentFee")),
     notes: value(formData, "notes"),
+    sourceName: value(formData, "sourceName"),
+    sourceUrl: value(formData, "sourceUrl"),
+    sourceRecordDate: value(formData, "sourceRecordDate"),
+    confidence: Number(value(formData, "confidence") || 0),
   });
   revalidatePath("/");
 }
@@ -123,6 +131,10 @@ export async function createDeveloperProjectAction(formData: FormData) {
     newBuildSalePrice: Number(value(formData, "newBuildSalePrice") || 0),
     lotSquareFeet: Number(value(formData, "lotSquareFeet") || 0),
     notes: value(formData, "notes"),
+    sourceName: value(formData, "sourceName"),
+    sourceUrl: value(formData, "sourceUrl"),
+    sourceRecordDate: value(formData, "sourceRecordDate"),
+    confidence: Number(value(formData, "confidence") || 0),
   });
   revalidatePath("/developers");
 }
