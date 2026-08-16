@@ -69,10 +69,6 @@ export async function createLeadAction(formData: FormData) {
     nextActionAt: value(formData, "nextActionAt"),
     estimatedAssignmentFee: Number(value(formData, "estimatedAssignmentFee")),
     notes: value(formData, "notes"),
-    sourceName: value(formData, "sourceName"),
-    sourceUrl: value(formData, "sourceUrl"),
-    sourceRecordDate: value(formData, "sourceRecordDate"),
-    confidence: Number(value(formData, "confidence") || 0),
   });
   revalidatePath("/");
 }
