@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { propertyInputSchema, leadInputSchema, __testables, type DeveloperRecord, type PropertyRecord } from "./database";
+import { propertyInputSchema, leadInputSchema, __testables, type DeveloperProjectRecord, type DeveloperRecord, type PropertyRecord } from "./database";
 import { approvedMessage, auditEntry, canSendOutbound, completedTask, normalizedPropertyKey } from "./domain";
 
 describe("production foundation business rules", () => {
@@ -34,9 +34,16 @@ describe("production foundation business rules", () => {
   });
 
   it("scores a same-ZIP developer above a generic developer", () => {
-    const property = { id: "p1", address: "10 Main", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner", createdAt: "", updatedAt: "" } satisfies PropertyRecord;
-    const developer = (id: string, targetZipCodes: string[]): DeveloperRecord => ({ id, companyName: id, targetZipCodes, active: true, createdAt: "", updatedAt: "" });
-    const matches = __testables.calculateMatches(property, [developer("same", ["77002"]), developer("other", ["77003"])], []);
-    expect(matches[0]).toMatchObject({ developerId: "same", score: 55 });
+    const property = { id: "p1", address: "10 Main", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner", opportunityStatus: "GOVERNMENT_SALE", contactPhone: "713-555-0100", sourceUrl: "https://example.gov/property", confidence: 90, createdAt: "", updatedAt: "" } satisfies PropertyRecord;
+    const developer = (id: string, targetZipCodes: string[]): DeveloperRecord => ({ id, companyName: id, phone: "713-555-0101", email: `${id}@example.com`, targetZipCodes, active: true, qualificationStatus: "QUALIFIED", createdAt: "", updatedAt: "" });
+    const purchase = (developerId: string): DeveloperProjectRecord => ({ id: `purchase-${developerId}`, developerId, address: "1 Prior St", city: "Houston", state: "TX", zipCode: "77002", sourceUrl: "https://example.gov/deed", verifiedAt: "2026-08-15", confidence: 90, createdAt: "", updatedAt: "" });
+    const matches = __testables.calculateMatches(property, [developer("same", ["77002"]), developer("other", ["77003"])], [purchase("same"), purchase("other")]);
+    expect(matches[0]?.developerId).toBe("same");
+  });
+
+  it("requires verified purchase history before qualification", () => {
+    const developer = { phone: "713-555-0100", email: "buyer@example.com", contactName: "Buyer" };
+    expect(__testables.qualificationFor(developer, 0)).toBe("RESEARCH_NEEDED");
+    expect(__testables.qualificationFor(developer, 1)).toBe("PRIORITY");
   });
 });

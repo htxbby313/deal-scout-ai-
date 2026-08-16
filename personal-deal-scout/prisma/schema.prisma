@@ -13,6 +13,22 @@ enum SystemMode {
   PAUSED
 }
 
+enum QualificationStatus {
+  RESEARCH_NEEDED
+  LIMITED_CONTACT
+  QUALIFIED
+  PRIORITY
+  REJECTED
+}
+
+enum OpportunityStatus {
+  NEEDS_VERIFICATION
+  DEVELOPMENT_SIGNAL
+  CONFIRMED_AVAILABLE
+  GOVERNMENT_SALE
+  REJECTED
+}
+
 model Property {
   id             String   @id @default(cuid())
   address        String
@@ -24,12 +40,22 @@ model Property {
   lotSize        String?
   estimatedValue Int?
   notes          String?
+  opportunityStatus OpportunityStatus @default(NEEDS_VERIFICATION)
+  contactName    String?
+  contactPhone   String?
+  contactEmail   String?
+  sourceName     String?
+  sourceUrl      String?
+  sourceRecordDate String?
+  lastVerifiedAt DateTime?
+  confidence     Int @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   leads          Lead[]
   matches        DeveloperMatch[]
 
   @@unique([address, zipCode])
+  @@index([opportunityStatus])
 }
 
 model Lead {
@@ -79,10 +105,15 @@ model Developer {
   typicalBuildPrice     Int?
   notes                 String?
   active                Boolean  @default(true)
+  qualificationStatus   QualificationStatus @default(RESEARCH_NEEDED)
+  contactVerifiedAt     DateTime?
+  lastResearchedAt      DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   projects              DeveloperProject[]
   matches               DeveloperMatch[]
+
+  @@index([qualificationStatus])
 }
 
 model DeveloperProject {
@@ -96,6 +127,11 @@ model DeveloperProject {
   newBuildSalePrice     Int?
   lotSquareFeet         Int?
   notes                 String?
+  sourceName            String?
+  sourceUrl             String?
+  sourceRecordDate      String?
+  verifiedAt            DateTime?
+  confidence            Int       @default(0)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   developer             Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
