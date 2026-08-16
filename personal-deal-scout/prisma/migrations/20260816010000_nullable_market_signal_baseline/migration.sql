@@ -1,0 +1,2 @@
+ALTER TABLE "MarketSignal" ALTER COLUMN "priorUnits" DROP NOT NULL;
+ALTER TABLE "MarketSignal" ALTER COLUMN "growthPct" DROP NOT NULL;

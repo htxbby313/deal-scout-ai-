@@ -230,8 +230,8 @@ model MarketSignal {
   stateName    String
   period       String
   currentUnits Int
-  priorUnits   Int
-  growthPct    Float
+  priorUnits   Int?
+  growthPct    Float?
   currentValue BigInt
   rank         Int
   sourceUrl    String
