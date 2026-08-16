@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/auth";
+import { runCensusPermitResearch } from "@/lib/government-research";
 
 import {
   attemptProviderSend,
@@ -30,6 +31,7 @@ function labeled(label: string, formData: FormData, key: string) {
 }
 
 export type CsvImportState = { status: "idle" | "success" | "error"; message: string };
+export type ResearchRunState = { status: "idle" | "success" | "error"; message: string };
 
 async function csvFile(formData: FormData) {
   const file = formData.get("csvFile");
@@ -210,5 +212,16 @@ export async function importPropertiesCsvAction(_previousState: CsvImportState, 
     return { status: "success", message: `Imported ${result.created} propertie(s). Skipped ${result.skipped} duplicate or incomplete row(s).` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "The property CSV could not be imported." };
+  }
+}
+
+export async function runCensusPermitResearchAction(_previousState: ResearchRunState): Promise<ResearchRunState> {
+  await requireOwner();
+  try {
+    const result = await runCensusPermitResearch();
+    revalidatePath("/research");
+    return { status: "success", message: `Ranked ${result.recordsFound} counties using Census permit data for ${result.period}.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "The Census permit scan failed." };
   }
 }
