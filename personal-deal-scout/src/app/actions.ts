@@ -147,6 +147,7 @@ export async function generateDeveloperPricingRequestAction(formData: FormData) 
   await requireOwner();
   await generateDeveloperPricingRequest(value(formData, "propertyId"), value(formData, "developerId"));
   revalidatePath("/");
+  revalidatePath("/disposition");
 }
 
 export async function generateDraftAction(formData: FormData) {
@@ -215,7 +216,8 @@ export async function importPropertiesCsvAction(_previousState: CsvImportState, 
   }
 }
 
-export async function runCensusPermitResearchAction(_previousState: ResearchRunState): Promise<ResearchRunState> {
+export async function runCensusPermitResearchAction(previousState: ResearchRunState): Promise<ResearchRunState> {
+  void previousState;
   await requireOwner();
   try {
     const result = await runCensusPermitResearch();

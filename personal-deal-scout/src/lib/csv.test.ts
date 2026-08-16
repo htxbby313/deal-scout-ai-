@@ -7,7 +7,7 @@ describe("CSV parsing", () => {
   });
 
   it("maps values to a header row", () => {
-    expect(__testables.parseCsvRows("Company Name,Email,Notes\nAcme,,\"Buys land, cash\""))[0]).toEqual({
+    expect(__testables.parseCsvRows("Company Name,Email,Notes\nAcme,,\"Buys land, cash\"")[0]).toEqual({
       "Company Name": "Acme",
       Email: "",
       Notes: "Buys land, cash",
