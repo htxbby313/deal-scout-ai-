@@ -15,13 +15,15 @@ export type AuditType =
   | "csv.properties_imported" | "provider.blocked"
   | "webhook.received" | "scheduler.followups";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SENT_BLOCKED";
-export type PropertyRecord = { id: string; address: string; city: string; state: string; zipCode: string; ownerName: string; yearBuilt?: string; lotSize?: string; estimatedValue?: number; notes?: string; createdAt: string; updatedAt: string };
+export type QualificationStatus = "RESEARCH_NEEDED" | "LIMITED_CONTACT" | "QUALIFIED" | "PRIORITY" | "REJECTED";
+export type OpportunityStatus = "NEEDS_VERIFICATION" | "DEVELOPMENT_SIGNAL" | "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE" | "REJECTED";
+export type PropertyRecord = { id: string; address: string; city: string; state: string; zipCode: string; ownerName: string; yearBuilt?: string; lotSize?: string; estimatedValue?: number; notes?: string; opportunityStatus: OpportunityStatus; contactName?: string; contactPhone?: string; contactEmail?: string; sourceName?: string; sourceUrl?: string; sourceRecordDate?: string; lastVerifiedAt?: string; confidence: number; createdAt: string; updatedAt: string };
 export type LeadRecord = { id: string; propertyId: string; ownerName: string; status: string; priority: string; nextActionType: string; nextActionAt: string; estimatedAssignmentFee: number; notes?: string; createdAt: string; updatedAt: string };
 export type TaskRecord = { id: string; leadId: string; title: string; type: string; priority: string; status: "OPEN" | "DONE"; dueAt: string; createdAt: string; updatedAt: string };
 export type MessageTemplate = { id: string; type: string; channel: "SMS" | "EMAIL" | "VOICE" | "INTERNAL"; body: string; active: boolean; createdAt: string; updatedAt: string };
 export type MessageApproval = { id: string; leadId?: string; templateId?: string; channel: "SMS" | "EMAIL" | "VOICE" | "INTERNAL"; recipientLabel: string; subject?: string; body: string; status: ApprovalStatus; provider: string; createdAt: string; updatedAt: string };
-export type DeveloperRecord = { id: string; companyName: string; contactName?: string; phone?: string; email?: string; website?: string; targetZipCodes: string[]; maximumPurchasePrice?: number; typicalBuildPrice?: number; notes?: string; active: boolean; createdAt: string; updatedAt: string };
-export type DeveloperProjectRecord = { id: string; developerId: string; address: string; city: string; state: string; zipCode: string; originalPurchasePrice?: number; newBuildSalePrice?: number; lotSquareFeet?: number; notes?: string; createdAt: string; updatedAt: string };
+export type DeveloperRecord = { id: string; companyName: string; contactName?: string; phone?: string; email?: string; website?: string; targetZipCodes: string[]; maximumPurchasePrice?: number; typicalBuildPrice?: number; notes?: string; active: boolean; qualificationStatus: QualificationStatus; contactVerifiedAt?: string; lastResearchedAt?: string; createdAt: string; updatedAt: string };
+export type DeveloperProjectRecord = { id: string; developerId: string; address: string; city: string; state: string; zipCode: string; originalPurchasePrice?: number; newBuildSalePrice?: number; lotSquareFeet?: number; notes?: string; sourceName?: string; sourceUrl?: string; sourceRecordDate?: string; verifiedAt?: string; confidence: number; createdAt: string; updatedAt: string };
 export type DeveloperMatch = { developerId: string; score: number; reasons: string[] };
 export type AuditLog = { id: string; type: AuditType; summary: string; details?: Record<string, unknown>; createdAt: string };
 export type Database = {
@@ -31,11 +33,11 @@ export type Database = {
   messageApprovals: MessageApproval[]; auditLogs: AuditLog[];
 };
 
-export const propertyInputSchema = z.object({ address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), ownerName: z.string().min(2), yearBuilt: z.string().optional(), lotSize: z.string().optional(), estimatedValue: z.coerce.number().min(0).optional(), notes: z.string().optional() });
+export const propertyInputSchema = z.object({ address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), ownerName: z.string().min(2), yearBuilt: z.string().optional(), lotSize: z.string().optional(), estimatedValue: z.coerce.number().min(0).optional(), notes: z.string().optional(), opportunityStatus: z.enum(["NEEDS_VERIFICATION", "DEVELOPMENT_SIGNAL", "CONFIRMED_AVAILABLE", "GOVERNMENT_SALE", "REJECTED"]).optional(), contactName: z.string().optional(), contactPhone: z.string().optional(), contactEmail: z.string().optional(), sourceName: z.string().optional(), sourceUrl: z.string().url().or(z.literal("")).optional(), sourceRecordDate: z.string().optional(), confidence: z.coerce.number().min(0).max(100).optional() });
 export const leadInputSchema = z.object({ propertyId: z.string().min(1), ownerName: z.string().min(2), status: z.string().min(2), priority: z.string().min(2), nextActionType: z.string().min(2), nextActionAt: z.string().min(2), estimatedAssignmentFee: z.coerce.number().min(0), notes: z.string().optional() });
 export const templateInputSchema = z.object({ type: z.string().min(2), channel: z.enum(["SMS", "EMAIL", "VOICE", "INTERNAL"]), body: z.string().min(10) });
-export const developerInputSchema = z.object({ companyName: z.string().min(2), contactName: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), website: z.string().optional(), targetZipCodes: z.string().min(5), maximumPurchasePrice: z.coerce.number().min(0).optional(), typicalBuildPrice: z.coerce.number().min(0).optional(), notes: z.string().optional() });
-export const developerProjectInputSchema = z.object({ developerId: z.string().min(1), address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), originalPurchasePrice: z.coerce.number().min(0).optional(), newBuildSalePrice: z.coerce.number().min(0).optional(), lotSquareFeet: z.coerce.number().min(0).optional(), notes: z.string().optional() });
+export const developerInputSchema = z.object({ companyName: z.string().min(2), contactName: z.string().optional(), phone: z.string().regex(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/).or(z.literal("")).optional(), email: z.string().email().or(z.literal("")).optional(), website: z.string().optional(), targetZipCodes: z.string().min(5), maximumPurchasePrice: z.coerce.number().min(0).optional(), typicalBuildPrice: z.coerce.number().min(0).optional(), notes: z.string().optional() });
+export const developerProjectInputSchema = z.object({ developerId: z.string().min(1), address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), originalPurchasePrice: z.coerce.number().min(0).optional(), newBuildSalePrice: z.coerce.number().min(0).optional(), lotSquareFeet: z.coerce.number().min(0).optional(), notes: z.string().optional(), sourceName: z.string().min(2), sourceUrl: z.string().url(), sourceRecordDate: z.string().min(4), confidence: z.coerce.number().min(1).max(100) });
 export const foreclosureCsvImportSchema = z.object({ csvText: z.string().min(10), sourceName: z.string().optional() });
 export const crmCsvImportSchema = z.object({ csvText: z.string().min(3), sourceName: z.string().optional() });
 
@@ -53,6 +55,23 @@ async function audit(tx: Prisma.TransactionClient | PrismaClient, type: AuditTyp
   await tx.auditLog.create({ data: { type, summary, details: details as InputJsonValue | undefined } });
 }
 
+function qualificationFor(developer: { phone: string | null; email: string | null; contactName: string | null }, verifiedPurchases: number): QualificationStatus {
+  if (!verifiedPurchases) return "RESEARCH_NEEDED";
+  const hasPhone = Boolean(developer.phone?.trim());
+  const hasEmail = Boolean(developer.email?.trim());
+  if (hasPhone && hasEmail && developer.contactName?.trim()) return "PRIORITY";
+  if (hasPhone && hasEmail) return "QUALIFIED";
+  if (hasPhone || hasEmail) return "LIMITED_CONTACT";
+  return "RESEARCH_NEEDED";
+}
+
+async function refreshDeveloperQualification(tx: Prisma.TransactionClient, developerId: string) {
+  const developer = await tx.developer.findUniqueOrThrow({ where: { id: developerId } });
+  const verifiedPurchases = await tx.developerProject.count({ where: { developerId, sourceUrl: { not: null }, verifiedAt: { not: null } } });
+  const qualificationStatus = qualificationFor(developer, verifiedPurchases);
+  return tx.developer.update({ where: { id: developerId }, data: { qualificationStatus, lastResearchedAt: new Date() } });
+}
+
 export async function readDatabase(): Promise<Database> {
   try {
     const db = getPrisma();
@@ -67,11 +86,11 @@ export async function readDatabase(): Promise<Database> {
     const enabled = (name: string) => providers.find((p) => p.provider === name)?.enabled === true;
     return {
       meta: { migrationVersion: setting.migrationVersion, systemMode: setting.mode, smsProviderEnabled: enabled("SMS"), emailProviderEnabled: enabled("EMAIL"), voiceProviderEnabled: enabled("VOICE"), createdAt: iso(setting.createdAt), updatedAt: iso(setting.updatedAt) },
-      properties: properties.map((p) => ({ ...p, yearBuilt: optional(p.yearBuilt), lotSize: optional(p.lotSize), estimatedValue: optional(p.estimatedValue), notes: optional(p.notes), createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
+      properties: properties.map((p) => ({ ...p, opportunityStatus: p.opportunityStatus as OpportunityStatus, yearBuilt: optional(p.yearBuilt), lotSize: optional(p.lotSize), estimatedValue: optional(p.estimatedValue), notes: optional(p.notes), contactName: optional(p.contactName), contactPhone: optional(p.contactPhone), contactEmail: optional(p.contactEmail), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), lastVerifiedAt: p.lastVerifiedAt ? iso(p.lastVerifiedAt) : undefined, createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
       leads: leads.map((l) => ({ ...l, notes: optional(l.notes), createdAt: iso(l.createdAt), updatedAt: iso(l.updatedAt) })),
       tasks: tasks.map((t) => ({ ...t, status: t.status as "OPEN" | "DONE", createdAt: iso(t.createdAt), updatedAt: iso(t.updatedAt) })),
-      developers: developers.map((d) => ({ ...d, contactName: optional(d.contactName), phone: optional(d.phone), email: optional(d.email), website: optional(d.website), maximumPurchasePrice: optional(d.maximumPurchasePrice), typicalBuildPrice: optional(d.typicalBuildPrice), notes: optional(d.notes), createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt) })),
-      developerProjects: developerProjects.map((p) => ({ ...p, originalPurchasePrice: optional(p.originalPurchasePrice), newBuildSalePrice: optional(p.newBuildSalePrice), lotSquareFeet: optional(p.lotSquareFeet), notes: optional(p.notes), createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
+      developers: developers.map((d) => ({ ...d, qualificationStatus: d.qualificationStatus as QualificationStatus, contactName: optional(d.contactName), phone: optional(d.phone), email: optional(d.email), website: optional(d.website), maximumPurchasePrice: optional(d.maximumPurchasePrice), typicalBuildPrice: optional(d.typicalBuildPrice), notes: optional(d.notes), contactVerifiedAt: d.contactVerifiedAt ? iso(d.contactVerifiedAt) : undefined, lastResearchedAt: d.lastResearchedAt ? iso(d.lastResearchedAt) : undefined, createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt) })),
+      developerProjects: developerProjects.map((p) => ({ ...p, originalPurchasePrice: optional(p.originalPurchasePrice), newBuildSalePrice: optional(p.newBuildSalePrice), lotSquareFeet: optional(p.lotSquareFeet), notes: optional(p.notes), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), verifiedAt: p.verifiedAt ? iso(p.verifiedAt) : undefined, createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
       messageTemplates: templates.map((t) => ({ ...t, channel: t.channel as MessageTemplate["channel"], createdAt: iso(t.createdAt), updatedAt: iso(t.updatedAt) })),
       messageApprovals: approvals.map((a) => ({ ...a, leadId: optional(a.leadId), templateId: optional(a.templateId), subject: optional(a.subject), channel: a.channel as MessageApproval["channel"], status: a.status as ApprovalStatus, createdAt: iso(a.createdAt), updatedAt: iso(a.updatedAt) })),
       auditLogs: logs.map((l) => ({ id: l.id, type: l.type as AuditType, summary: l.summary, details: optional(l.details as Record<string, unknown> | null), createdAt: iso(l.createdAt) })),
@@ -127,20 +146,22 @@ export async function createDeveloper(input: z.infer<typeof developerInputSchema
   catch (error) { return safeError(error, "create developer"); }
 }
 export async function createDeveloperProject(input: z.infer<typeof developerProjectInputSchema>) {
-  try { const p = developerProjectInputSchema.parse(input); return await getPrisma().$transaction(async (tx) => { const record = await tx.developerProject.create({ data: { ...p, state: p.state.toUpperCase() } }); await audit(tx, "developer.project.created", `Recorded developer project ${record.address}.`, { developerId: record.developerId, projectId: record.id }); return record; }); }
+  try { const p = developerProjectInputSchema.parse(input); return await getPrisma().$transaction(async (tx) => { const record = await tx.developerProject.create({ data: { ...p, state: p.state.toUpperCase(), verifiedAt: new Date() } }); const developer = await refreshDeveloperQualification(tx, p.developerId); await audit(tx, "developer.project.created", `Recorded verified developer purchase ${record.address}.`, { developerId: record.developerId, projectId: record.id, qualificationStatus: developer.qualificationStatus, sourceUrl: record.sourceUrl }); return record; }); }
   catch (error) { return safeError(error, "create developer project"); }
 }
 
 function calculateMatches(property: PropertyRecord, developers: DeveloperRecord[], projects: DeveloperProjectRecord[]) {
-  return developers.filter((d) => d.active).map((developer) => {
-    let score = 20; const reasons: string[] = []; const history = projects.filter((p) => p.developerId === developer.id);
+  const propertyIsActionable = ["CONFIRMED_AVAILABLE", "GOVERNMENT_SALE"].includes(property.opportunityStatus) && Boolean(property.sourceUrl) && Boolean(property.contactPhone || property.contactEmail);
+  if (!propertyIsActionable) return [];
+  return developers.filter((d) => d.active && ["PRIORITY", "QUALIFIED"].includes(d.qualificationStatus)).map((developer) => {
+    let score = 20; const reasons: string[] = []; const history = projects.filter((p) => p.developerId === developer.id && p.verifiedAt && p.sourceUrl);
     if (developer.targetZipCodes.includes(property.zipCode)) { score += 35; reasons.push("Builds in the same ZIP code."); }
     const cityCount = history.filter((p) => p.city.toLowerCase() === property.city.toLowerCase()).length;
     if (cityCount) { score += Math.min(20, cityCount * 8); reasons.push(`Has ${cityCount} known project(s) in the same city.`); }
     if (developer.maximumPurchasePrice && property.estimatedValue && developer.maximumPurchasePrice >= property.estimatedValue) { score += 15; reasons.push("Maximum purchase price can cover the estimated value."); }
     else if (developer.maximumPurchasePrice) { score += 8; reasons.push("Known maximum purchase price is available for underwriting."); }
     if (developer.typicalBuildPrice && developer.typicalBuildPrice >= 3_000_000) { score += 10; reasons.push("Typical build value supports high-end redevelopment."); }
-    if (!reasons.length) reasons.push("General active developer; add more project history for stronger scoring.");
+    reasons.push(`${history.length} government-source purchase record${history.length === 1 ? "" : "s"} verified.`);
     return { developerId: developer.id, score: Math.min(100, score), reasons };
   }).sort((a, b) => b.score - a.score);
 }
@@ -243,6 +264,10 @@ function csvNumber(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : undefined;
 }
 
+function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : ""; }
+function validPhone(value: string) { return /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/.test(value) ? value : ""; }
+function validUrl(value: string) { return /^https?:\/\//i.test(value) ? value : ""; }
+
 function noteLines(entries: Array<[string, string]>) {
   return entries.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`).join("\n") || undefined;
 }
@@ -298,8 +323,8 @@ export async function importDevelopersCsv(input: z.infer<typeof crmCsvImportSche
       await tx.developer.create({ data: {
         companyName,
         contactName: normalized.contactName || undefined,
-        phone: normalized.phone || undefined,
-        email: normalized.email || undefined,
+        phone: validPhone(normalized.phone) || undefined,
+        email: validEmail(normalized.email) || undefined,
         website: normalized.website || undefined,
         targetZipCodes: targetZipCodes.length ? targetZipCodes : ["Unknown"],
         maximumPurchasePrice: csvNumber(csvValue(row, "Maximum Purchase Price", "Max Purchase Price", "Maximum Price", "Max Price")),
@@ -347,6 +372,14 @@ export async function importPropertiesCsv(input: z.infer<typeof crmCsvImportSche
         yearBuilt: csvValue(row, "Year Built", "Year") || undefined,
         lotSize: csvValue(row, "Lot Size", "Acreage", "Acres") || undefined,
         estimatedValue: csvNumber(csvValue(row, "Estimated Value", "Asking Price", "List Price", "Price")),
+        contactName: csvValue(row, "Contact Name", "Seller Contact", "Agency Contact") || undefined,
+        contactPhone: validPhone(csvValue(row, "Contact Phone", "Phone")) || undefined,
+        contactEmail: validEmail(csvValue(row, "Contact Email", "Email")) || undefined,
+        sourceName: csvValue(row, "Source Name", "Agency", "Government Source") || parsed.sourceName || undefined,
+        sourceUrl: validUrl(csvValue(row, "Source URL", "Official URL", "Listing URL")) || undefined,
+        sourceRecordDate: csvValue(row, "Record Date", "Listing Date", "Sale Date") || undefined,
+        opportunityStatus: "NEEDS_VERIFICATION",
+        confidence: 0,
         notes: noteLines([
           ["Source", csvValue(row, "Source", "Source URL") || parsed.sourceName || "CSV import"],
           ["Zoning", csvValue(row, "Zoning")],
@@ -380,4 +413,4 @@ export async function importForeclosureCsv(input: z.infer<typeof foreclosureCsvI
   return { rows: rows.length, propertiesCreated, leadsCreated, skipped };
 }
 
-export const __testables = { calculateMatches, parseCsvLine, parseCsvRows };
+export const __testables = { calculateMatches, qualificationFor, parseCsvLine, parseCsvRows };
