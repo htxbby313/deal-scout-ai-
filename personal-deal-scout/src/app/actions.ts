@@ -18,6 +18,7 @@ import {
   importForeclosureCsv,
   importPropertiesCsv,
   runFollowUpScheduler,
+  retireProperty,
   scoreDeveloperMatches,
   setApprovalStatus,
   updatePropertyEvidence,
@@ -79,6 +80,15 @@ export async function updatePropertyEvidenceAction(propertyId: string, _previous
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Property evidence could not be updated." }; }
 }
 
+export async function retirePropertyAction(propertyId: string, _previousState: EvidenceUpdateState, formData: FormData): Promise<EvidenceUpdateState> {
+  await requireOwner();
+  try {
+    await retireProperty({ propertyId, retirementReason: value(formData, "retirementReason") as "OFF_MARKET" | "SOLD" | "SOURCE_CONFLICT" | "DUPLICATE" | "OTHER", verificationSourceUrl: value(formData, "verificationSourceUrl"), verificationDate: value(formData, "verificationDate"), confidence: Number(value(formData, "confidence")), notes: value(formData, "notes") });
+    revalidatePath("/properties"); revalidatePath("/disposition");
+    return { status: "success", message: "Property retired with dated evidence. Matching remains locked." };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Property could not be retired." }; }
+}
+
 export async function createLeadAction(formData: FormData) {
   await requireOwner();
   await createLead({
@@ -128,6 +138,7 @@ export async function createDeveloperAction(formData: FormData) {
     phone: value(formData, "phone"),
     email: value(formData, "email"),
     website: value(formData, "website"),
+    contactUrl: value(formData, "contactUrl"),
     targetZipCodes: value(formData, "targetZipCodes") || "Unknown",
     maximumPurchasePrice: Number(value(formData, "maximumPurchasePrice") || 0),
     typicalBuildPrice: Number(value(formData, "typicalBuildPrice") || 0),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { propertyEvidenceUpdateSchema, propertyInputSchema, leadInputSchema, __testables, type DeveloperProjectRecord, type DeveloperRecord, type PropertyRecord } from "./database";
+import { propertyEvidenceUpdateSchema, propertyInputSchema, propertyRetirementSchema, leadInputSchema, __testables, type DeveloperProjectRecord, type DeveloperRecord, type PropertyRecord } from "./database";
 import { approvedMessage, auditEntry, canSendOutbound, completedTask, normalizedPropertyKey, propertyReadiness } from "./domain";
 
 describe("production foundation business rules", () => {
@@ -60,5 +60,16 @@ describe("production foundation business rules", () => {
     const base = { propertyId: "p1", estimatedValue: 125000, opportunityStatus: "GOVERNMENT_SALE", contactName: "HUD broker", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17", confidence: 90 };
     expect(() => propertyEvidenceUpdateSchema.parse(base)).toThrow();
     expect(propertyEvidenceUpdateSchema.parse({ ...base, contactEmail: "broker@example.gov" }).contactEmail).toBe("broker@example.gov");
+  });
+
+  it("accepts an official land-submission route without inventing an acquisitions email", () => {
+    const developer = { phone: "210-555-0100", email: null, contactName: "Land acquisition team", contactUrl: "https://builder.example/land-submission" };
+    expect(__testables.qualificationFor(developer, 1)).toBe("PRIORITY");
+  });
+
+  it("requires dated source evidence before retiring a stale property", () => {
+    const retirement = { propertyId: "p1", retirementReason: "SOLD", verificationSourceUrl: "https://example.gov/closing", verificationDate: "2026-08-17", confidence: 95, notes: "Recorded sale confirms the listing is stale." };
+    expect(propertyRetirementSchema.parse(retirement).retirementReason).toBe("SOLD");
+    expect(() => propertyRetirementSchema.parse({ ...retirement, verificationSourceUrl: "" })).toThrow();
   });
 });
