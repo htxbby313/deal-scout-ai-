@@ -9,9 +9,9 @@
     "lint": "node ./node_modules/eslint/bin/eslint.js src prisma next.config.ts eslint.config.mjs",
     "test": "node ./node_modules/vitest/vitest.mjs run --config vitest.config.ts",
     "db:generate": "node ./node_modules/prisma/build/index.js generate",
-    "db:migrate": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js migrate dev",
-    "db:migrate:deploy": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js migrate deploy",
-    "db:status": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js migrate status",
+    "db:migrate": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate dev",
+    "db:migrate:deploy": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate deploy",
+    "db:status": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate status",
     "db:seed": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs prisma/seed.ts"
   },
   "dependencies": {
