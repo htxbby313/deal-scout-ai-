@@ -48,6 +48,8 @@ model Property {
   sourceName     String?
   sourceUrl      String?
   sourceRecordDate String?
+  verificationSourceUrl String?
+  verificationDate String?
   lastVerifiedAt DateTime?
   confidence     Int @default(0)
   createdAt      DateTime @default(now())

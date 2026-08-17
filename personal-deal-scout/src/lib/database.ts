@@ -5,19 +5,19 @@ import { PrismaClientKnownRequestError, type InputJsonValue } from "@prisma/clie
 import { z } from "zod";
 
 import { getPrisma } from "@/lib/prisma";
-import { canSendOutbound } from "@/lib/domain";
+import { canSendOutbound, propertyReadiness } from "@/lib/domain";
 
 export type AuditType =
   | "database.migrated" | "property.created" | "lead.created" | "task.created" | "task.completed"
   | "message.template.created" | "message.draft.generated" | "message.approved" | "message.rejected"
   | "developer.created" | "developer.project.created" | "developer.matches.scored"
   | "developer.pricing_request.created" | "csv.foreclosure_imported" | "csv.developers_imported"
-  | "csv.properties_imported" | "provider.blocked"
+  | "csv.properties_imported" | "property.evidence_updated" | "provider.blocked"
   | "webhook.received" | "scheduler.followups" | "research.census_permits";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SENT_BLOCKED";
 export type QualificationStatus = "RESEARCH_NEEDED" | "LIMITED_CONTACT" | "QUALIFIED" | "PRIORITY" | "REJECTED";
 export type OpportunityStatus = "NEEDS_VERIFICATION" | "DEVELOPMENT_SIGNAL" | "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE" | "REJECTED";
-export type PropertyRecord = { id: string; address: string; city: string; state: string; zipCode: string; ownerName: string; marketFips?: string; yearBuilt?: string; lotSize?: string; estimatedValue?: number; notes?: string; opportunityStatus: OpportunityStatus; contactName?: string; contactPhone?: string; contactEmail?: string; sourceName?: string; sourceUrl?: string; sourceRecordDate?: string; lastVerifiedAt?: string; confidence: number; createdAt: string; updatedAt: string };
+export type PropertyRecord = { id: string; address: string; city: string; state: string; zipCode: string; ownerName: string; marketFips?: string; yearBuilt?: string; lotSize?: string; estimatedValue?: number; notes?: string; opportunityStatus: OpportunityStatus; contactName?: string; contactPhone?: string; contactEmail?: string; sourceName?: string; sourceUrl?: string; sourceRecordDate?: string; verificationSourceUrl?: string; verificationDate?: string; lastVerifiedAt?: string; confidence: number; createdAt: string; updatedAt: string };
 export type LeadRecord = { id: string; propertyId: string; ownerName: string; status: string; priority: string; nextActionType: string; nextActionAt: string; estimatedAssignmentFee: number; notes?: string; createdAt: string; updatedAt: string };
 export type TaskRecord = { id: string; leadId: string; title: string; type: string; priority: string; status: "OPEN" | "DONE"; dueAt: string; createdAt: string; updatedAt: string };
 export type MessageTemplate = { id: string; type: string; channel: "SMS" | "EMAIL" | "VOICE" | "INTERNAL"; body: string; active: boolean; createdAt: string; updatedAt: string };
@@ -34,6 +34,7 @@ export type Database = {
 };
 
 export const propertyInputSchema = z.object({ address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), ownerName: z.string().min(2), marketFips: z.string().regex(/^\d{5}$/).optional(), yearBuilt: z.string().optional(), lotSize: z.string().optional(), estimatedValue: z.coerce.number().min(0).optional(), notes: z.string().optional(), opportunityStatus: z.enum(["NEEDS_VERIFICATION", "DEVELOPMENT_SIGNAL", "CONFIRMED_AVAILABLE", "GOVERNMENT_SALE", "REJECTED"]).optional(), contactName: z.string().optional(), contactPhone: z.string().optional(), contactEmail: z.string().optional(), sourceName: z.string().optional(), sourceUrl: z.string().url().or(z.literal("")).optional(), sourceRecordDate: z.string().optional(), confidence: z.coerce.number().min(0).max(100).optional() });
+export const propertyEvidenceUpdateSchema = z.object({ propertyId: z.string().min(1), estimatedValue: z.coerce.number().int().positive(), opportunityStatus: z.enum(["CONFIRMED_AVAILABLE", "GOVERNMENT_SALE"]), contactName: z.string().min(2), contactPhone: z.string().optional(), contactEmail: z.string().email().or(z.literal("")).optional(), verificationSourceUrl: z.string().url(), verificationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), confidence: z.coerce.number().int().min(1).max(100), notes: z.string().optional() }).superRefine((value, context) => { if (!value.contactPhone && !value.contactEmail) context.addIssue({ code: "custom", message: "A contact phone or email is required.", path: ["contactPhone"] }); });
 export const leadInputSchema = z.object({ propertyId: z.string().min(1), ownerName: z.string().min(2), status: z.string().min(2), priority: z.string().min(2), nextActionType: z.string().min(2), nextActionAt: z.string().min(2), estimatedAssignmentFee: z.coerce.number().min(0), notes: z.string().optional() });
 export const templateInputSchema = z.object({ type: z.string().min(2), channel: z.enum(["SMS", "EMAIL", "VOICE", "INTERNAL"]), body: z.string().min(10) });
 export const developerInputSchema = z.object({ companyName: z.string().min(2), contactName: z.string().optional(), phone: z.string().regex(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/).or(z.literal("")).optional(), email: z.string().email().or(z.literal("")).optional(), website: z.string().optional(), targetZipCodes: z.string().min(5), maximumPurchasePrice: z.coerce.number().min(0).optional(), typicalBuildPrice: z.coerce.number().min(0).optional(), notes: z.string().optional() });
@@ -86,7 +87,7 @@ export async function readDatabase(): Promise<Database> {
     const enabled = (name: string) => providers.find((p) => p.provider === name)?.enabled === true;
     return {
       meta: { migrationVersion: setting.migrationVersion, systemMode: setting.mode, smsProviderEnabled: enabled("SMS"), emailProviderEnabled: enabled("EMAIL"), voiceProviderEnabled: enabled("VOICE"), createdAt: iso(setting.createdAt), updatedAt: iso(setting.updatedAt) },
-      properties: properties.map((p) => ({ ...p, marketFips: optional(p.marketFips), opportunityStatus: p.opportunityStatus as OpportunityStatus, yearBuilt: optional(p.yearBuilt), lotSize: optional(p.lotSize), estimatedValue: optional(p.estimatedValue), notes: optional(p.notes), contactName: optional(p.contactName), contactPhone: optional(p.contactPhone), contactEmail: optional(p.contactEmail), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), lastVerifiedAt: p.lastVerifiedAt ? iso(p.lastVerifiedAt) : undefined, createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
+      properties: properties.map((p) => ({ ...p, marketFips: optional(p.marketFips), opportunityStatus: p.opportunityStatus as OpportunityStatus, yearBuilt: optional(p.yearBuilt), lotSize: optional(p.lotSize), estimatedValue: optional(p.estimatedValue), notes: optional(p.notes), contactName: optional(p.contactName), contactPhone: optional(p.contactPhone), contactEmail: optional(p.contactEmail), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), verificationSourceUrl: optional(p.verificationSourceUrl), verificationDate: optional(p.verificationDate), lastVerifiedAt: p.lastVerifiedAt ? iso(p.lastVerifiedAt) : undefined, createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
       leads: leads.map((l) => ({ ...l, notes: optional(l.notes), createdAt: iso(l.createdAt), updatedAt: iso(l.updatedAt) })),
       tasks: tasks.map((t) => ({ ...t, status: t.status as "OPEN" | "DONE", createdAt: iso(t.createdAt), updatedAt: iso(t.updatedAt) })),
       developers: developers.map((d) => ({ ...d, qualificationStatus: d.qualificationStatus as QualificationStatus, contactName: optional(d.contactName), phone: optional(d.phone), email: optional(d.email), website: optional(d.website), maximumPurchasePrice: optional(d.maximumPurchasePrice), typicalBuildPrice: optional(d.typicalBuildPrice), notes: optional(d.notes), contactVerifiedAt: d.contactVerifiedAt ? iso(d.contactVerifiedAt) : undefined, lastResearchedAt: d.lastResearchedAt ? iso(d.lastResearchedAt) : undefined, createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt) })),
@@ -112,6 +113,20 @@ export async function createProperty(input: z.infer<typeof propertyInputSchema>)
       return property;
     });
   } catch (error) { return safeError(error, "create property"); }
+}
+
+export async function updatePropertyEvidence(input: z.infer<typeof propertyEvidenceUpdateSchema>) {
+  try {
+    const parsed = propertyEvidenceUpdateSchema.parse(input); const { propertyId, ...evidence } = parsed;
+    return await getPrisma().$transaction(async (tx) => {
+      const existing = await tx.property.findUnique({ where: { id: propertyId } });
+      if (!existing || !existing.sourceUrl) throw new Error("Property and original source evidence are required.");
+      const property = await tx.property.update({ where: { id: propertyId }, data: { ...evidence, lastVerifiedAt: new Date() } });
+      const readiness = propertyReadiness(property);
+      await audit(tx, "property.evidence_updated", `Updated price and contact evidence for ${property.address}.`, { propertyId, actionable: readiness.actionable, missing: readiness.missing, verificationSourceUrl: property.verificationSourceUrl, verificationDate: property.verificationDate });
+      return property;
+    });
+  } catch (error) { return safeError(error, "update property evidence"); }
 }
 
 export async function createLead(input: z.infer<typeof leadInputSchema>) {
@@ -151,8 +166,7 @@ export async function createDeveloperProject(input: z.infer<typeof developerProj
 }
 
 function calculateMatches(property: PropertyRecord, developers: DeveloperRecord[], projects: DeveloperProjectRecord[]) {
-  const propertyIsActionable = ["CONFIRMED_AVAILABLE", "GOVERNMENT_SALE"].includes(property.opportunityStatus) && Boolean(property.sourceUrl) && Boolean(property.contactPhone || property.contactEmail);
-  if (!propertyIsActionable) return [];
+  if (!propertyReadiness(property).actionable) return [];
   return developers.filter((d) => d.active && ["PRIORITY", "QUALIFIED"].includes(d.qualificationStatus)).map((developer) => {
     let score = 20; const reasons: string[] = []; const history = projects.filter((p) => p.developerId === developer.id && p.verifiedAt && p.sourceUrl);
     if (developer.targetZipCodes.includes(property.zipCode)) { score += 35; reasons.push("Builds in the same ZIP code."); }
