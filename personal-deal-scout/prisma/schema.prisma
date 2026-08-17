@@ -36,6 +36,7 @@ model Property {
   state          String
   zipCode        String
   ownerName      String
+  marketFips     String?
   yearBuilt      String?
   lotSize        String?
   estimatedValue Int?
@@ -56,6 +57,7 @@ model Property {
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
+  @@index([marketFips])
 }
 
 model Lead {

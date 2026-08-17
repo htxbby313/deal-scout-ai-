@@ -48,6 +48,7 @@ export async function createPropertyAction(formData: FormData) {
     state: value(formData, "state").toUpperCase(),
     zipCode: value(formData, "zipCode"),
     ownerName: value(formData, "ownerName"),
+    marketFips: value(formData, "marketFips") || undefined,
     yearBuilt: value(formData, "yearBuilt"),
     lotSize: value(formData, "lotSize"),
     estimatedValue: Number(value(formData, "estimatedValue") || 0),
@@ -56,8 +57,14 @@ export async function createPropertyAction(formData: FormData) {
     contactName: value(formData, "contactName"),
     contactPhone: value(formData, "contactPhone"),
     contactEmail: value(formData, "contactEmail"),
+    sourceName: value(formData, "sourceName"),
+    sourceUrl: value(formData, "sourceUrl"),
+    sourceRecordDate: value(formData, "sourceRecordDate"),
+    confidence: Number(value(formData, "confidence") || 0),
   });
   revalidatePath("/properties");
+  const marketFips = value(formData, "marketFips");
+  if (marketFips) revalidatePath(`/research/${marketFips}`);
 }
 
 export async function createLeadAction(formData: FormData) {
