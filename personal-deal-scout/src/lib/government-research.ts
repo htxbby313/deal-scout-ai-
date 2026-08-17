@@ -7,10 +7,10 @@ const MAX_FILE_BYTES = 2_000_000;
 const states: Record<string, string> = {"01":"Alabama","02":"Alaska","04":"Arizona","05":"Arkansas","06":"California","08":"Colorado","09":"Connecticut","10":"Delaware","11":"District of Columbia","12":"Florida","13":"Georgia","15":"Hawaii","16":"Idaho","17":"Illinois","18":"Indiana","19":"Iowa","20":"Kansas","21":"Kentucky","22":"Louisiana","23":"Maine","24":"Maryland","25":"Massachusetts","26":"Michigan","27":"Minnesota","28":"Mississippi","29":"Missouri","30":"Montana","31":"Nebraska","32":"Nevada","33":"New Hampshire","34":"New Jersey","35":"New Mexico","36":"New York","37":"North Carolina","38":"North Dakota","39":"Ohio","40":"Oklahoma","41":"Oregon","42":"Pennsylvania","44":"Rhode Island","45":"South Carolina","46":"South Dakota","47":"Tennessee","48":"Texas","49":"Utah","50":"Vermont","51":"Virginia","53":"Washington","54":"West Virginia","55":"Wisconsin","56":"Wyoming","72":"Puerto Rico"};
 
 export const governmentSources = [
-  { name: CENSUS_SOURCE, purpose: "Ranks counties by current residential permit activity and year-over-year momentum.", url: "https://www.census.gov/construction/bps/" },
-  { name: "HUD Homes and Multifamily Sales", purpose: "Official federal property and multifamily foreclosure sale listings.", url: "https://www.hud.gov/helping-americans/homes-for-sale" },
-  { name: "GSA Auctions", purpose: "Active federal real-property auctions and government surplus sales.", url: "https://www.gsaauctions.gov/" },
-  { name: "SEC EDGAR", purpose: "Public-company filings used to verify acquisitions and development activity.", url: "https://www.sec.gov/search-filings" },
+  { name: CENSUS_SOURCE, purpose: "Ranks counties by current residential permit activity and year-over-year momentum.", url: "https://www.census.gov/construction/bps/", status: "Connected" },
+  { name: "HUD FHA Single Family REO", purpose: "Imports publicly listed step-6 federal REO properties and verifies county geography with Census TIGERweb.", url: "https://egis.hud.gov/arcgis/rest/services/cpdmaps/HudSfReo/MapServer/1", status: "Connected" },
+  { name: "GSA Auctions", purpose: "Active federal real-property auctions and government surplus sales.", url: "https://www.gsaauctions.gov/", status: "Queued" },
+  { name: "SEC EDGAR", purpose: "Public-company filings used to verify acquisitions and development activity.", url: "https://www.sec.gov/search-filings", status: "Queued" },
 ] as const;
 
 type CountyPermit = { period: string; fips: string; stateFips: string; countyFips: string; countyName: string; stateName: string; units: number; value: bigint };

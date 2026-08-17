@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/auth";
 import { runCensusPermitResearch } from "@/lib/government-research";
+import { importHudReoCounty } from "@/lib/hud-reo";
 
 import {
   attemptProviderSend,
@@ -232,5 +233,18 @@ export async function runCensusPermitResearchAction(previousState: ResearchRunSt
     return { status: "success", message: `Ranked ${result.recordsFound} counties using Census permit data for ${result.period}.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "The Census permit scan failed." };
+  }
+}
+
+export async function importHudReoCountyAction(fips: string, previousState: ResearchRunState): Promise<ResearchRunState> {
+  void previousState;
+  await requireOwner();
+  try {
+    const result = await importHudReoCounty(fips);
+    revalidatePath(`/research/${fips}`);
+    revalidatePath("/properties");
+    return { status: "success", message: `HUD found ${result.found}; created ${result.created}; refreshed ${result.refreshed}; retired ${result.retired}; skipped ${result.skipped} source collision(s).` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "The HUD REO import failed." };
   }
 }
