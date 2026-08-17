@@ -36,7 +36,7 @@ describe("production foundation business rules", () => {
   });
 
   it("scores a same-ZIP developer above a generic developer", () => {
-    const property = { id: "p1", address: "10 Main", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner", estimatedValue: 250000, opportunityStatus: "GOVERNMENT_SALE", contactPhone: "713-555-0100", sourceUrl: "https://example.gov/property", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17", confidence: 90, createdAt: "", updatedAt: "" } satisfies PropertyRecord;
+    const property = { id: "p1", address: "10 Main", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner", estimatedValue: 250000, opportunityStatus: "GOVERNMENT_SALE", contactPhone: "713-555-0100", sourceUrl: "https://example.gov/property", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17", confidence: 90, researchFindings: [], media: [], researchRuns: [], createdAt: "", updatedAt: "" } satisfies PropertyRecord;
     const developer = (id: string, targetZipCodes: string[]): DeveloperRecord => ({ id, companyName: id, phone: "713-555-0101", email: `${id}@example.com`, targetZipCodes, active: true, qualificationStatus: "QUALIFIED", createdAt: "", updatedAt: "" });
     const purchase = (developerId: string): DeveloperProjectRecord => ({ id: `purchase-${developerId}`, developerId, address: "1 Prior St", city: "Houston", state: "TX", zipCode: "77002", sourceUrl: "https://example.gov/deed", verifiedAt: "2026-08-15", confidence: 90, createdAt: "", updatedAt: "" });
     const matches = __testables.calculateMatches(property, [developer("same", ["77002"]), developer("other", ["77003"])], [purchase("same"), purchase("other")]);

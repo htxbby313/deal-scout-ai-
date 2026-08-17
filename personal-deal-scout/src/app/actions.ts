@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/auth";
 import { runCensusPermitResearch } from "@/lib/government-research";
 import { importHudReoCounty } from "@/lib/hud-reo";
+import { addSourcedPropertyMedia, researchProperty, setPropertyMediaApproval } from "@/lib/property-research";
 
 import {
   attemptProviderSend,
@@ -87,6 +88,30 @@ export async function retirePropertyAction(propertyId: string, _previousState: E
     revalidatePath("/properties"); revalidatePath("/disposition");
     return { status: "success", message: "Property retired with dated evidence. Matching remains locked." };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Property could not be retired." }; }
+}
+
+export async function researchPropertyAction(propertyId: string, _previousState: ResearchRunState): Promise<ResearchRunState> {
+  void _previousState;
+  await requireOwner();
+  try {
+    const result = await researchProperty(propertyId);
+    revalidatePath("/properties"); revalidatePath("/disposition");
+    return { status: "success", message: `Research saved: ${result.verified} verified topic(s), ${result.mediaFound} image(s), ${result.manualNeeded} routed to manual verification.` };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Property research failed." }; }
+}
+
+export async function reviewPropertyMediaAction(formData: FormData) {
+  await requireOwner();
+  const propertyId = value(formData, "propertyId");
+  await setPropertyMediaApproval(propertyId, value(formData, "mediaId"), value(formData, "approved") === "true");
+  revalidatePath("/properties"); revalidatePath("/disposition");
+}
+
+export async function addPropertyMediaAction(formData: FormData) {
+  await requireOwner();
+  const propertyId = value(formData, "propertyId");
+  await addSourcedPropertyMedia({ propertyId, url: value(formData, "url"), sourceUrl: value(formData, "sourceUrl"), sourceName: value(formData, "sourceName"), caption: value(formData, "caption") });
+  revalidatePath("/properties"); revalidatePath("/disposition");
 }
 
 export async function createLeadAction(formData: FormData) {
