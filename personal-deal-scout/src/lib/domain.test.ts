@@ -5,7 +5,9 @@ import { approvedMessage, auditEntry, canSendOutbound, completedTask, normalized
 
 describe("production foundation business rules", () => {
   it("validates creating a property", () => {
-    expect(propertyInputSchema.parse({ address: "10 Main St", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner One" }).address).toBe("10 Main St");
+    const property = propertyInputSchema.parse({ address: "10 Main St", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner One", marketFips: "48201", sourceUrl: "https://example.gov/property" });
+    expect(property).toMatchObject({ address: "10 Main St", marketFips: "48201", sourceUrl: "https://example.gov/property" });
+    expect(() => propertyInputSchema.parse({ address: "10 Main St", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner One", marketFips: "TX" })).toThrow();
   });
 
   it("validates creating a lead", () => {
