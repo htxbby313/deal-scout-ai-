@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { propertyInputSchema, leadInputSchema, __testables, type DeveloperProjectRecord, type DeveloperRecord, type PropertyRecord } from "./database";
-import { approvedMessage, auditEntry, canSendOutbound, completedTask, normalizedPropertyKey } from "./domain";
+import { propertyEvidenceUpdateSchema, propertyInputSchema, leadInputSchema, __testables, type DeveloperProjectRecord, type DeveloperRecord, type PropertyRecord } from "./database";
+import { approvedMessage, auditEntry, canSendOutbound, completedTask, normalizedPropertyKey, propertyReadiness } from "./domain";
 
 describe("production foundation business rules", () => {
   it("validates creating a property", () => {
@@ -36,7 +36,7 @@ describe("production foundation business rules", () => {
   });
 
   it("scores a same-ZIP developer above a generic developer", () => {
-    const property = { id: "p1", address: "10 Main", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner", opportunityStatus: "GOVERNMENT_SALE", contactPhone: "713-555-0100", sourceUrl: "https://example.gov/property", confidence: 90, createdAt: "", updatedAt: "" } satisfies PropertyRecord;
+    const property = { id: "p1", address: "10 Main", city: "Houston", state: "TX", zipCode: "77002", ownerName: "Owner", estimatedValue: 250000, opportunityStatus: "GOVERNMENT_SALE", contactPhone: "713-555-0100", sourceUrl: "https://example.gov/property", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17", confidence: 90, createdAt: "", updatedAt: "" } satisfies PropertyRecord;
     const developer = (id: string, targetZipCodes: string[]): DeveloperRecord => ({ id, companyName: id, phone: "713-555-0101", email: `${id}@example.com`, targetZipCodes, active: true, qualificationStatus: "QUALIFIED", createdAt: "", updatedAt: "" });
     const purchase = (developerId: string): DeveloperProjectRecord => ({ id: `purchase-${developerId}`, developerId, address: "1 Prior St", city: "Houston", state: "TX", zipCode: "77002", sourceUrl: "https://example.gov/deed", verifiedAt: "2026-08-15", confidence: 90, createdAt: "", updatedAt: "" });
     const matches = __testables.calculateMatches(property, [developer("same", ["77002"]), developer("other", ["77003"])], [purchase("same"), purchase("other")]);
@@ -47,5 +47,18 @@ describe("production foundation business rules", () => {
     const developer = { phone: "713-555-0100", email: "buyer@example.com", contactName: "Buyer" };
     expect(__testables.qualificationFor(developer, 0)).toBe("RESEARCH_NEEDED");
     expect(__testables.qualificationFor(developer, 1)).toBe("PRIORITY");
+  });
+
+  it("keeps a sourced property locked until price, contact, and dated verification evidence exist", () => {
+    const incomplete = propertyReadiness({ opportunityStatus: "GOVERNMENT_SALE", sourceUrl: "https://example.gov/original" });
+    expect(incomplete.actionable).toBe(false);
+    expect(incomplete.missing).toEqual(expect.arrayContaining(["current asking price", "usable seller contact", "price/contact evidence URL", "verification date"]));
+    expect(propertyReadiness({ opportunityStatus: "GOVERNMENT_SALE", sourceUrl: "https://example.gov/original", estimatedValue: 125000, contactPhone: "713-555-0100", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17" }).actionable).toBe(true);
+  });
+
+  it("rejects an evidence update without a usable contact", () => {
+    const base = { propertyId: "p1", estimatedValue: 125000, opportunityStatus: "GOVERNMENT_SALE", contactName: "HUD broker", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17", confidence: 90 };
+    expect(() => propertyEvidenceUpdateSchema.parse(base)).toThrow();
+    expect(propertyEvidenceUpdateSchema.parse({ ...base, contactEmail: "broker@example.gov" }).contactEmail).toBe("broker@example.gov");
   });
 });

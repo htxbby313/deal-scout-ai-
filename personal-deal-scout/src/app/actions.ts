@@ -20,6 +20,7 @@ import {
   runFollowUpScheduler,
   scoreDeveloperMatches,
   setApprovalStatus,
+  updatePropertyEvidence,
 } from "@/lib/database";
 
 function value(formData: FormData, key: string) {
@@ -33,6 +34,7 @@ function labeled(label: string, formData: FormData, key: string) {
 
 export type CsvImportState = { status: "idle" | "success" | "error"; message: string };
 export type ResearchRunState = { status: "idle" | "success" | "error"; message: string };
+export type EvidenceUpdateState = { status: "idle" | "success" | "error"; message: string };
 
 async function csvFile(formData: FormData) {
   const file = formData.get("csvFile");
@@ -66,6 +68,15 @@ export async function createPropertyAction(formData: FormData) {
   revalidatePath("/properties");
   const marketFips = value(formData, "marketFips");
   if (marketFips) revalidatePath(`/research/${marketFips}`);
+}
+
+export async function updatePropertyEvidenceAction(propertyId: string, _previousState: EvidenceUpdateState, formData: FormData): Promise<EvidenceUpdateState> {
+  await requireOwner();
+  try {
+    await updatePropertyEvidence({ propertyId, estimatedValue: Number(value(formData, "estimatedValue")), opportunityStatus: value(formData, "opportunityStatus") as "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE", contactName: value(formData, "contactName"), contactPhone: value(formData, "contactPhone"), contactEmail: value(formData, "contactEmail"), verificationSourceUrl: value(formData, "verificationSourceUrl"), verificationDate: value(formData, "verificationDate"), confidence: Number(value(formData, "confidence")), notes: value(formData, "notes") });
+    revalidatePath("/properties"); revalidatePath("/disposition");
+    return { status: "success", message: "Evidence saved. Readiness was recalculated." };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Property evidence could not be updated." }; }
 }
 
 export async function createLeadAction(formData: FormData) {
