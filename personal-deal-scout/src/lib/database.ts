@@ -12,7 +12,7 @@ export type AuditType =
   | "message.template.created" | "message.draft.generated" | "message.approved" | "message.rejected"
   | "developer.created" | "developer.project.created" | "developer.matches.scored"
   | "developer.pricing_request.created" | "csv.foreclosure_imported" | "csv.developers_imported"
-  | "csv.properties_imported" | "property.evidence_updated" | "provider.blocked"
+  | "csv.properties_imported" | "property.evidence_updated" | "property.retired" | "provider.blocked"
   | "webhook.received" | "scheduler.followups" | "research.census_permits";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SENT_BLOCKED";
 export type QualificationStatus = "RESEARCH_NEEDED" | "LIMITED_CONTACT" | "QUALIFIED" | "PRIORITY" | "REJECTED";
@@ -22,7 +22,7 @@ export type LeadRecord = { id: string; propertyId: string; ownerName: string; st
 export type TaskRecord = { id: string; leadId: string; title: string; type: string; priority: string; status: "OPEN" | "DONE"; dueAt: string; createdAt: string; updatedAt: string };
 export type MessageTemplate = { id: string; type: string; channel: "SMS" | "EMAIL" | "VOICE" | "INTERNAL"; body: string; active: boolean; createdAt: string; updatedAt: string };
 export type MessageApproval = { id: string; leadId?: string; templateId?: string; channel: "SMS" | "EMAIL" | "VOICE" | "INTERNAL"; recipientLabel: string; subject?: string; body: string; status: ApprovalStatus; provider: string; createdAt: string; updatedAt: string };
-export type DeveloperRecord = { id: string; companyName: string; contactName?: string; phone?: string; email?: string; website?: string; targetZipCodes: string[]; maximumPurchasePrice?: number; typicalBuildPrice?: number; notes?: string; active: boolean; qualificationStatus: QualificationStatus; contactVerifiedAt?: string; lastResearchedAt?: string; createdAt: string; updatedAt: string };
+export type DeveloperRecord = { id: string; companyName: string; contactName?: string; phone?: string; email?: string; website?: string; contactUrl?: string; targetZipCodes: string[]; maximumPurchasePrice?: number; typicalBuildPrice?: number; notes?: string; active: boolean; qualificationStatus: QualificationStatus; contactVerifiedAt?: string; lastResearchedAt?: string; createdAt: string; updatedAt: string };
 export type DeveloperProjectRecord = { id: string; developerId: string; address: string; city: string; state: string; zipCode: string; originalPurchasePrice?: number; newBuildSalePrice?: number; lotSquareFeet?: number; notes?: string; sourceName?: string; sourceUrl?: string; sourceRecordDate?: string; verifiedAt?: string; confidence: number; createdAt: string; updatedAt: string };
 export type DeveloperMatch = { developerId: string; score: number; reasons: string[] };
 export type AuditLog = { id: string; type: AuditType; summary: string; details?: Record<string, unknown>; createdAt: string };
@@ -35,9 +35,10 @@ export type Database = {
 
 export const propertyInputSchema = z.object({ address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), ownerName: z.string().min(2), marketFips: z.string().regex(/^\d{5}$/).optional(), yearBuilt: z.string().optional(), lotSize: z.string().optional(), estimatedValue: z.coerce.number().min(0).optional(), notes: z.string().optional(), opportunityStatus: z.enum(["NEEDS_VERIFICATION", "DEVELOPMENT_SIGNAL", "CONFIRMED_AVAILABLE", "GOVERNMENT_SALE", "REJECTED"]).optional(), contactName: z.string().optional(), contactPhone: z.string().optional(), contactEmail: z.string().optional(), sourceName: z.string().optional(), sourceUrl: z.string().url().or(z.literal("")).optional(), sourceRecordDate: z.string().optional(), confidence: z.coerce.number().min(0).max(100).optional() });
 export const propertyEvidenceUpdateSchema = z.object({ propertyId: z.string().min(1), estimatedValue: z.coerce.number().int().positive(), opportunityStatus: z.enum(["CONFIRMED_AVAILABLE", "GOVERNMENT_SALE"]), contactName: z.string().min(2), contactPhone: z.string().optional(), contactEmail: z.string().email().or(z.literal("")).optional(), verificationSourceUrl: z.string().url(), verificationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), confidence: z.coerce.number().int().min(1).max(100), notes: z.string().optional() }).superRefine((value, context) => { if (!value.contactPhone && !value.contactEmail) context.addIssue({ code: "custom", message: "A contact phone or email is required.", path: ["contactPhone"] }); });
+export const propertyRetirementSchema = z.object({ propertyId: z.string().min(1), retirementReason: z.enum(["OFF_MARKET", "SOLD", "SOURCE_CONFLICT", "DUPLICATE", "OTHER"]), verificationSourceUrl: z.string().url(), verificationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), confidence: z.coerce.number().int().min(1).max(100), notes: z.string().min(10) });
 export const leadInputSchema = z.object({ propertyId: z.string().min(1), ownerName: z.string().min(2), status: z.string().min(2), priority: z.string().min(2), nextActionType: z.string().min(2), nextActionAt: z.string().min(2), estimatedAssignmentFee: z.coerce.number().min(0), notes: z.string().optional() });
 export const templateInputSchema = z.object({ type: z.string().min(2), channel: z.enum(["SMS", "EMAIL", "VOICE", "INTERNAL"]), body: z.string().min(10) });
-export const developerInputSchema = z.object({ companyName: z.string().min(2), contactName: z.string().optional(), phone: z.string().regex(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/).or(z.literal("")).optional(), email: z.string().email().or(z.literal("")).optional(), website: z.string().optional(), targetZipCodes: z.string().min(5), maximumPurchasePrice: z.coerce.number().min(0).optional(), typicalBuildPrice: z.coerce.number().min(0).optional(), notes: z.string().optional() });
+export const developerInputSchema = z.object({ companyName: z.string().min(2), contactName: z.string().optional(), phone: z.string().regex(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/).or(z.literal("")).optional(), email: z.string().email().or(z.literal("")).optional(), website: z.string().url().or(z.literal("")).optional(), contactUrl: z.string().url().or(z.literal("")).optional(), targetZipCodes: z.string().min(5), maximumPurchasePrice: z.coerce.number().min(0).optional(), typicalBuildPrice: z.coerce.number().min(0).optional(), notes: z.string().optional() });
 export const developerProjectInputSchema = z.object({ developerId: z.string().min(1), address: z.string().min(3), city: z.string().min(2), state: z.string().length(2), zipCode: z.string().min(5), originalPurchasePrice: z.coerce.number().min(0).optional(), newBuildSalePrice: z.coerce.number().min(0).optional(), lotSquareFeet: z.coerce.number().min(0).optional(), notes: z.string().optional(), sourceName: z.string().min(2), sourceUrl: z.string().url(), sourceRecordDate: z.string().min(4), confidence: z.coerce.number().min(1).max(100) });
 export const foreclosureCsvImportSchema = z.object({ csvText: z.string().min(10), sourceName: z.string().optional() });
 export const crmCsvImportSchema = z.object({ csvText: z.string().min(3), sourceName: z.string().optional() });
@@ -56,20 +57,18 @@ async function audit(tx: Prisma.TransactionClient | PrismaClient, type: AuditTyp
   await tx.auditLog.create({ data: { type, summary, details: details as InputJsonValue | undefined } });
 }
 
-function qualificationFor(developer: { phone: string | null; email: string | null; contactName: string | null }, verifiedPurchases: number): QualificationStatus {
-  if (!verifiedPurchases) return "RESEARCH_NEEDED";
-  const hasPhone = Boolean(developer.phone?.trim());
-  const hasEmail = Boolean(developer.email?.trim());
-  if (hasPhone && hasEmail && developer.contactName?.trim()) return "PRIORITY";
-  if (hasPhone && hasEmail) return "QUALIFIED";
-  if (hasPhone || hasEmail) return "LIMITED_CONTACT";
+function qualificationFor(developer: { phone: string | null; email: string | null; contactName: string | null; contactUrl?: string | null }, verifiedProjects: number): QualificationStatus {
+  if (!verifiedProjects) return "RESEARCH_NEEDED";
+  const channels = [developer.phone, developer.email, developer.contactUrl].filter((value) => Boolean(value?.trim())).length;
+  if (channels >= 2 && developer.contactName?.trim()) return "PRIORITY";
+  if (channels >= 1) return "QUALIFIED";
   return "RESEARCH_NEEDED";
 }
 
 async function refreshDeveloperQualification(tx: Prisma.TransactionClient, developerId: string) {
   const developer = await tx.developer.findUniqueOrThrow({ where: { id: developerId } });
-  const verifiedPurchases = await tx.developerProject.count({ where: { developerId, sourceUrl: { not: null }, verifiedAt: { not: null } } });
-  const qualificationStatus = qualificationFor(developer, verifiedPurchases);
+  const verifiedProjects = await tx.developerProject.count({ where: { developerId, sourceUrl: { not: null }, verifiedAt: { not: null } } });
+  const qualificationStatus = qualificationFor(developer, verifiedProjects);
   return tx.developer.update({ where: { id: developerId }, data: { qualificationStatus, lastResearchedAt: new Date() } });
 }
 
@@ -90,7 +89,7 @@ export async function readDatabase(): Promise<Database> {
       properties: properties.map((p) => ({ ...p, marketFips: optional(p.marketFips), opportunityStatus: p.opportunityStatus as OpportunityStatus, yearBuilt: optional(p.yearBuilt), lotSize: optional(p.lotSize), estimatedValue: optional(p.estimatedValue), notes: optional(p.notes), contactName: optional(p.contactName), contactPhone: optional(p.contactPhone), contactEmail: optional(p.contactEmail), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), verificationSourceUrl: optional(p.verificationSourceUrl), verificationDate: optional(p.verificationDate), lastVerifiedAt: p.lastVerifiedAt ? iso(p.lastVerifiedAt) : undefined, createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
       leads: leads.map((l) => ({ ...l, notes: optional(l.notes), createdAt: iso(l.createdAt), updatedAt: iso(l.updatedAt) })),
       tasks: tasks.map((t) => ({ ...t, status: t.status as "OPEN" | "DONE", createdAt: iso(t.createdAt), updatedAt: iso(t.updatedAt) })),
-      developers: developers.map((d) => ({ ...d, qualificationStatus: d.qualificationStatus as QualificationStatus, contactName: optional(d.contactName), phone: optional(d.phone), email: optional(d.email), website: optional(d.website), maximumPurchasePrice: optional(d.maximumPurchasePrice), typicalBuildPrice: optional(d.typicalBuildPrice), notes: optional(d.notes), contactVerifiedAt: d.contactVerifiedAt ? iso(d.contactVerifiedAt) : undefined, lastResearchedAt: d.lastResearchedAt ? iso(d.lastResearchedAt) : undefined, createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt) })),
+      developers: developers.map((d) => ({ ...d, qualificationStatus: d.qualificationStatus as QualificationStatus, contactName: optional(d.contactName), phone: optional(d.phone), email: optional(d.email), website: optional(d.website), contactUrl: optional(d.contactUrl), maximumPurchasePrice: optional(d.maximumPurchasePrice), typicalBuildPrice: optional(d.typicalBuildPrice), notes: optional(d.notes), contactVerifiedAt: d.contactVerifiedAt ? iso(d.contactVerifiedAt) : undefined, lastResearchedAt: d.lastResearchedAt ? iso(d.lastResearchedAt) : undefined, createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt) })),
       developerProjects: developerProjects.map((p) => ({ ...p, originalPurchasePrice: optional(p.originalPurchasePrice), newBuildSalePrice: optional(p.newBuildSalePrice), lotSquareFeet: optional(p.lotSquareFeet), notes: optional(p.notes), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), verifiedAt: p.verifiedAt ? iso(p.verifiedAt) : undefined, createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
       messageTemplates: templates.map((t) => ({ ...t, channel: t.channel as MessageTemplate["channel"], createdAt: iso(t.createdAt), updatedAt: iso(t.updatedAt) })),
       messageApprovals: approvals.map((a) => ({ ...a, leadId: optional(a.leadId), templateId: optional(a.templateId), subject: optional(a.subject), channel: a.channel as MessageApproval["channel"], status: a.status as ApprovalStatus, createdAt: iso(a.createdAt), updatedAt: iso(a.updatedAt) })),
@@ -129,6 +128,20 @@ export async function updatePropertyEvidence(input: z.infer<typeof propertyEvide
   } catch (error) { return safeError(error, "update property evidence"); }
 }
 
+export async function retireProperty(input: z.infer<typeof propertyRetirementSchema>) {
+  try {
+    const parsed = propertyRetirementSchema.parse(input); const { propertyId, retirementReason, ...evidence } = parsed;
+    return await getPrisma().$transaction(async (tx) => {
+      const existing = await tx.property.findUnique({ where: { id: propertyId } });
+      if (!existing || !existing.sourceUrl) throw new Error("Property and original source evidence are required.");
+      const property = await tx.property.update({ where: { id: propertyId }, data: { opportunityStatus: "REJECTED", verificationSourceUrl: evidence.verificationSourceUrl, verificationDate: evidence.verificationDate, confidence: evidence.confidence, notes: evidence.notes, lastVerifiedAt: new Date() } });
+      await tx.developerMatch.deleteMany({ where: { propertyId } });
+      await audit(tx, "property.retired", `Retired ${property.address} from the actionable pipeline.`, { propertyId, retirementReason, verificationSourceUrl: property.verificationSourceUrl, verificationDate: property.verificationDate });
+      return property;
+    });
+  } catch (error) { return safeError(error, "retire property"); }
+}
+
 export async function createLead(input: z.infer<typeof leadInputSchema>) {
   try {
     const parsed = leadInputSchema.parse(input);
@@ -161,7 +174,7 @@ export async function createDeveloper(input: z.infer<typeof developerInputSchema
   catch (error) { return safeError(error, "create developer"); }
 }
 export async function createDeveloperProject(input: z.infer<typeof developerProjectInputSchema>) {
-  try { const p = developerProjectInputSchema.parse(input); return await getPrisma().$transaction(async (tx) => { const record = await tx.developerProject.create({ data: { ...p, state: p.state.toUpperCase(), verifiedAt: new Date() } }); const developer = await refreshDeveloperQualification(tx, p.developerId); await audit(tx, "developer.project.created", `Recorded verified developer purchase ${record.address}.`, { developerId: record.developerId, projectId: record.id, qualificationStatus: developer.qualificationStatus, sourceUrl: record.sourceUrl }); return record; }); }
+  try { const p = developerProjectInputSchema.parse(input); return await getPrisma().$transaction(async (tx) => { const record = await tx.developerProject.create({ data: { ...p, state: p.state.toUpperCase(), verifiedAt: new Date() } }); const developer = await refreshDeveloperQualification(tx, p.developerId); await audit(tx, "developer.project.created", `Recorded verified developer project ${record.address}.`, { developerId: record.developerId, projectId: record.id, qualificationStatus: developer.qualificationStatus, sourceUrl: record.sourceUrl }); return record; }); }
   catch (error) { return safeError(error, "create developer project"); }
 }
 
@@ -175,7 +188,7 @@ function calculateMatches(property: PropertyRecord, developers: DeveloperRecord[
     if (developer.maximumPurchasePrice && property.estimatedValue && developer.maximumPurchasePrice >= property.estimatedValue) { score += 15; reasons.push("Maximum purchase price can cover the estimated value."); }
     else if (developer.maximumPurchasePrice) { score += 8; reasons.push("Known maximum purchase price is available for underwriting."); }
     if (developer.typicalBuildPrice && developer.typicalBuildPrice >= 3_000_000) { score += 10; reasons.push("Typical build value supports high-end redevelopment."); }
-    reasons.push(`${history.length} government-source purchase record${history.length === 1 ? "" : "s"} verified.`);
+    reasons.push(`${history.length} government-source ownership or development record${history.length === 1 ? "" : "s"} verified.`);
     return { developerId: developer.id, score: Math.min(100, score), reasons };
   }).sort((a, b) => b.score - a.score);
 }
@@ -197,7 +210,7 @@ export async function generateDraftApproval(templateId: string, leadId: string) 
   catch (error) { return safeError(error, "generate message draft"); }
 }
 export async function generateDeveloperPricingRequest(propertyId: string, developerId: string) {
-  try { const db = getPrisma(); const [property, developer, lead] = await Promise.all([db.property.findUnique({ where: { id: propertyId } }), db.developer.findUnique({ where: { id: developerId } }), db.lead.findUnique({ where: { propertyId } })]); if (!property || !developer) throw new Error("Property or developer not found."); const matches = await scoreDeveloperMatches(propertyId, false); const match = matches.find((m) => m.developerId === developerId); const body = `I have a possible property in ${property.zipCode}.\n\nAddress: ${property.address}\nLot size: ${property.lotSize || "unknown"}\nYear built: ${property.yearBuilt || "unknown"}\nNearby / fit notes: ${(match?.reasons ?? []).join(" ") || "Potential redevelopment candidate."}\n\nWhere would you need to be on price?`; return await db.$transaction(async (tx) => { const approval = await tx.messageApproval.create({ data: { leadId: lead?.id, channel: "EMAIL", recipientLabel: developer.companyName, subject: `Pricing request: ${property.address}`, body } }); await audit(tx, "developer.pricing_request.created", `Generated pricing request for ${developer.companyName}.`, { developerId, propertyId, approvalId: approval.id, matchScore: match?.score }); return approval; }); }
+  try { const db = getPrisma(); const [property, developer, lead] = await Promise.all([db.property.findUnique({ where: { id: propertyId } }), db.developer.findUnique({ where: { id: developerId } }), db.lead.findUnique({ where: { propertyId } })]); if (!property || !developer) throw new Error("Property or developer not found."); const matches = await scoreDeveloperMatches(propertyId, false); const match = matches.find((m) => m.developerId === developerId); const channel = developer.email ? "EMAIL" : "INTERNAL"; const route = developer.email || developer.contactUrl || developer.phone || "No verified route"; const body = `I have a possible property in ${property.zipCode}.\n\nAddress: ${property.address}\nLot size: ${property.lotSize || "unknown"}\nYear built: ${property.yearBuilt || "unknown"}\nNearby / fit notes: ${(match?.reasons ?? []).join(" ") || "Potential redevelopment candidate."}\n\nWhere would you need to be on price?\n\nManual contact route: ${route}`; return await db.$transaction(async (tx) => { const approval = await tx.messageApproval.create({ data: { leadId: lead?.id, channel, recipientLabel: developer.companyName, subject: `Pricing request: ${property.address}`, body, provider: "disabled" } }); await audit(tx, "developer.pricing_request.created", `Generated pricing request for ${developer.companyName}.`, { developerId, propertyId, approvalId: approval.id, matchScore: match?.score, channel, contactRoute: route }); return approval; }); }
   catch (error) { return safeError(error, "generate developer pricing request"); }
 }
 export async function setApprovalStatus(approvalId: string, status: "APPROVED" | "REJECTED") {
