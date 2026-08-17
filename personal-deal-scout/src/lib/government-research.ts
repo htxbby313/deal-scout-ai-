@@ -33,8 +33,9 @@ function integer(value: string | undefined) { const parsed = Number(value ?? 0);
 function parseCountyPermits(text: string, expectedPeriod?: string): CountyPermit[] {
   if (new TextEncoder().encode(text).length > MAX_FILE_BYTES) throw new Error("Census county permit file exceeded the safe size limit.");
   const lines = text.split(/\r?\n/);
-  const header = lines.slice(0, 3).join(" ").toLowerCase();
-  if (!header.includes("survey date") || !header.includes("county")) throw new Error("Census county permit file header was not recognized.");
+  const heading = csvLine(lines[0] ?? "").map((value) => value.toLowerCase());
+  const labels = csvLine(lines[1] ?? "").map((value) => value.toLowerCase());
+  if (heading[0] !== "survey" || labels[0] !== "date" || labels[1] !== "state" || labels[2] !== "county" || labels[5] !== "name") throw new Error("Census county permit file header was not recognized.");
   const records = lines.slice(3).filter((line) => line.trim()).map(csvLine).map((row) => {
     if (row.length < 18 || !/^\d{6}$/.test(row[0] ?? "")) throw new Error("Census county permit file contained an invalid county row.");
     const period = row[0];
