@@ -66,14 +66,45 @@ function imageUrls(html: string, baseUrl: string) {
   }).filter((value) => value.startsWith("https://")))];
 }
 
+function listingImageUrls(html: string, baseUrl: string, address: string) {
+  const addressTerms = address.toLowerCase().split(/\s+/).filter((term) => term.length > 2);
+  const matches: string[] = [];
+  for (const tag of html.match(/<img\s[^>]*>/gi) || []) {
+    const alt = tag.match(/alt\s*=\s*["']([^"']*)["']/i)?.[1]?.toLowerCase() || "";
+    if (!addressTerms.some((term) => alt.includes(term))) continue;
+    const src = tag.match(/(?:src|data-src)\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (src) matches.push(src);
+  }
+  const jsonImages = [...html.matchAll(/["'](?:image|contentUrl)["']\s*:\s*["'](https:\/\/[^"']+)["']/gi)].map((match) => match[1]);
+  return [...new Set([...imageUrls(html, baseUrl), ...matches, ...jsonImages].map((value) => {
+    try { return new URL(value.replaceAll("\\/", "/").replaceAll("&amp;", "&"), baseUrl).toString(); } catch { return ""; }
+  }).filter((value) => value.startsWith("https://")))].slice(0, 12);
+}
+
+function phoneNumbers(html: string) {
+  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
+  const matches = text.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g) || [];
+  return [...new Set(matches.map((phone) => phone.trim()))];
+}
+
 async function censusGeocode(property: { address: string; city: string; state: string; zipCode: string }) {
-  const endpoint = new URL("https://geocoding.geo.census.gov/geocoder/locations/address");
-  endpoint.search = new URLSearchParams({ street: property.address, city: property.city, state: property.state, zip: property.zipCode, benchmark: "Public_AR_Current", format: "json" }).toString();
+  const endpoint = new URL("https://geocoding.geo.census.gov/geocoder/geographies/address");
+  endpoint.search = new URLSearchParams({ street: property.address, city: property.city, state: property.state, zip: property.zipCode, benchmark: "Public_AR_Current", vintage: "Current_Current", format: "json" }).toString();
   const response = await fetch(endpoint, { cache: "no-store", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 source-backed-property-research" } });
   if (!response.ok) throw new Error(`Census Geocoder returned ${response.status}.`);
-  const payload = await response.json() as { result?: { addressMatches?: Array<{ matchedAddress?: string; coordinates?: { x?: number; y?: number } }> } };
+  const payload = await response.json() as { result?: { addressMatches?: Array<{ matchedAddress?: string; coordinates?: { x?: number; y?: number }; geographies?: { Counties?: Array<{ NAME?: string }> } }> } };
   const match = payload.result?.addressMatches?.[0];
-  return match?.coordinates?.x !== undefined && match.coordinates.y !== undefined ? { address: match.matchedAddress || "Census address match", longitude: match.coordinates.x, latitude: match.coordinates.y, sourceUrl: endpoint.toString() } : null;
+  return match?.coordinates?.x !== undefined && match.coordinates.y !== undefined ? { address: match.matchedAddress || "Census address match", longitude: match.coordinates.x, latitude: match.coordinates.y, county: match.geographies?.Counties?.[0]?.NAME, sourceUrl: endpoint.toString() } : null;
+}
+
+async function openStreetMapGeocode(property: { address: string; city: string; state: string; zipCode: string }) {
+  const endpoint = new URL("https://nominatim.openstreetmap.org/search");
+  endpoint.search = new URLSearchParams({ q: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`, countrycodes: "us", addressdetails: "1", format: "jsonv2", limit: "1" }).toString();
+  const response = await fetch(endpoint, { cache: "no-store", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 property-research" } });
+  if (!response.ok) throw new Error(`OpenStreetMap geocoder returned ${response.status}.`);
+  const [match] = await response.json() as Array<{ lat?: string; lon?: string; display_name?: string; address?: { county?: string; neighbourhood?: string; suburb?: string } }>;
+  const latitude = Number(match?.lat); const longitude = Number(match?.lon);
+  return Number.isFinite(latitude) && Number.isFinite(longitude) ? { address: match.display_name || "OpenStreetMap address match", latitude, longitude, county: match.address?.county, neighborhood: match.address?.neighbourhood || match.address?.suburb, sourceUrl: endpoint.toString() } : null;
 }
 
 export async function researchProperty(propertyId: string) {
@@ -84,6 +115,8 @@ export async function researchProperty(propertyId: string) {
   const findings = new Map<string, Finding>();
   const media: DiscoveredMedia[] = [];
   const errors: string[] = [];
+  const discoveredPhones: Array<{ phone: string; sourceUrl: string; sourceName: string }> = [];
+  let geocode: Awaited<ReturnType<typeof censusGeocode>> = null;
   let sourcesChecked = 0;
 
   const sourceUrls = [...new Set([property.sourceUrl, property.verificationSourceUrl].filter(Boolean) as string[])];
@@ -94,7 +127,8 @@ export async function researchProperty(propertyId: string) {
       const sourceName = new URL(finalUrl).hostname.replace(/^www\./, "");
       const title = meta(html, "og:title") || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
       findings.set("LISTING", { topic: "LISTING", label: "Current listing or opportunity source", value: title || "Source page responded", status: "VERIFIED", sourceName, sourceUrl, confidence: title ? 80 : 60, notes: "The source page responded during this run; availability still requires dated listing evidence." });
-      for (const [position, url] of imageUrls(html, finalUrl).entries()) media.push({ url, sourceUrl, sourceName, altText: `${property.address} source photo ${position + 1}` });
+      for (const [position, url] of listingImageUrls(html, finalUrl, property.address).entries()) media.push({ url, sourceUrl, sourceName, altText: `${property.address} source photo ${position + 1}` });
+      for (const phone of phoneNumbers(html)) discoveredPhones.push({ phone, sourceUrl, sourceName });
     } catch (error) {
       errors.push(`${sourceUrl}: ${error instanceof Error ? error.message : "source failed"}`);
     }
@@ -102,21 +136,26 @@ export async function researchProperty(propertyId: string) {
 
   try {
     sourcesChecked += 1;
-    const location = await censusGeocode(property);
-    if (location) findings.set("LOCATION", { topic: "LOCATION", label: "Mapped location", value: `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)} — ${location.address}`, status: "VERIFIED", sourceName: "U.S. Census Geocoder", sourceUrl: location.sourceUrl, confidence: 80, notes: "Census coordinates are address-range estimates, not a parcel survey." });
+    geocode = await censusGeocode(property);
   } catch (error) { errors.push(`Census Geocoder: ${error instanceof Error ? error.message : "lookup failed"}`); }
+  if (!geocode) try { geocode = await openStreetMapGeocode(property); } catch (error) { errors.push(`OpenStreetMap Geocoder: ${error instanceof Error ? error.message : "lookup failed"}`); }
+  if (geocode) findings.set("LOCATION", { topic: "LOCATION", label: "Mapped location", value: `${geocode.latitude.toFixed(6)}, ${geocode.longitude.toFixed(6)} — ${geocode.address}`, status: "VERIFIED", sourceName: geocode.sourceUrl.includes("openstreetmap") ? "OpenStreetMap Nominatim" : "U.S. Census Geocoder", sourceUrl: geocode.sourceUrl, confidence: 80, notes: "Geocoder coordinates are address estimates, not a parcel survey." });
 
   if (media.length) findings.set("PHOTOS", { topic: "PHOTOS", label: "Property photos", value: `${media.length} source image${media.length === 1 ? "" : "s"} found`, status: "VERIFIED", sourceName: media[0].sourceName, sourceUrl: media[0].sourceUrl, confidence: 70, notes: "Images were exposed by the source page. Review subject match and usage rights before sending." });
   if (property.estimatedValue && property.verificationSourceUrl) findings.set("PRICE", { topic: "PRICE", label: "Current asking price", value: `$${property.estimatedValue.toLocaleString("en-US")}`, status: "VERIFIED", sourceName: "Dated property verification", sourceUrl: property.verificationSourceUrl, confidence: property.confidence });
-  if (property.contactName && (property.contactPhone || property.contactEmail) && property.verificationSourceUrl) findings.set("CONTACT", { topic: "CONTACT", label: "Seller or broker contact", value: [property.contactName, property.contactPhone, property.contactEmail].filter(Boolean).join(" · "), status: "VERIFIED", sourceName: "Dated property verification", sourceUrl: property.verificationSourceUrl, confidence: property.confidence });
+  const foundPhone = property.contactPhone ? null : discoveredPhones[0];
+  const contactPhone = property.contactPhone || foundPhone?.phone;
+  if (contactPhone && (property.verificationSourceUrl || foundPhone)) findings.set("CONTACT", { topic: "CONTACT", label: "Seller or broker phone", value: [property.contactName, contactPhone, property.contactEmail].filter(Boolean).join(" · "), status: "VERIFIED", sourceName: foundPhone?.sourceName || "Dated property verification", sourceUrl: foundPhone?.sourceUrl || property.verificationSourceUrl || undefined, confidence: property.contactPhone ? property.confidence : 70, notes: foundPhone ? "Phone was extracted from the saved listing source and should be rechecked when the listing changes." : undefined });
 
   for (const [topic, label] of TOPICS) if (!findings.has(topic)) {
     const previous = existingFindings.get(topic);
     if (previous?.status === "VERIFIED") findings.set(topic, { topic, label: previous.label, value: previous.value || undefined, status: "VERIFIED", sourceName: previous.sourceName || undefined, sourceUrl: previous.sourceUrl || undefined, confidence: previous.confidence, notes: previous.notes || undefined });
     else findings.set(topic, { topic, label, status: "NEEDS_MANUAL_VERIFICATION", confidence: 0, notes: topic === "PHOTOS" ? "Integrated source pages did not expose a usable property image." : "Integrated sources did not return enough evidence during this run." });
   }
+  const geocodedNeighborhood = geocode && "neighborhood" in geocode && typeof geocode.neighborhood === "string" ? geocode.neighborhood : undefined;
 
   await db.$transaction(async (tx) => {
+    if (foundPhone || geocode) await tx.property.update({ where: { id: propertyId }, data: { contactPhone: contactPhone || undefined, contactUrl: foundPhone?.sourceUrl || undefined, latitude: geocode?.latitude, longitude: geocode?.longitude, county: property.county || geocode?.county, neighborhood: property.neighborhood || geocodedNeighborhood } });
     for (const finding of findings.values()) await tx.propertyResearchFinding.upsert({ where: { propertyId_topic: { propertyId, topic: finding.topic } }, update: { ...finding, observedAt: new Date() }, create: { propertyId, ...finding } });
     for (const [position, item] of media.entries()) await tx.propertyMedia.upsert({ where: { propertyId_url: { propertyId, url: item.url } }, update: { sourceUrl: item.sourceUrl, sourceName: item.sourceName, altText: item.altText, position }, create: { propertyId, ...item, position } });
     const manualNeeded = [...findings.values()].filter((item) => item.status !== "VERIFIED").length;
@@ -151,4 +190,4 @@ export async function addSourcedPropertyMedia(input: { propertyId: string; url: 
   return media;
 }
 
-export const __propertyResearchTestables = { safePublicUrl, meta, imageUrls };
+export const __propertyResearchTestables = { safePublicUrl, meta, imageUrls, listingImageUrls, phoneNumbers };
