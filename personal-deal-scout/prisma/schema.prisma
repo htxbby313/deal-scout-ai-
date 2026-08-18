@@ -29,6 +29,21 @@ enum OpportunityStatus {
   REJECTED
 }
 
+enum ResearchFindingStatus {
+  VERIFIED
+  NOT_FOUND
+  CONFLICT
+  NEEDS_MANUAL_VERIFICATION
+}
+
+enum PropertyMediaKind {
+  LISTING_PHOTO
+  MAP
+  PARCEL
+  DOCUMENT
+  OTHER
+}
+
 model Property {
   id             String   @id @default(cuid())
   address        String
@@ -56,10 +71,65 @@ model Property {
   updatedAt      DateTime @updatedAt
   leads          Lead[]
   matches        DeveloperMatch[]
+  researchRuns   PropertyResearchRun[]
+  researchFindings PropertyResearchFinding[]
+  media          PropertyMedia[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
   @@index([marketFips])
+}
+
+model PropertyResearchRun {
+  id             String   @id @default(cuid())
+  propertyId     String
+  status         String
+  sourcesChecked Int      @default(0)
+  findingsFound  Int      @default(0)
+  manualNeeded   Int      @default(0)
+  error          String?
+  startedAt      DateTime @default(now())
+  finishedAt     DateTime?
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, startedAt])
+}
+
+model PropertyResearchFinding {
+  id          String                @id @default(cuid())
+  propertyId  String
+  topic       String
+  label       String
+  value       String?
+  status      ResearchFindingStatus
+  sourceName  String?
+  sourceUrl   String?
+  observedAt  DateTime              @default(now())
+  confidence  Int                   @default(0)
+  notes       String?
+  property    Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, topic])
+  @@index([propertyId, status])
+}
+
+model PropertyMedia {
+  id            String            @id @default(cuid())
+  propertyId    String
+  url           String
+  sourceUrl     String
+  sourceName    String
+  caption       String?
+  altText       String
+  kind          PropertyMediaKind @default(LISTING_PHOTO)
+  position      Int               @default(0)
+  sendApproved  Boolean           @default(false)
+  discoveredAt  DateTime          @default(now())
+  reviewedAt    DateTime?
+  property      Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, url])
+  @@index([propertyId, position])
 }
 
 model Lead {
