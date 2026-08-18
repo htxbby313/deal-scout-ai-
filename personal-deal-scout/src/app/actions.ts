@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { runCensusPermitResearch } from "@/lib/government-research";
 import { importHudReoCounty } from "@/lib/hud-reo";
-import { addSourcedPropertyMedia, researchProperty, setPropertyMediaApproval } from "@/lib/property-research";
+import { addSourcedPropertyMedia, enqueuePropertyResearch, researchProperty, runAutomaticPropertyResearchBatch, runQueuedPropertyResearch, setPropertyMediaApproval } from "@/lib/property-research";
 
 import {
   attemptProviderSend,
@@ -47,7 +48,7 @@ async function csvFile(formData: FormData) {
 
 export async function createPropertyAction(formData: FormData) {
   await requireOwner();
-  await createProperty({
+  const property = await createProperty({
     address: value(formData, "address"),
     city: value(formData, "city"),
     state: value(formData, "state").toUpperCase(),
@@ -72,6 +73,8 @@ export async function createPropertyAction(formData: FormData) {
     sourceRecordDate: value(formData, "sourceRecordDate"),
     confidence: Number(value(formData, "confidence") || 0),
   });
+  const queued = await enqueuePropertyResearch(property.id);
+  after(async () => { await runQueuedPropertyResearch(queued.id); });
   revalidatePath("/properties");
   const marketFips = value(formData, "marketFips");
   if (marketFips) revalidatePath(`/research/${marketFips}`);
@@ -269,8 +272,10 @@ export async function importPropertiesCsvAction(_previousState: CsvImportState, 
   await requireOwner();
   try {
     const result = await importPropertiesCsv(await csvFile(formData));
+    for (const propertyId of result.createdIds) await enqueuePropertyResearch(propertyId);
+    if (result.createdIds.length) after(async () => { await runAutomaticPropertyResearchBatch(2); });
     revalidatePath("/properties");
-    return { status: "success", message: `Imported ${result.created} propertie(s). Skipped ${result.skipped} duplicate or incomplete row(s).` };
+    return { status: "success", message: `Imported ${result.created} propertie(s) and queued ${result.createdIds.length} for automatic public-source research. Skipped ${result.skipped} duplicate or incomplete row(s).` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "The property CSV could not be imported." };
   }

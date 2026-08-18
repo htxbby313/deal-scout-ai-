@@ -386,7 +386,7 @@ export async function importDevelopersCsv(input: z.infer<typeof crmCsvImportSche
 export async function importPropertiesCsv(input: z.infer<typeof crmCsvImportSchema>) {
   const parsed = crmCsvImportSchema.parse(input);
   const rows = parseCsvRows(parsed.csvText);
-  let created = 0; let skipped = 0;
+  let created = 0; let skipped = 0; const createdIds: string[] = [];
   await getPrisma().$transaction(async (tx) => {
     for (const row of rows) {
       const address = csvValue(row, "Street Address", "Property Address", "Address");
@@ -396,7 +396,7 @@ export async function importPropertiesCsv(input: z.infer<typeof crmCsvImportSche
       if (!address || !city || state.length !== 2 || zipCode.length < 5) { skipped += 1; continue; }
       const existing = await tx.property.findUnique({ where: { address_zipCode: { address, zipCode } } });
       if (existing) { skipped += 1; continue; }
-      await tx.property.create({ data: {
+      const property = await tx.property.create({ data: {
         address, city, state, zipCode,
         ownerName: csvValue(row, "Owner1 Full Name", "Owner Full Name", "Owner Name", "Owner") || "Unknown Owner",
         yearBuilt: csvValue(row, "Year Built", "Year") || undefined,
@@ -417,11 +417,12 @@ export async function importPropertiesCsv(input: z.infer<typeof crmCsvImportSche
           ["Additional notes", csvValue(row, "Notes", "Additional Notes")],
         ]),
       } });
+      createdIds.push(property.id);
       created += 1;
     }
     await audit(tx, "csv.properties_imported", `Imported property CSV: ${created} propertie(s) created, ${skipped} row(s) skipped.`, { sourceName: parsed.sourceName, rows: rows.length, created, skipped });
   });
-  return { rows: rows.length, created, skipped };
+  return { rows: rows.length, created, skipped, createdIds };
 }
 
 export async function importForeclosureCsv(input: z.infer<typeof foreclosureCsvImportSchema>) {
