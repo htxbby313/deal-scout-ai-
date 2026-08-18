@@ -1,6 +1,13 @@
 # Deal Scout AI licensing plan
 
-Status: commercial terms draft; not yet an issued license.
+Status: ownership recorded; commercial customer terms remain a draft and require legal review.
+
+## Ownership record
+
+- Copyright owner and licensor: **Coleman and Co Holdings LLC**
+- Governing-law jurisdiction: **To be confirmed**
+
+The proprietary notice in `LICENSE` identifies the owner without inventing jurisdiction or final customer-contract terms.
 
 ## Intended model
 
@@ -27,9 +34,9 @@ Deal Scout AI should remain proprietary software and be offered under a commerci
 - confidentiality, security, warranties, liability limits, indemnity, governing law, and dispute terms;
 - export, assignment, and survival clauses.
 
-## Required owner decision
+## Remaining owner decision
 
-Before issuing a `LICENSE` or customer agreement, replace this section with the exact legal name and jurisdiction of the person or company that owns Deal Scout AI. Do not publish a license with a guessed owner.
+Confirm the governing-law jurisdiction before issuing the customer subscription agreement. The jurisdiction should not be guessed from an address, repository location, or operating market.
 
 ## Source notes
 
