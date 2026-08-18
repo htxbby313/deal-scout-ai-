@@ -44,7 +44,7 @@ function parseCountyPermits(text: string, expectedPeriod?: string): CountyPermit
     const units = integer(row[7]) + integer(row[10]) + integer(row[13]) + integer(row[16]);
     const value = BigInt(integer(row[8]) + integer(row[11]) + integer(row[14]) + integer(row[17]));
     return { period, fips: `${stateFips}${countyFips}`, stateFips, countyFips, countyName: row[5]?.trim() || "Unknown County", stateName: states[stateFips] || `State FIPS ${stateFips}`, units, value };
-  }).filter((row) => /^\d{5}$/.test(row.fips));
+  }).filter((row) => /^\d{5}$/.test(row.fips) && row.stateFips !== "72");
   if (!records.length) throw new Error("Census county permit file contained no county records.");
   return records;
 }
@@ -104,12 +104,13 @@ export async function runCensusPermitResearch() {
 
 export async function readGovernmentResearch() {
   const db = getPrisma();
-  const [latestRun, latestCompletedRun] = await Promise.all([
+  const [latestRun, latestCompletedRun, listings] = await Promise.all([
     db.governmentResearchRun.findFirst({ where: { source: CENSUS_SOURCE }, orderBy: { createdAt: "desc" } }),
     db.governmentResearchRun.findFirst({ where: { source: CENSUS_SOURCE, status: "COMPLETED", period: { not: null } }, orderBy: { createdAt: "desc" } }),
+    db.property.findMany({ where: { latitude: { not: null }, longitude: { not: null }, opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true, city: true, state: true, zipCode: true, county: true, neighborhood: true, latitude: true, longitude: true, estimatedValue: true, marketFips: true } }),
   ]);
   const signals = latestCompletedRun?.period ? await db.marketSignal.findMany({ where: { source: CENSUS_SOURCE, period: latestCompletedRun.period }, orderBy: { rank: "asc" }, take: 150 }) : [];
-  return { dataPeriod: latestCompletedRun?.period ?? null, latestRun: latestRun ? { ...latestRun, startedAt: latestRun.startedAt.toISOString(), finishedAt: latestRun.finishedAt?.toISOString(), createdAt: latestRun.createdAt.toISOString() } : null, signals: signals.map((signal) => ({ ...signal, currentValue: signal.currentValue.toString(), capturedAt: signal.capturedAt.toISOString() })) };
+  return { dataPeriod: latestCompletedRun?.period ?? null, latestRun: latestRun ? { ...latestRun, startedAt: latestRun.startedAt.toISOString(), finishedAt: latestRun.finishedAt?.toISOString(), createdAt: latestRun.createdAt.toISOString() } : null, signals: signals.map((signal) => ({ ...signal, currentValue: signal.currentValue.toString(), capturedAt: signal.capturedAt.toISOString() })), listings: listings.flatMap((listing) => listing.latitude === null || listing.longitude === null ? [] : [{ ...listing, county: listing.county ?? undefined, neighborhood: listing.neighborhood ?? undefined, marketFips: listing.marketFips ?? undefined, estimatedValue: listing.estimatedValue ?? undefined, latitude: listing.latitude, longitude: listing.longitude }]) };
 }
 
 export const __governmentTestables = { parseCountyPermits, rankCountyPermits, candidatePeriods };
