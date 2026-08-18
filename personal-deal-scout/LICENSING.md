@@ -5,6 +5,7 @@ Status: ownership recorded; commercial customer terms remain a draft and require
 ## Ownership record
 
 - Copyright owner and licensor: **Coleman and Co Holdings LLC**
+- Company formation jurisdiction: **Mississippi**
 - Governing-law jurisdiction: **To be confirmed**
 
 The proprietary notice in `LICENSE` identifies the owner without inventing jurisdiction or final customer-contract terms.
@@ -36,7 +37,7 @@ Deal Scout AI should remain proprietary software and be offered under a commerci
 
 ## Remaining owner decision
 
-Confirm the governing-law jurisdiction before issuing the customer subscription agreement. The jurisdiction should not be guessed from an address, repository location, or operating market.
+Confirm whether Mississippi should also govern the customer subscription agreement. The company's Mississippi formation jurisdiction is recorded above, but formation and contract governing law are separate legal facts.
 
 ## Source notes
 
