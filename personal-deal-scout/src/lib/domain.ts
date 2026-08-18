@@ -7,6 +7,7 @@ export type PropertyReadinessInput = {
   estimatedValue?: number | null;
   contactPhone?: string | null;
   contactEmail?: string | null;
+  contactUrl?: string | null;
   sourceUrl?: string | null;
   verificationSourceUrl?: string | null;
   verificationDate?: string | null;
@@ -17,7 +18,7 @@ export function propertyReadiness(property: PropertyReadinessInput) {
   if (!["CONFIRMED_AVAILABLE", "GOVERNMENT_SALE"].includes(property.opportunityStatus)) missing.push("confirmed availability");
   if (!property.sourceUrl) missing.push("original source");
   if (!property.estimatedValue || property.estimatedValue <= 0) missing.push("current asking price");
-  if (!property.contactPhone && !property.contactEmail) missing.push("usable seller contact");
+  if (!property.contactPhone) missing.push("verified seller or broker phone");
   if (!property.verificationSourceUrl) missing.push("price/contact evidence URL");
   if (!property.verificationDate) missing.push("verification date");
   return { actionable: missing.length === 0, missing };

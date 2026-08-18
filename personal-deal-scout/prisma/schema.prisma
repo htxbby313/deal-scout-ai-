@@ -51,6 +51,10 @@ model Property {
   state          String
   zipCode        String
   ownerName      String
+  county         String?
+  neighborhood   String?
+  latitude       Float?
+  longitude      Float?
   marketFips     String?
   yearBuilt      String?
   lotSize        String?
@@ -60,6 +64,7 @@ model Property {
   contactName    String?
   contactPhone   String?
   contactEmail   String?
+  contactUrl     String?
   sourceName     String?
   sourceUrl      String?
   sourceRecordDate String?

@@ -53,6 +53,10 @@ export async function createPropertyAction(formData: FormData) {
     state: value(formData, "state").toUpperCase(),
     zipCode: value(formData, "zipCode"),
     ownerName: value(formData, "ownerName"),
+    county: value(formData, "county"),
+    neighborhood: value(formData, "neighborhood"),
+    latitude: value(formData, "latitude") ? Number(value(formData, "latitude")) : undefined,
+    longitude: value(formData, "longitude") ? Number(value(formData, "longitude")) : undefined,
     marketFips: value(formData, "marketFips") || undefined,
     yearBuilt: value(formData, "yearBuilt"),
     lotSize: value(formData, "lotSize"),
@@ -62,6 +66,7 @@ export async function createPropertyAction(formData: FormData) {
     contactName: value(formData, "contactName"),
     contactPhone: value(formData, "contactPhone"),
     contactEmail: value(formData, "contactEmail"),
+    contactUrl: value(formData, "contactUrl"),
     sourceName: value(formData, "sourceName"),
     sourceUrl: value(formData, "sourceUrl"),
     sourceRecordDate: value(formData, "sourceRecordDate"),
@@ -75,7 +80,7 @@ export async function createPropertyAction(formData: FormData) {
 export async function updatePropertyEvidenceAction(propertyId: string, _previousState: EvidenceUpdateState, formData: FormData): Promise<EvidenceUpdateState> {
   await requireOwner();
   try {
-    await updatePropertyEvidence({ propertyId, estimatedValue: Number(value(formData, "estimatedValue")), opportunityStatus: value(formData, "opportunityStatus") as "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE", contactName: value(formData, "contactName"), contactPhone: value(formData, "contactPhone"), contactEmail: value(formData, "contactEmail"), verificationSourceUrl: value(formData, "verificationSourceUrl"), verificationDate: value(formData, "verificationDate"), confidence: Number(value(formData, "confidence")), notes: value(formData, "notes") });
+    await updatePropertyEvidence({ propertyId, estimatedValue: Number(value(formData, "estimatedValue")), opportunityStatus: value(formData, "opportunityStatus") as "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE", contactName: value(formData, "contactName"), contactPhone: value(formData, "contactPhone"), contactEmail: value(formData, "contactEmail"), contactUrl: value(formData, "contactUrl"), verificationSourceUrl: value(formData, "verificationSourceUrl"), verificationDate: value(formData, "verificationDate"), confidence: Number(value(formData, "confidence")), notes: value(formData, "notes") });
     revalidatePath("/properties"); revalidatePath("/disposition");
     return { status: "success", message: "Evidence saved. Readiness was recalculated." };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Property evidence could not be updated." }; }

@@ -52,14 +52,15 @@ describe("production foundation business rules", () => {
   it("keeps a sourced property locked until price, contact, and dated verification evidence exist", () => {
     const incomplete = propertyReadiness({ opportunityStatus: "GOVERNMENT_SALE", sourceUrl: "https://example.gov/original" });
     expect(incomplete.actionable).toBe(false);
-    expect(incomplete.missing).toEqual(expect.arrayContaining(["current asking price", "usable seller contact", "price/contact evidence URL", "verification date"]));
+    expect(incomplete.missing).toEqual(expect.arrayContaining(["current asking price", "verified seller or broker phone", "price/contact evidence URL", "verification date"]));
     expect(propertyReadiness({ opportunityStatus: "GOVERNMENT_SALE", sourceUrl: "https://example.gov/original", estimatedValue: 125000, contactPhone: "713-555-0100", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17" }).actionable).toBe(true);
   });
 
-  it("rejects an evidence update without a usable contact", () => {
+  it("requires a seller or broker phone even when email exists", () => {
     const base = { propertyId: "p1", estimatedValue: 125000, opportunityStatus: "GOVERNMENT_SALE", contactName: "HUD broker", verificationSourceUrl: "https://example.gov/listing", verificationDate: "2026-08-17", confidence: 90 };
     expect(() => propertyEvidenceUpdateSchema.parse(base)).toThrow();
-    expect(propertyEvidenceUpdateSchema.parse({ ...base, contactEmail: "broker@example.gov" }).contactEmail).toBe("broker@example.gov");
+    expect(() => propertyEvidenceUpdateSchema.parse({ ...base, contactEmail: "broker@example.gov" })).toThrow();
+    expect(propertyEvidenceUpdateSchema.parse({ ...base, contactPhone: "713-555-0100" }).contactPhone).toBe("713-555-0100");
   });
 
   it("accepts an official land-submission route without inventing an acquisitions email", () => {

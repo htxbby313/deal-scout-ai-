@@ -11,4 +11,10 @@ describe("property research source parsing", () => {
     expect(() => __propertyResearchTestables.safePublicUrl("http://example.com")).toThrow("HTTPS");
     expect(() => __propertyResearchTestables.safePublicUrl("https://127.0.0.1/secret")).toThrow("Private network");
   });
+
+  it("extracts listing phones and address-matched source images", () => {
+    const html = '<div>Listed by Agent · (210) 386-7583</div><img alt="0 Claymore San Antonio" src="https://images.example.com/claymore.jpg">';
+    expect(__propertyResearchTestables.phoneNumbers(html)).toEqual(["(210) 386-7583"]);
+    expect(__propertyResearchTestables.listingImageUrls(html, "https://listing.example.com/0-claymore", "0 Claymore")).toContain("https://images.example.com/claymore.jpg");
+  });
 });
