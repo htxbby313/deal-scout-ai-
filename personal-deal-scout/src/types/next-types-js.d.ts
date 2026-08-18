@@ -18,4 +18,5 @@ declare module "next/server" {
   export const NextResponse: {
     json(body: unknown, init?: ResponseInit): Response;
   };
+  export function after(callback: () => void | Promise<void>): void;
 }

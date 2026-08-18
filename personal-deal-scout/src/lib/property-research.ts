@@ -30,6 +30,18 @@ type Finding = {
 
 type DiscoveredMedia = { url: string; sourceUrl: string; sourceName: string; altText: string };
 
+export async function enqueuePropertyResearch(propertyId: string) {
+  const db = getPrisma();
+  const property = await db.property.findUnique({ where: { id: propertyId }, select: { id: true, address: true, opportunityStatus: true } });
+  if (!property) throw new Error("Property was not found.");
+  if (property.opportunityStatus === "REJECTED") throw new Error("Retired properties cannot be queued for automatic research.");
+  const existing = await db.propertyResearchRun.findFirst({ where: { propertyId, status: { in: ["QUEUED", "RUNNING"] } }, orderBy: { startedAt: "desc" } });
+  if (existing) return existing;
+  const queued = await db.propertyResearchRun.create({ data: { propertyId, status: "QUEUED" } });
+  await db.auditLog.create({ data: { type: "research.property_dossier", summary: `Queued automatic public-source research for ${property.address}.`, details: { propertyId, runId: queued.id, trigger: "automatic" } } });
+  return queued;
+}
+
 function safePublicUrl(raw: string) {
   const url = new URL(raw);
   if (url.protocol !== "https:") throw new Error("Research sources must use HTTPS.");
@@ -107,11 +119,12 @@ async function openStreetMapGeocode(property: { address: string; city: string; s
   return Number.isFinite(latitude) && Number.isFinite(longitude) ? { address: match.display_name || "OpenStreetMap address match", latitude, longitude, county: match.address?.county, neighborhood: match.address?.neighbourhood || match.address?.suburb, sourceUrl: endpoint.toString() } : null;
 }
 
-export async function researchProperty(propertyId: string) {
+export async function researchProperty(propertyId: string, queuedRunId?: string) {
   const db = getPrisma();
   const property = await db.property.findUniqueOrThrow({ where: { id: propertyId } });
   const existingFindings = new Map((await db.propertyResearchFinding.findMany({ where: { propertyId } })).map((finding) => [finding.topic, finding]));
-  const run = await db.propertyResearchRun.create({ data: { propertyId, status: "RUNNING" } });
+  const queuedRun = queuedRunId ? await db.propertyResearchRun.findFirst({ where: { id: queuedRunId, propertyId, status: "QUEUED" } }) : await db.propertyResearchRun.findFirst({ where: { propertyId, status: "QUEUED" }, orderBy: { startedAt: "asc" } });
+  const run = queuedRun ? await db.propertyResearchRun.update({ where: { id: queuedRun.id }, data: { status: "RUNNING", startedAt: new Date(), error: null } }) : await db.propertyResearchRun.create({ data: { propertyId, status: "RUNNING" } });
   const findings = new Map<string, Finding>();
   const media: DiscoveredMedia[] = [];
   const errors: string[] = [];
@@ -164,6 +177,34 @@ export async function researchProperty(propertyId: string) {
   });
 
   return { verified: [...findings.values()].filter((item) => item.status === "VERIFIED").length, manualNeeded: [...findings.values()].filter((item) => item.status !== "VERIFIED").length, mediaFound: media.length, errors };
+}
+
+export async function runQueuedPropertyResearch(runId: string) {
+  const db = getPrisma();
+  const run = await db.propertyResearchRun.findUnique({ where: { id: runId } });
+  if (!run || run.status !== "QUEUED") return { status: "skipped" as const };
+  try {
+    const result = await researchProperty(run.propertyId, run.id);
+    return { status: "completed" as const, propertyId: run.propertyId, ...result };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Automatic public-source research failed.";
+    await db.propertyResearchRun.updateMany({ where: { id: run.id, status: { in: ["QUEUED", "RUNNING"] } }, data: { status: "FAILED", error: message.slice(0, 4000), finishedAt: new Date() } });
+    return { status: "failed" as const, propertyId: run.propertyId, error: message };
+  }
+}
+
+export async function runAutomaticPropertyResearchBatch(limit = 2) {
+  const db = getPrisma();
+  const safeLimit = Math.max(1, Math.min(limit, 10));
+  const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000);
+  const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
+  await db.propertyResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic research run." } });
+  const stale = await db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" }, AND: [{ researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } } }, { researchRuns: { none: { startedAt: { gte: staleCutoff } } } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
+  for (const property of stale) await enqueuePropertyResearch(property.id);
+  const queued = await db.propertyResearchRun.findMany({ where: { status: "QUEUED", property: { opportunityStatus: { not: "REJECTED" } } }, orderBy: { startedAt: "asc" }, take: safeLimit });
+  const results = [];
+  for (const run of queued) results.push(await runQueuedPropertyResearch(run.id));
+  return { processed: results.length, completed: results.filter((result) => result.status === "completed").length, failed: results.filter((result) => result.status === "failed").length, results };
 }
 
 export async function setPropertyMediaApproval(propertyId: string, mediaId: string, approved: boolean) {
