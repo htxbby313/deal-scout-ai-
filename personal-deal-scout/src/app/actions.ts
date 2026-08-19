@@ -7,6 +7,7 @@ import { runCensusPermitResearch } from "@/lib/government-research";
 import { importHudReoCounty } from "@/lib/hud-reo";
 import { enqueueDeveloperResearch, runAutomaticDeveloperResearchBatch, runQueuedDeveloperResearch } from "@/lib/developer-research";
 import { addSourcedPropertyMedia, enqueuePropertyResearch, researchProperty, runAutomaticPropertyResearchBatch, runQueuedPropertyResearch, setPropertyMediaApproval } from "@/lib/property-research";
+import { enqueueResearchBacklog } from "@/lib/research-operations";
 
 import {
   attemptProviderSend,
@@ -104,9 +105,33 @@ export async function researchPropertyAction(propertyId: string, _previousState:
   await requireOwner();
   try {
     const result = await researchProperty(propertyId);
-    revalidatePath("/properties"); revalidatePath("/disposition");
+    revalidatePath("/properties"); revalidatePath("/disposition"); revalidatePath("/operations");
     return { status: "success", message: `Research saved: ${result.verified} verified topic(s), ${result.mediaFound} image(s), ${result.manualNeeded} routed to manual verification.` };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Property research failed." }; }
+}
+
+export async function researchDeveloperAction(developerId: string, _previousState: ResearchRunState): Promise<ResearchRunState> {
+  void _previousState;
+  await requireOwner();
+  try {
+    const queued = await enqueueDeveloperResearch(developerId);
+    const result = await runQueuedDeveloperResearch(queued.id);
+    revalidatePath("/developers"); revalidatePath("/operations");
+    if (result.status === "failed") return { status: "error", message: result.error };
+    if (result.status === "skipped") return { status: "success", message: "Research is already running." };
+    return { status: "success", message: `Research saved: ${result.findingsFound} found, ${result.manualNeeded} need verification.` };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Developer research failed." }; }
+}
+
+export async function runResearchBacklogAction(_previousState: ResearchRunState): Promise<ResearchRunState> {
+  void _previousState;
+  await requireOwner();
+  try {
+    const queued = await enqueueResearchBacklog();
+    const [properties, developers] = await Promise.all([runAutomaticPropertyResearchBatch(2), runAutomaticDeveloperResearchBatch(5)]);
+    revalidatePath("/operations"); revalidatePath("/properties"); revalidatePath("/developers"); revalidatePath("/disposition");
+    return { status: "success", message: `${queued.properties} properties and ${queued.developers} developers queued; ${properties.processed + developers.processed} processed now.` };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Research backlog could not run." }; }
 }
 
 export async function reviewPropertyMediaAction(formData: FormData) {
