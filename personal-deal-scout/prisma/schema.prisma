@@ -585,6 +585,7 @@ model Agent {
 
 model AgentTask {
   id                    String            @id @default(cuid())
+  dedupeKey             String            @unique
   assignedAgentId       String
   taskType              String
   title                 String
@@ -797,6 +798,26 @@ enum LearningObservationStatus {
   REVIEWED
   REJECTED
   APPROVED_FOR_MANUAL_CHANGE
+}
+
+enum ContractTemplateType {
+  PURCHASE_AGREEMENT
+  ASSIGNMENT_AGREEMENT
+  EQUITABLE_INTEREST_DISCLOSURE
+  SELLER_ACKNOWLEDGMENT
+  BUYER_ACKNOWLEDGMENT
+  DUE_DILIGENCE_NOTICE
+  TERMINATION_NOTICE
+  CLOSING_INSTRUCTIONS
+  OTHER
+}
+
+enum ContractTemplateStatus {
+  INACTIVE_PLACEHOLDER
+  REVIEW_PENDING
+  ACTIVE
+  REJECTED
+  SUPERSEDED
 }
 
 model SellerEngagement {
@@ -1222,6 +1243,33 @@ model SettlementCorrection {
   settlementArtifact   SettlementArtifact @relation(fields: [settlementArtifactId], references: [id], onDelete: Restrict)
 
   @@index([settlementArtifactId, createdAt])
+}
+
+model ContractTemplateVersion {
+  id                         String                 @id @default(cuid())
+  name                       String
+  type                       ContractTemplateType
+  jurisdictionState          String
+  version                    Int
+  status                     ContractTemplateStatus @default(INACTIVE_PLACEHOLDER)
+  artifactHash               String?
+  storageKey                 String?
+  sourceUrl                  String?
+  userSuppliedBy             String?
+  userSuppliedAt             DateTime?
+  counselReviewer            String?
+  counselApprovedAt          DateTime?
+  counselApprovalEvidenceUrl String?
+  ownerApprovedBy            String?
+  ownerApprovedAt            DateTime?
+  ownerApprovalReason        String?
+  effectiveAt                DateTime?
+  expiresAt                  DateTime?
+  createdAt                  DateTime               @default(now())
+  activatedAt                DateTime?
+
+  @@unique([jurisdictionState, type, version])
+  @@index([jurisdictionState, type, status])
 }
 
 enum AcquisitionStage {

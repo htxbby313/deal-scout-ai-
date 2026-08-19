@@ -4,16 +4,30 @@ import { Prisma, type CountyAgencyType, type CountyAutomationStatus, type County
 import { getPrisma } from "@/lib/prisma";
 import { validateCountyIdentity } from "@/lib/county-source-policy";
 
+const stateCodeByFips: Record<string, string> = { "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY" };
+
 function https(raw: string) { const url = new URL(raw); if (url.protocol !== "https:") throw new Error("County sources must use HTTPS."); return url; }
 function officialDomain(raw: string, delegationEvidenceUrl?: string) { const url = https(raw); const government = url.hostname.endsWith(".gov") || url.hostname.endsWith(".us"); if (!government && !delegationEvidenceUrl) throw new Error("A non-government vendor requires an official delegation evidence URL."); if (delegationEvidenceUrl) https(delegationEvidenceUrl); return url.origin; }
 
 export async function synchronizeCountyCoverageTargets(now = new Date()) {
   const db = getPrisma();
-  const [properties, projects] = await Promise.all([
+  const [properties, projects, signals] = await Promise.all([
     db.property.findMany({ where: { marketFips: { not: null }, countyRegistryId: null, opportunityStatus: { not: "REJECTED" } }, select: { id: true, state: true, county: true, marketFips: true } }),
     db.developerProject.findMany({ where: { countyRegistryId: null }, select: { id: true, state: true, sourceName: true, zipCode: true } }),
+    db.marketSignal.findMany({ orderBy: { capturedAt: "desc" }, take: 500, select: { fips: true, stateFips: true, countyName: true } }),
   ]);
   let attachedProperties = 0;
+  let registeredMapCounties = 0;
+  const seenSignalCounties = new Set<string>();
+  for (const signal of signals) {
+    if (seenSignalCounties.has(signal.fips)) continue;
+    seenSignalCounties.add(signal.fips);
+    const stateCode = stateCodeByFips[signal.stateFips];
+    const countyName = signal.countyName.replace(/\s+(County|Parish|Borough|Census Area|Municipality)$/i, "").trim();
+    if (!stateCode || !validateCountyIdentity({ stateCode, countyName, fipsCode: signal.fips }).valid) continue;
+    await db.countySourceRegistry.upsert({ where: { fipsCode: signal.fips }, update: { stateCode, countyName }, create: { stateCode, countyName, fipsCode: signal.fips, nextReviewAt: now, coverageReason: "Created from a persisted U.S. Census Development Radar county; official local sources require verification." } });
+    registeredMapCounties += 1;
+  }
   for (const property of properties) {
     if (!property.marketFips || !property.county) continue;
     const identity = { stateCode: property.state.toUpperCase(), countyName: property.county.replace(/\s+County$/i, "").trim(), fipsCode: property.marketFips };
@@ -22,7 +36,7 @@ export async function synchronizeCountyCoverageTargets(now = new Date()) {
     await db.property.update({ where: { id: property.id }, data: { countyRegistryId: registry.id } });
     attachedProperties += 1;
   }
-  return { propertiesScanned: properties.length, attachedProperties, unresolvedProjects: projects.length };
+  return { propertiesScanned: properties.length, attachedProperties, registeredMapCounties, unresolvedProjects: projects.length };
 }
 
 export async function upsertCountyRegistry(input: { stateCode: string; countyName: string; fipsCode: string; actor: string; manualSearchInstructions?: string }) {

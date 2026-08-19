@@ -20,6 +20,18 @@ function secureUrl(raw: string) {
   return url.toString();
 }
 
+const VERSION_RETRY_LIMIT = 3;
+async function withVersionRetry<T>(operation: () => Promise<T>) {
+  for (let attempt = 1; attempt <= VERSION_RETRY_LIMIT; attempt += 1) {
+    try { return await operation(); }
+    catch (error) {
+      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code);
+      if (!retryable || attempt === VERSION_RETRY_LIMIT) throw error;
+    }
+  }
+  throw new Error("Financial version allocation failed.");
+}
+
 export async function createFinancialProjectionRecord(input: {
   transactionId: string;
   actor: string;
@@ -33,7 +45,7 @@ export async function createFinancialProjectionRecord(input: {
   if (input.evidenceNotes.trim().length < 10) throw new Error("Financial evidence notes are required.");
   const result = calculateFinancialProjection(input.projection);
   const db = getPrisma();
-  return db.$transaction(async (tx) => {
+  return withVersionRetry(() => db.$transaction(async (tx) => {
     const transaction = await tx.dealTransaction.findUnique({ where: { id: input.transactionId } });
     if (!transaction) throw new Error("Transaction not found.");
     if (transaction.controlStatus === "STOPPED") throw new Error("Financial projections cannot be added to a stopped transaction.");
@@ -52,12 +64,13 @@ export async function createFinancialProjectionRecord(input: {
     } });
     await appendAuditEvent(tx, input.transactionId, "financial.projection.recorded", input.actor, `Recorded projected financial scenario version ${record.version}.`, financialAuditDetails({ recordId: record.id, version: record.version, kind: "PROJECTED", amountCents: record.feeBaseCents, correctsId: record.supersedesId }) as Prisma.InputJsonValue);
     return record;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 export async function createSettlementReviewRecord(input: { transactionId: string; actor: string; grossAssignmentFeeCents: MoneyCents; actualExpensesCents: MoneyCents; settlementDocumentUrl: string; settlementDocumentHash: string; reviewedAt: Date; correctionReason?: string }) {
   const calculated = calculateSettlementReviewedProfit({ grossAssignmentFeeCents: input.grossAssignmentFeeCents, actualExpensesCents: input.actualExpensesCents, settlementDocumentUrl: secureUrl(input.settlementDocumentUrl), settlementDocumentHash: input.settlementDocumentHash, reviewedBy: input.actor, reviewedAt: input.reviewedAt.toISOString() });
-  return getPrisma().$transaction(async (tx) => {
+  const db = getPrisma();
+  return withVersionRetry(() => db.$transaction(async (tx) => {
     const transaction = await tx.dealTransaction.findUnique({ where: { id: input.transactionId } });
     if (!transaction) throw new Error("Transaction not found.");
     if (transaction.controlStatus === "STOPPED") throw new Error("Settlement results cannot be added to a stopped transaction.");
@@ -66,8 +79,10 @@ export async function createSettlementReviewRecord(input: { transactionId: strin
     const record = await tx.settlementReview.create({ data: { transactionId: input.transactionId, version: (latest?.version ?? 0) + 1, settlementDocumentUrl: input.settlementDocumentUrl, settlementDocumentHash: input.settlementDocumentHash, grossAssignmentFeeCents: input.grossAssignmentFeeCents, actualExpensesCents: input.actualExpensesCents, realizedProfitCents: calculated.realizedProfitCents, reviewedBy: input.actor, reviewedAt: input.reviewedAt, correctionReason: input.correctionReason?.trim(), correctsId: latest?.id } });
     await appendAuditEvent(tx, input.transactionId, "financial.settlement.reviewed", input.actor, `Recorded settlement-backed realized profit version ${record.version}.`, financialAuditDetails({ recordId: record.id, version: record.version, kind: "REALIZED", amountCents: record.realizedProfitCents, correctsId: record.correctsId }) as Prisma.InputJsonValue);
     return record;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
+
+export const __profitabilityServiceTestables = { VERSION_RETRY_LIMIT, withVersionRetry };
 
 export async function readProfitabilityWorkspace() {
   const transactions = await getPrisma().dealTransaction.findMany({ include: { property: true, developer: true, financialProjections: { orderBy: { version: "desc" }, take: 1 }, settlementReviews: { orderBy: { version: "desc" }, take: 1 }, acquisitionFunnel: { include: { buyerCoverage: true, gates: true } } }, orderBy: { updatedAt: "desc" } });

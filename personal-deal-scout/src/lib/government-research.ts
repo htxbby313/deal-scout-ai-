@@ -104,13 +104,15 @@ export async function runCensusPermitResearch() {
 
 export async function readGovernmentResearch() {
   const db = getPrisma();
-  const [latestRun, latestCompletedRun, listings] = await Promise.all([
+  const [latestRun, latestCompletedRun, listings, countyCoverage] = await Promise.all([
     db.governmentResearchRun.findFirst({ where: { source: CENSUS_SOURCE }, orderBy: { createdAt: "desc" } }),
     db.governmentResearchRun.findFirst({ where: { source: CENSUS_SOURCE, status: "COMPLETED", period: { not: null } }, orderBy: { createdAt: "desc" } }),
     db.property.findMany({ where: { latitude: { not: null }, longitude: { not: null }, opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true, city: true, state: true, zipCode: true, county: true, neighborhood: true, latitude: true, longitude: true, estimatedValue: true, marketFips: true } }),
+    db.countySourceRegistry.findMany({ select: { fipsCode: true, coverageStatus: true, coverageReason: true, lastAccessibilityCheckAt: true, nextReviewAt: true } }),
   ]);
   const signals = latestCompletedRun?.period ? await db.marketSignal.findMany({ where: { source: CENSUS_SOURCE, period: latestCompletedRun.period }, orderBy: { rank: "asc" }, take: 150 }) : [];
-  return { dataPeriod: latestCompletedRun?.period ?? null, latestRun: latestRun ? { ...latestRun, startedAt: latestRun.startedAt.toISOString(), finishedAt: latestRun.finishedAt?.toISOString(), createdAt: latestRun.createdAt.toISOString() } : null, signals: signals.map((signal) => ({ ...signal, currentValue: signal.currentValue.toString(), capturedAt: signal.capturedAt.toISOString() })), listings: listings.flatMap((listing) => listing.latitude === null || listing.longitude === null ? [] : [{ ...listing, county: listing.county ?? undefined, neighborhood: listing.neighborhood ?? undefined, marketFips: listing.marketFips ?? undefined, estimatedValue: listing.estimatedValue ?? undefined, latitude: listing.latitude, longitude: listing.longitude }]) };
+  const coverageByFips = new Map(countyCoverage.map((item) => [item.fipsCode, item]));
+  return { dataPeriod: latestCompletedRun?.period ?? null, latestRun: latestRun ? { ...latestRun, startedAt: latestRun.startedAt.toISOString(), finishedAt: latestRun.finishedAt?.toISOString(), createdAt: latestRun.createdAt.toISOString() } : null, signals: signals.map((signal) => { const coverage = coverageByFips.get(signal.fips); return { ...signal, currentValue: signal.currentValue.toString(), capturedAt: signal.capturedAt.toISOString(), countyCoverageStatus: coverage?.coverageStatus ?? "NEEDS_REVIEW", countyCoverageReason: coverage?.coverageReason ?? "Official county source coverage has not been registered.", countyCoverageCheckedAt: coverage?.lastAccessibilityCheckAt?.toISOString() ?? null, countyCoverageNextReviewAt: coverage?.nextReviewAt?.toISOString() ?? null }; }), listings: listings.flatMap((listing) => listing.latitude === null || listing.longitude === null ? [] : [{ ...listing, county: listing.county ?? undefined, neighborhood: listing.neighborhood ?? undefined, marketFips: listing.marketFips ?? undefined, estimatedValue: listing.estimatedValue ?? undefined, latitude: listing.latitude, longitude: listing.longitude }]) };
 }
 
 export const __governmentTestables = { parseCountyPermits, rankCountyPermits, candidatePeriods };

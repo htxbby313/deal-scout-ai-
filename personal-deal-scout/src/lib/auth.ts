@@ -1,8 +1,8 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createOwnerToken, ownerCredentialsMatch, verifyOwnerToken } from "@/lib/owner-auth-token";
 
 const COOKIE_NAME = "deal_scout_owner";
 
@@ -16,19 +16,12 @@ function configured() {
   return { username, password, secret };
 }
 
-function signature(value: string, secret: string) {
-  return createHmac("sha256", secret).update(value).digest("hex");
-}
-
 export async function ownerIsAuthenticated() {
   try {
     const { username, secret } = configured();
     const token = (await cookies()).get(COOKIE_NAME)?.value;
     if (!token) return false;
-    const [value, supplied] = token.split(".");
-    if (value !== username || !supplied) return false;
-    const expected = signature(value, secret);
-    return supplied.length === expected.length && timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+    return verifyOwnerToken(token, username, secret);
   } catch {
     return false;
   }
@@ -40,10 +33,8 @@ export async function requireOwner() {
 
 export async function createOwnerSession(username: string, password: string) {
   const config = configured();
-  const usernameOk = username.length === config.username.length && timingSafeEqual(Buffer.from(username), Buffer.from(config.username));
-  const passwordOk = password.length === config.password.length && timingSafeEqual(Buffer.from(password), Buffer.from(config.password));
-  if (!usernameOk || !passwordOk) return false;
-  (await cookies()).set(COOKIE_NAME, `${config.username}.${signature(config.username, config.secret)}`, {
+  if (!ownerCredentialsMatch({ suppliedUsername: username, suppliedPassword: password, configuredUsername: config.username, configuredPassword: config.password })) return false;
+  (await cookies()).set(COOKIE_NAME, createOwnerToken(config.username, config.secret), {
     httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 12,
   });
   return true;

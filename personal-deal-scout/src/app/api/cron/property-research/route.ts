@@ -4,6 +4,7 @@ import { recoverAutomaticResearchWork } from "@/lib/research-automation";
 import { synchronizeAcquisitionFunnels } from "@/lib/operating-layer";
 import { synchronizeCountyCoverageTargets } from "@/lib/county-source-service";
 import { runFunnelExpirationCycle } from "@/lib/funnel-automation";
+import { runCountyAccessibilityChecks } from "@/lib/county-accessibility-service";
 
 export const maxDuration = 300;
 
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
   const funnels = await synchronizeAcquisitionFunnels();
   const funnelExpirations = await runFunnelExpirationCycle();
   const counties = await synchronizeCountyCoverageTargets();
+  const countyAccessibility = await runCountyAccessibilityChecks(10);
   const agents = await runAgentTeamBatch();
-  return Response.json({ ok: true, recovery, research, funnels, funnelExpirations, counties, agents });
+  return Response.json({ ok: true, recovery, research, funnels, funnelExpirations, counties, countyAccessibility, agents });
 }
