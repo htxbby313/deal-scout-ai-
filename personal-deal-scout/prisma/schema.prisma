@@ -814,9 +814,199 @@ model SellerEngagement {
   updatedAt          DateTime               @updatedAt
   transaction        DealTransaction        @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   consents            ContactConsent[]
+  contactAttempts     SellerContactAttempt[]
+  conversations       SellerConversation[]
+  sellerFacts         SellerFactVersion[]
+  followUps           SellerFollowUp[]
+  offerHistory        SellerOfferHistory[]
+  dispositions        SellerLeadDisposition[]
 
   @@index([transactionId, status])
   @@index([recipientHash, channel])
+}
+
+enum SellerContactAttemptStatus {
+  DRAFT
+  APPROVED_NOT_SENT
+  MANUALLY_RECORDED
+  DELIVERED
+  FAILED
+  SUPPRESSED
+  CANCELLED
+}
+
+enum SellerAuthorityStatus {
+  UNKNOWN
+  CLAIMED
+  DOCUMENTED
+  VERIFIED
+  REJECTED
+}
+
+enum SellerRepresentationStatus {
+  UNKNOWN
+  UNREPRESENTED
+  AGENT_REPRESENTED
+  ATTORNEY_REPRESENTED
+  OTHER
+}
+
+enum SellerFollowUpStatus {
+  SCHEDULED
+  DUE
+  COMPLETED
+  CANCELLED
+  SUPPRESSED
+}
+
+enum SellerOfferStatus {
+  DRAFT
+  OWNER_APPROVED
+  DELIVERED_MANUALLY
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum SellerDispositionReason {
+  SELLER_REJECTED_PRICE
+  SELLER_CHOSE_ANOTHER_BUYER
+  SELLER_WITHDREW
+  UNABLE_TO_CONTACT
+  AUTHORITY_UNVERIFIED
+  SPREAD_BELOW_TARGET
+  COMPLIANCE_BLOCK
+  NURTURE
+  OPT_OUT
+  OTHER
+}
+
+model SellerContactAttempt {
+  id              String                     @id @default(cuid())
+  engagementId    String
+  channel         EngagementChannel
+  status          SellerContactAttemptStatus @default(DRAFT)
+  senderIdentity  String?
+  provider        String?
+  draftContentHash String?
+  disclosureVersion String?
+  consentId       String?
+  policyId        String?
+  suppressionCheckedAt DateTime?
+  permittedWindowCheckedAt DateTime?
+  ownerApprovedAt DateTime?
+  ownerApprovedBy String?
+  attemptedAt     DateTime?
+  providerReference String?
+  result          String?
+  sourceUrl       String?
+  createdAt       DateTime                   @default(now())
+  engagement      SellerEngagement           @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  conversations   SellerConversation[]
+  providerLogs    CommunicationProviderLog[]
+
+  @@index([engagementId, status, createdAt])
+}
+
+model SellerConversation {
+  id              String               @id @default(cuid())
+  engagementId    String
+  contactAttemptId String?
+  occurredAt      DateTime
+  sourceType      String
+  sourceUrl       String?
+  sourceArtifactHash String?
+  summary         String
+  objections      String[]
+  questions       String[]
+  recordedBy      String
+  createdAt       DateTime             @default(now())
+  engagement      SellerEngagement     @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  contactAttempt  SellerContactAttempt? @relation(fields: [contactAttemptId], references: [id], onDelete: Restrict)
+  factVersions    SellerFactVersion[]
+
+  @@index([engagementId, occurredAt])
+}
+
+model SellerFactVersion {
+  id                String                     @id @default(cuid())
+  engagementId      String
+  conversationId    String
+  version           Int
+  priorities        String[]
+  timeline          String?
+  propertyCondition String?
+  desiredProceedsCents BigInt?
+  minimumNetProceedsCents BigInt?
+  authorityStatus   SellerAuthorityStatus
+  authoritySourceUrl String?
+  representationStatus SellerRepresentationStatus
+  preferredChannel  EngagementChannel?
+  independentAdviceOfferedAt DateTime?
+  sellerStatedAt    DateTime
+  recordedBy        String
+  correctionReason  String?
+  createdAt         DateTime                   @default(now())
+  engagement        SellerEngagement           @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  conversation      SellerConversation         @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@unique([engagementId, version])
+  @@index([engagementId, sellerStatedAt])
+}
+
+model SellerFollowUp {
+  id             String               @id @default(cuid())
+  engagementId   String
+  status         SellerFollowUpStatus @default(SCHEDULED)
+  dueAt          DateTime
+  reason         String
+  channel        EngagementChannel?
+  createdBy      String
+  completedAt    DateTime?
+  completionNote String?
+  createdAt      DateTime             @default(now())
+  engagement     SellerEngagement     @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+
+  @@index([status, dueAt])
+  @@index([engagementId, dueAt])
+}
+
+model SellerOfferHistory {
+  id               String            @id @default(cuid())
+  engagementId     String
+  version          Int
+  status           SellerOfferStatus @default(DRAFT)
+  offerPriceCents  BigInt
+  sellerNetCents   BigInt?
+  financialProjectionId String?
+  documentVersionId String?
+  assumptions      String[]
+  expiresAt        DateTime?
+  ownerApprovedAt  DateTime?
+  ownerApprovedBy  String?
+  deliveredAt      DateTime?
+  responseAt       DateTime?
+  responseNotes    String?
+  createdBy        String
+  createdAt        DateTime          @default(now())
+  engagement       SellerEngagement  @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+
+  @@unique([engagementId, version])
+  @@index([status, expiresAt])
+}
+
+model SellerLeadDisposition {
+  id             String                  @id @default(cuid())
+  engagementId   String
+  reason         SellerDispositionReason
+  explanation    String?
+  nurtureUntil   DateTime?
+  decidedBy      String
+  decidedAt      DateTime                @default(now())
+  engagement     SellerEngagement        @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+
+  @@index([reason, decidedAt])
 }
 
 model ContactSuppression {
@@ -860,6 +1050,73 @@ model StateChannelPolicy {
   updatedAt         DateTime          @updatedAt
 
   @@unique([jurisdictionState, channel])
+}
+
+model CommunicationPolicyProcedure {
+  id                String            @id @default(cuid())
+  jurisdictionState String
+  channel           EngagementChannel
+  version           Int
+  status            String            @default("DRAFT")
+  procedureText     String
+  requiredDisclosure String?
+  permittedStartLocal String?
+  permittedEndLocal String?
+  counselSourceUrl  String?
+  counselApprovedAt DateTime?
+  effectiveAt       DateTime?
+  expiresAt         DateTime?
+  createdBy         String
+  createdAt         DateTime          @default(now())
+  acknowledgments   CommunicationTrainingAcknowledgment[]
+  listScrubs        CommunicationListScrub[]
+
+  @@unique([jurisdictionState, channel, version])
+  @@index([status, effectiveAt, expiresAt])
+}
+
+model CommunicationTrainingAcknowledgment {
+  id          String                       @id @default(cuid())
+  procedureId String
+  actor       String
+  acknowledgedAt DateTime                  @default(now())
+  evidenceHash String?
+  procedure   CommunicationPolicyProcedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+
+  @@unique([procedureId, actor])
+}
+
+model CommunicationListScrub {
+  id          String                       @id @default(cuid())
+  procedureId String
+  source      String
+  sourceUrl   String?
+  artifactHash String?
+  recordCount Int
+  scrubbedAt  DateTime
+  expiresAt   DateTime
+  reviewedBy  String
+  createdAt   DateTime                     @default(now())
+  procedure   CommunicationPolicyProcedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+
+  @@index([scrubbedAt, expiresAt])
+}
+
+model CommunicationProviderLog {
+  id              String               @id @default(cuid())
+  contactAttemptId String
+  provider        String
+  environment     String
+  eventType       String
+  externalReference String?
+  idempotencyKey  String               @unique
+  payloadHash     String
+  webhookVerified Boolean              @default(false)
+  occurredAt      DateTime
+  createdAt       DateTime             @default(now())
+  contactAttempt  SellerContactAttempt @relation(fields: [contactAttemptId], references: [id], onDelete: Restrict)
+
+  @@index([contactAttemptId, occurredAt])
 }
 
 model DiligenceReview {
