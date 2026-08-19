@@ -140,6 +140,7 @@ model Property {
   media          PropertyMedia[]
   transactions   DealTransaction[]
   agentTasks     AgentTask[]
+  acquisitionFunnels AcquisitionFunnel[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
@@ -257,6 +258,9 @@ model Developer {
   researchRuns          DeveloperResearchRun[]
   transactions          DealTransaction[]
   agentTasks            AgentTask[]
+  demandVersions        BuyerDemandVersion[]
+  capacityEvidence      BuyerCapacityEvidence[]
+  reliabilityEvidence   BuyerReliabilityEvidence[]
 
   @@index([qualificationStatus])
 }
@@ -474,6 +478,13 @@ model DealTransaction {
   approvals            TransactionApproval[]
   auditEvents          TransactionAuditEvent[]
   agentTasks           AgentTask[]
+  financialProjections FinancialProjection[]
+  settlementReviews    SettlementReview[]
+  sellerEngagements    SellerEngagement[]
+  diligenceReviews     DiligenceReview[]
+  outcomes             TransactionOutcome[]
+  settlementArtifacts  SettlementArtifact[]
+  acquisitionFunnel    AcquisitionFunnel?
 
   @@index([status, controlStatus])
   @@index([propertyId, createdAt])
@@ -629,4 +640,629 @@ model AgentEvent {
   @@index([taskId, createdAt])
   @@index([targetAgentId, type, createdAt])
   @@index([runId])
+}
+
+model FinancialProjection {
+  id                       String          @id @default(cuid())
+  transactionId            String
+  version                  Int
+  sellerContractPriceCents BigInt
+  sellerAskingPriceCents   BigInt?
+  sellerMinimumNetCents    BigInt?
+  buyerPriceLowCents       BigInt
+  buyerPriceBaseCents      BigInt
+  buyerPriceHighCents      BigInt
+  buyerPriceStatus         String
+  buyerPriceSourceUrl      String
+  buyerPriceObservedAt     DateTime
+  buyerPriceExpiresAt      DateTime
+  transactionCostsCents    BigInt
+  doubleClosingCostsCents  BigInt
+  titleExpensesCents       BigInt
+  closingExpensesCents     BigInt
+  transactionalFundingCents BigInt
+  financingCostsCents      BigInt
+  taxesCents               BigInt
+  liensAndPayoffsCents     BigInt
+  concessionsCents         BigInt
+  inspectionExpensesCents BigInt
+  legalExpensesCents      BigInt
+  dataMarketingCostsCents BigInt
+  insuranceExpensesCents  BigInt
+  otherExpensesCents      BigInt
+  riskReserveCents         BigInt
+  contingencyReserveCents BigInt
+  earnestMoneyDepositedCents BigInt
+  earnestMoneyAtRiskCents  BigInt
+  probabilityLowBps        Int
+  probabilityBaseBps       Int
+  probabilityHighBps       Int
+  feeLowCents              BigInt
+  feeBaseCents             BigInt
+  feeHighCents             BigInt
+  probabilityWeightedCents BigInt
+  sellerSafeMaximumCents   BigInt
+  targetFeeLowCents        BigInt
+  targetFeeHighCents       BigInt
+  evidence                 Json
+  createdBy                String
+  correctionReason         String?
+  supersedesId             String?
+  createdAt                DateTime        @default(now())
+  transaction              DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  supersedes               FinancialProjection? @relation("ProjectionCorrections", fields: [supersedesId], references: [id], onDelete: Restrict)
+  corrections              FinancialProjection[] @relation("ProjectionCorrections")
+
+  @@unique([transactionId, version])
+  @@index([transactionId, createdAt])
+  @@index([supersedesId])
+}
+
+model SettlementReview {
+  id                       String          @id @default(cuid())
+  transactionId            String
+  version                  Int
+  settlementDocumentUrl    String
+  settlementDocumentHash   String
+  grossAssignmentFeeCents  BigInt
+  actualExpensesCents      BigInt
+  realizedProfitCents      BigInt
+  reviewedBy               String
+  reviewedAt               DateTime
+  correctionReason         String?
+  correctsId               String?
+  createdAt                DateTime        @default(now())
+  transaction              DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  corrects                 SettlementReview? @relation("SettlementCorrections", fields: [correctsId], references: [id], onDelete: Restrict)
+  corrections              SettlementReview[] @relation("SettlementCorrections")
+
+  @@unique([transactionId, version])
+  @@unique([transactionId, settlementDocumentHash, version])
+  @@index([transactionId, reviewedAt])
+  @@index([correctsId])
+}
+
+enum EngagementChannel {
+  EMAIL
+  SMS
+  PHONE
+  MAIL
+  INTERNAL
+}
+
+enum SellerEngagementStatus {
+  DRAFT
+  BLOCKED
+  READY_FOR_OWNER_REVIEW
+  OWNER_APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+enum ConsentStatus {
+  UNKNOWN
+  GRANTED
+  DENIED
+  REVOKED
+  EXPIRED
+}
+
+enum DiligenceLevel {
+  PRELIMINARY
+  ENHANCED
+}
+
+enum DiligenceStatus {
+  PENDING
+  IN_PROGRESS
+  NEEDS_MANUAL_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+enum ProviderReadinessStatus {
+  DISABLED
+  CONFIGURATION_NEEDED
+  REVIEW_NEEDED
+  READY
+  SUSPENDED
+}
+
+enum TransactionOutcomeStatus {
+  OPEN
+  CLOSED_ASSIGNED
+  CLOSED_PURCHASED
+  CANCELLED
+  FAILED
+}
+
+enum LearningObservationStatus {
+  OBSERVED
+  REVIEWED
+  REJECTED
+  APPROVED_FOR_MANUAL_CHANGE
+}
+
+model SellerEngagement {
+  id                 String                 @id @default(cuid())
+  transactionId      String
+  channel            EngagementChannel
+  recipientHash      String
+  recipientLabel     String?
+  jurisdictionState  String
+  status             SellerEngagementStatus @default(DRAFT)
+  purpose            String
+  ownerApprovedAt    DateTime?
+  ownerApprovedBy    String?
+  completedAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  transaction        DealTransaction        @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  consents            ContactConsent[]
+
+  @@index([transactionId, status])
+  @@index([recipientHash, channel])
+}
+
+model ContactSuppression {
+  id                String            @id @default(cuid())
+  recipientHash     String
+  channel           EngagementChannel
+  jurisdictionState String?
+  reason            String
+  source             String
+  effectiveAt       DateTime          @default(now())
+  expiresAt         DateTime?
+  createdAt         DateTime          @default(now())
+
+  @@index([recipientHash, channel, effectiveAt])
+}
+
+model ContactConsent {
+  id            String            @id @default(cuid())
+  engagementId  String
+  channel       EngagementChannel
+  status        ConsentStatus     @default(UNKNOWN)
+  evidenceUrl   String?
+  evidenceNote  String?
+  capturedAt    DateTime
+  expiresAt     DateTime?
+  createdAt     DateTime          @default(now())
+  engagement    SellerEngagement  @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+
+  @@index([engagementId, channel, capturedAt])
+}
+
+model StateChannelPolicy {
+  id                String            @id @default(cuid())
+  jurisdictionState String
+  channel           EngagementChannel
+  enabled           Boolean           @default(false)
+  counselApprovedAt DateTime?
+  reviewedAt        DateTime?
+  sourceUrl         String?
+  notes             String?
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([jurisdictionState, channel])
+}
+
+model DiligenceReview {
+  id                    String          @id @default(cuid())
+  transactionId         String
+  level                 DiligenceLevel
+  status                DiligenceStatus @default(PENDING)
+  evidenceCount         Int             @default(0)
+  unresolvedCount       Int             @default(0)
+  reviewer              String?
+  sourceManifest        Json?
+  conclusion            String?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  transaction           DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@unique([transactionId, level])
+  @@index([status, level])
+}
+
+model ProviderIntegrationReadiness {
+  id                    String                  @id @default(cuid())
+  provider              String
+  channel               EngagementChannel
+  status                ProviderReadinessStatus @default(DISABLED)
+  credentialsConfigured Boolean                 @default(false)
+  webhookVerified       Boolean                 @default(false)
+  suppressionIntegrated Boolean                 @default(false)
+  auditIntegrated       Boolean                 @default(false)
+  ownerEnabled          Boolean                 @default(false)
+  reviewedAt            DateTime?
+  notes                 String?
+  updatedAt             DateTime                @updatedAt
+
+  @@unique([provider, channel])
+}
+
+model TransactionOutcome {
+  id                    String                   @id @default(cuid())
+  transactionId         String
+  status                TransactionOutcomeStatus @default(OPEN)
+  sellerProceeds        Int?
+  assignmentFee         Int?
+  transactionCosts      Int?
+  cycleDays             Int?
+  cancellationReason    String?
+  evidence              Json?
+  finalizedAt           DateTime?
+  createdAt             DateTime                 @default(now())
+  transaction           DealTransaction          @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  observations          LearningObservation[]
+
+  @@index([transactionId, status])
+}
+
+model LearningObservation {
+  id                    String                    @id @default(cuid())
+  outcomeId             String
+  status                LearningObservationStatus @default(OBSERVED)
+  metric                String
+  observedValue         Float?
+  hypothesis            String
+  evidence              Json?
+  ownerReviewedAt       DateTime?
+  ownerReviewedBy       String?
+  appliedAutomatically  Boolean                   @default(false)
+  createdAt             DateTime                  @default(now())
+  outcome               TransactionOutcome        @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+}
+
+model SettlementArtifact {
+  id                   String                 @id @default(cuid())
+  transactionId        String
+  artifactHash         String                 @unique
+  storageKey           String?
+  sourceUrl            String?
+  reviewer             String
+  reviewedAt           DateTime
+  closingDate          DateTime
+  sellerProceeds       Int?
+  assignmentFee        Int?
+  transactionCosts     Int?
+  ingestedAt           DateTime               @default(now())
+  transaction          DealTransaction        @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  corrections          SettlementCorrection[]
+
+  @@index([transactionId, closingDate])
+}
+
+model SettlementCorrection {
+  id                   String             @id @default(cuid())
+  settlementArtifactId String
+  correctedFields      Json
+  reason               String
+  reviewer             String
+  reviewedAt           DateTime
+  createdAt            DateTime           @default(now())
+  settlementArtifact   SettlementArtifact @relation(fields: [settlementArtifactId], references: [id], onDelete: Restrict)
+
+  @@index([settlementArtifactId, createdAt])
+}
+
+enum AcquisitionStage {
+  DISCOVERED
+  RESEARCHABLE
+  BUYER_FIT
+  OUTREACH_READY
+  SELLER_ENGAGED
+  UNDERWRITING_READY
+  OFFER_READY
+  CONTRACTED
+  DISPOSITION_READY
+  CLOSED
+  DISQUALIFIED
+  NURTURE
+  ARCHIVED
+}
+
+enum AcquisitionGateType {
+  PROPERTY_EVIDENCE
+  SELLER_CONTACT
+  UNDERWRITING
+  COMPLIANCE
+  CONTRACT
+  BUYER_COVERAGE
+  DISPOSITION
+  CLOSING
+}
+
+enum AcquisitionGateStatus {
+  PENDING
+  SATISFIED
+  FAILED
+  EXPIRED
+  WAIVED
+}
+
+enum BuyerDemandStatus {
+  DRAFT
+  VERIFIED
+  EXPIRED
+  SUPERSEDED
+}
+
+enum BuyerEvidenceStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum BuyerCoverageRole {
+  PRIMARY
+  BACKUP
+}
+
+enum BuyerCoverageStatus {
+  CANDIDATE
+  CONFIRMED
+  DECLINED
+  EXPIRED
+}
+
+enum AcquisitionCampaignType {
+  SELLER_ACQUISITION
+  BUYER_DISPOSITION
+}
+
+enum AcquisitionCampaignStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model AcquisitionFunnel {
+  id            String           @id @default(cuid())
+  propertyId    String
+  transactionId String?          @unique
+  stage         AcquisitionStage @default(DISCOVERED)
+  stageEnteredAt DateTime        @default(now())
+  expiresAt     DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  property      Property         @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  transaction   DealTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  stageHistory  AcquisitionStageHistory[]
+  gates         AcquisitionGate[]
+  buyerCoverage BuyerCoverage[]
+  campaigns     AcquisitionCampaign[]
+  priorityScores ProfitPriorityScoreHistory[]
+
+  @@index([stage, expiresAt])
+  @@index([propertyId, createdAt])
+}
+
+model AcquisitionStageHistory {
+  id          String            @id @default(cuid())
+  funnelId    String
+  sequence    Int
+  fromStage   AcquisitionStage?
+  toStage     AcquisitionStage
+  actor       String
+  reason      String
+  evidence    Json?
+  occurredAt  DateTime          @default(now())
+  funnel      AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+
+  @@unique([funnelId, sequence])
+  @@index([funnelId, occurredAt])
+}
+
+model AcquisitionGate {
+  id          String                @id @default(cuid())
+  funnelId    String
+  type        AcquisitionGateType
+  version     Int
+  status      AcquisitionGateStatus @default(PENDING)
+  evidence    Json?
+  sourceUrl   String?
+  decidedBy   String?
+  decidedAt   DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime              @default(now())
+  funnel      AcquisitionFunnel     @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+
+  @@unique([funnelId, type, version])
+  @@index([funnelId, type, status, expiresAt])
+}
+
+model BuyerDemandVersion {
+  id                   String            @id @default(cuid())
+  developerId          String
+  version              Int
+  status               BuyerDemandStatus @default(DRAFT)
+  states               String[]
+  counties             String[]
+  zipCodes             String[]
+  assetTypes           String[]
+  minPurchasePriceCents BigInt?
+  maxPurchasePriceCents BigInt?
+  minAcres             Float?
+  maxAcres             Float?
+  maxAssignmentFeeCents BigInt?
+  strategy             String?
+  sourceUrl            String
+  verifiedAt           DateTime?
+  effectiveAt          DateTime?
+  expiresAt            DateTime?
+  createdBy            String
+  createdAt            DateTime          @default(now())
+  developer            Developer         @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  coverage             BuyerCoverage[]
+
+  @@unique([developerId, version])
+  @@index([status, expiresAt])
+  @@index([developerId, createdAt])
+}
+
+model BuyerCapacityEvidence {
+  id          String              @id @default(cuid())
+  developerId String
+  version     Int
+  status      BuyerEvidenceStatus @default(PENDING)
+  amountCents BigInt?
+  sourceUrl   String
+  verifiedBy  String?
+  verifiedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime            @default(now())
+  developer   Developer           @relation(fields: [developerId], references: [id], onDelete: Restrict)
+
+  @@unique([developerId, version])
+  @@index([developerId, status, expiresAt])
+}
+
+model BuyerReliabilityEvidence {
+  id                String              @id @default(cuid())
+  developerId       String
+  version           Int
+  status            BuyerEvidenceStatus @default(PENDING)
+  completedClosings Int                 @default(0)
+  failedClosings    Int                 @default(0)
+  averageCloseDays  Int?
+  sourceUrl         String
+  verifiedBy        String?
+  verifiedAt        DateTime?
+  expiresAt         DateTime
+  createdAt         DateTime            @default(now())
+  developer         Developer           @relation(fields: [developerId], references: [id], onDelete: Restrict)
+
+  @@unique([developerId, version])
+  @@index([developerId, status, expiresAt])
+}
+
+model BuyerCoverage {
+  id              String              @id @default(cuid())
+  funnelId        String
+  demandVersionId String
+  role            BuyerCoverageRole
+  status          BuyerCoverageStatus @default(CANDIDATE)
+  matchScore      Int
+  reasons         String[]
+  evaluatedAt     DateTime            @default(now())
+  confirmedAt     DateTime?
+  expiresAt       DateTime
+  funnel          AcquisitionFunnel   @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  demandVersion   BuyerDemandVersion  @relation(fields: [demandVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([funnelId, demandVersionId])
+  @@index([funnelId, role, status, expiresAt])
+}
+
+model AcquisitionCampaign {
+  id                    String                    @id @default(cuid())
+  funnelId              String?
+  type                  AcquisitionCampaignType
+  status                AcquisitionCampaignStatus @default(DRAFT)
+  name                  String
+  jurisdictionState     String
+  requiresOwnerApproval Boolean                   @default(true)
+  ownerApprovedAt       DateTime?
+  ownerApprovedBy       String?
+  outboundEnabled       Boolean                   @default(false)
+  startsAt              DateTime?
+  endsAt                DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  funnel                AcquisitionFunnel?        @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  boundaries            AcquisitionCampaignBoundary[]
+
+  @@index([status, startsAt, endsAt])
+  @@index([funnelId])
+}
+
+model AcquisitionCampaignBoundary {
+  id                    String              @id @default(cuid())
+  campaignId            String
+  version               Int
+  allowedStates         String[]
+  allowedChannels       String[]
+  audienceCriteria      Json
+  sourceRequirements    Json
+  doNotContactEnforced  Boolean             @default(true)
+  consentRequired       Boolean             @default(true)
+  maxRecipientsPerDay   Int                 @default(0)
+  effectiveAt           DateTime?
+  expiresAt             DateTime?
+  createdBy             String
+  createdAt             DateTime            @default(now())
+  campaign              AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+
+  @@unique([campaignId, version])
+  @@index([campaignId, effectiveAt, expiresAt])
+}
+
+enum ProfitPriorityConfigurationStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+model ProfitPriorityScoreConfiguration {
+  id                    String                            @id @default(cuid())
+  version               Int                               @unique
+  status                ProfitPriorityConfigurationStatus @default(DRAFT)
+  projectedProfitWeight Int
+  probabilityWeight     Int
+  sellerFitWeight       Int
+  evidenceWeight        Int
+  buyerCoverageWeight   Int
+  velocityWeight        Int
+  riskPenaltyWeight     Int
+  effectiveAt           DateTime?
+  expiresAt             DateTime?
+  reason                String
+  createdBy             String
+  createdAt             DateTime                          @default(now())
+  scoreHistory          ProfitPriorityScoreHistory[]
+
+  @@index([status, effectiveAt, expiresAt])
+}
+
+model ProfitPriorityScoreHistory {
+  id                       String                           @id @default(cuid())
+  funnelId                 String
+  configurationId          String
+  version                  Int
+  totalScore               Int
+  projectedProfitScore     Int
+  probabilityScore         Int
+  sellerFitScore           Int
+  evidenceScore            Int
+  buyerCoverageScore       Int
+  velocityScore            Int
+  riskPenaltyScore         Int
+  projectedBaseCents       BigInt
+  probabilityWeightedCents BigInt
+  contractedFeeCents       BigInt?
+  realizedProfitCents      BigInt?
+  reasons                  String[]
+  blockers                 String[]
+  inputSnapshot            Json
+  calculatedBy             String
+  calculatedAt             DateTime                         @default(now())
+  expiresAt                DateTime
+  funnel                   AcquisitionFunnel                @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  configuration            ProfitPriorityScoreConfiguration @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+
+  @@unique([funnelId, version])
+  @@index([funnelId, calculatedAt])
+  @@index([totalScore, expiresAt])
+  @@index([configurationId])
 }
