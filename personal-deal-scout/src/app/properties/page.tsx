@@ -131,7 +131,7 @@ export default async function PropertiesPage() {
             open
           >
             <summary className="cursor-pointer font-bold">
-              Import properties into verification
+              Add properties from a spreadsheet
             </summary>
             <div className="mt-4">
               <CsvImportForm
@@ -146,7 +146,7 @@ export default async function PropertiesPage() {
             id="add-property"
           >
             <summary className="cursor-pointer font-bold">
-              Add one sourced opportunity
+              Add one property
             </summary>
             <form
               action={createPropertyAction}
@@ -233,7 +233,7 @@ export default async function PropertiesPage() {
                 placeholder="Zoning, utilities, document number, and research notes"
               />
               <button className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2">
-                Save property evidence
+                Add property
               </button>
             </form>
           </details>
