@@ -72,3 +72,13 @@ export async function recordCountySourceCheck(input: { sourceId: string; status:
 export async function readCountyCoverage(filters: { status?: CountyCoverageStatus } = {}) {
   return getPrisma().countySourceRegistry.findMany({ where: filters.status ? { coverageStatus: filters.status } : undefined, include: { sources: { where: { supersededAt: null }, include: { checks: { orderBy: { checkedAt: "desc" }, take: 1 } } }, _count: { select: { properties: true, developerProjects: true, campaignCoverage: true } } }, orderBy: [{ stateCode: "asc" }, { countyName: "asc" }] });
 }
+
+export async function readCountyManualReviewQueue(limit = 100) {
+  const db = getPrisma();
+  const [entityMatches, observations, inaccessible] = await Promise.all([
+    db.countyEntityMatch.findMany({ where: { status: { in: ["PROPOSED", "NEEDS_MANUAL_VERIFICATION", "CONFLICTED"] } }, include: { source: { include: { registry: true } }, developer: { select: { companyName: true } }, property: { select: { address: true } } }, orderBy: { observedAt: "asc" }, take: limit }),
+    db.countyFactObservation.findMany({ where: { status: { in: ["NEEDS_MANUAL_VERIFICATION", "CONFLICTED", "EXPIRED"] } }, include: { source: { include: { registry: true } }, property: { select: { address: true } }, developerProject: { select: { address: true } } }, orderBy: { observedAt: "asc" }, take: limit }),
+    db.countySourceRegistry.findMany({ where: { coverageStatus: { in: ["MANUAL_ONLY", "RESTRICTED", "PAYWALLED", "TEMPORARILY_UNAVAILABLE", "NOT_FOUND", "NEEDS_REVIEW"] } }, orderBy: [{ nextReviewAt: "asc" }, { stateCode: "asc" }], take: limit }),
+  ]);
+  return { entityMatches, observations, inaccessible };
+}

@@ -15,6 +15,13 @@ const TOPICS = [
   ["UTILITIES", "Utility availability"],
   ["ACCESS", "Legal and physical access"],
   ["COMPS", "Comparable land or property sales"],
+  ["PARCEL", "Parcel identity and legal description"],
+  ["LIENS", "Known lien or encumbrance indicators"],
+  ["EASEMENTS", "Recorded easement indicators"],
+  ["COVENANTS", "Restrictive covenant indicators"],
+  ["HISTORIC", "Historic or demolition restriction indicators"],
+  ["ENVIRONMENTAL", "Wetland and environmental indicators"],
+  ["DIMENSIONS", "Lot dimensions and frontage"],
 ] as const;
 
 type Finding = {

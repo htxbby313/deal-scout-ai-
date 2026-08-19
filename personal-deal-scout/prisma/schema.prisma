@@ -119,6 +119,8 @@ model Property {
   lotSize        String?
   estimatedValue Int?
   notes          String?
+  propertyType   String?
+  leadSource     String?
   opportunityStatus OpportunityStatus @default(NEEDS_VERIFICATION)
   contactName    String?
   contactPhone   String?
@@ -482,6 +484,7 @@ model DealTransaction {
   targetBuyerPrice     Int?
   targetAssignmentFee  Int?
   jurisdictionState    String
+  transactionStructure String?
   counselApprovedAt    DateTime?
   complianceVerifiedAt DateTime?
   createdAt            DateTime                 @default(now())
@@ -709,10 +712,30 @@ model FinancialProjection {
   transaction              DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   supersedes               FinancialProjection? @relation("ProjectionCorrections", fields: [supersedesId], references: [id], onDelete: Restrict)
   corrections              FinancialProjection[] @relation("ProjectionCorrections")
+  costEvidence             FinancialCostEvidence[]
+  outcomes                 TransactionOutcome[]
 
   @@unique([transactionId, version])
   @@index([transactionId, createdAt])
   @@index([supersedesId])
+}
+
+model FinancialCostEvidence {
+  id             String              @id @default(cuid())
+  projectionId   String
+  category       String
+  version        Int
+  amountCents    BigInt
+  evidenceStatus String
+  sourceUrl      String
+  artifactHash   String?
+  observedAt     DateTime
+  expiresAt      DateTime?
+  createdBy      String
+  createdAt      DateTime            @default(now())
+  projection     FinancialProjection @relation(fields: [projectionId], references: [id], onDelete: Restrict)
+  @@unique([projectionId, category, version])
+  @@index([category, expiresAt])
 }
 
 model SettlementReview {
@@ -732,11 +755,23 @@ model SettlementReview {
   transaction              DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   corrects                 SettlementReview? @relation("SettlementCorrections", fields: [correctsId], references: [id], onDelete: Restrict)
   corrections              SettlementReview[] @relation("SettlementCorrections")
+  expenseLines             SettlementExpenseLine[]
 
   @@unique([transactionId, version])
   @@unique([transactionId, settlementDocumentHash, version])
   @@index([transactionId, reviewedAt])
   @@index([correctsId])
+}
+
+model SettlementExpenseLine {
+  id                 String           @id @default(cuid())
+  settlementReviewId String
+  category           String
+  amountCents        BigInt
+  sourceReference    String
+  createdAt          DateTime         @default(now())
+  settlementReview   SettlementReview @relation(fields: [settlementReviewId], references: [id], onDelete: Restrict)
+  @@unique([settlementReviewId, category, sourceReference])
 }
 
 enum EngagementChannel {
@@ -818,6 +853,22 @@ enum ContractTemplateStatus {
   ACTIVE
   REJECTED
   SUPERSEDED
+}
+
+enum RetentionCategory {
+  CONTACT_IDENTIFIER
+  CONSENT_EVIDENCE
+  CONTRACT_ARTIFACT
+  SETTLEMENT_ARTIFACT
+  AUDIT_EVENT
+  RESEARCH_EVIDENCE
+}
+
+enum RetentionReviewStatus {
+  PENDING
+  RETAIN
+  ELIGIBLE_FOR_MANUAL_DELETION
+  LEGAL_HOLD
 }
 
 model SellerEngagement {
@@ -1156,9 +1207,28 @@ model DiligenceReview {
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
   transaction           DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  professionalArtifacts ProfessionalDiligenceArtifact[]
 
   @@unique([transactionId, level])
   @@index([status, level])
+}
+
+model ProfessionalDiligenceArtifact {
+  id              String          @id @default(cuid())
+  diligenceReviewId String
+  category        String
+  artifactHash    String
+  sourceUrl       String
+  professionalName String
+  professionalRole String
+  verifiedAt      DateTime
+  expiresAt       DateTime?
+  notes           String?
+  createdAt       DateTime        @default(now())
+  diligenceReview DiligenceReview @relation(fields: [diligenceReviewId], references: [id], onDelete: Restrict)
+
+  @@unique([diligenceReviewId, category, artifactHash])
+  @@index([diligenceReviewId, category, verifiedAt])
 }
 
 model ProviderIntegrationReadiness {
@@ -1171,11 +1241,32 @@ model ProviderIntegrationReadiness {
   suppressionIntegrated Boolean                 @default(false)
   auditIntegrated       Boolean                 @default(false)
   ownerEnabled          Boolean                 @default(false)
+  environment           String                  @default("SANDBOX")
+  environmentConfigured Boolean                 @default(false)
+  authenticationVerified Boolean                @default(false)
+  allowedOperations     String[]
+  idempotencyVerified   Boolean                 @default(false)
+  retryBoundariesVerified Boolean               @default(false)
+  sandboxVerified       Boolean                 @default(false)
+  productionOwnerApprovedAt DateTime?
   reviewedAt            DateTime?
   notes                 String?
   updatedAt             DateTime                @updatedAt
 
   @@unique([provider, channel])
+}
+
+model ProviderWebhookReceipt {
+  id              String            @id @default(cuid())
+  provider        String
+  channel         EngagementChannel
+  externalEventId String
+  payloadHash     String
+  byteLength      Int
+  receivedAt      DateTime          @default(now())
+
+  @@unique([provider, channel, externalEventId])
+  @@index([channel, receivedAt])
 }
 
 model TransactionOutcome {
@@ -1187,13 +1278,29 @@ model TransactionOutcome {
   transactionCosts      Int?
   cycleDays             Int?
   cancellationReason    String?
+  reasonCode            String?
+  reasonExplanation     String?
+  version               Int                      @default(1)
+  predictedProbabilityBps Int?
+  projectionId          String?
+  priorityScoreId       String?
+  decisionSnapshot      Json?
+  correctionReason      String?
+  correctsId            String?
   evidence              Json?
   finalizedAt           DateTime?
   createdAt             DateTime                 @default(now())
   transaction           DealTransaction          @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   observations          LearningObservation[]
+  projection            FinancialProjection?     @relation(fields: [projectionId], references: [id], onDelete: Restrict)
+  priorityScore         ProfitPriorityScoreHistory? @relation(fields: [priorityScoreId], references: [id], onDelete: Restrict)
+  corrects              TransactionOutcome?      @relation("OutcomeCorrections", fields: [correctsId], references: [id], onDelete: Restrict)
+  corrections           TransactionOutcome[]     @relation("OutcomeCorrections")
 
+  @@unique([transactionId, version])
   @@index([transactionId, status])
+  @@index([projectionId])
+  @@index([priorityScoreId])
 }
 
 model LearningObservation {
@@ -1270,6 +1377,45 @@ model ContractTemplateVersion {
 
   @@unique([jurisdictionState, type, version])
   @@index([jurisdictionState, type, status])
+}
+
+model DataRetentionPolicy {
+  id                         String            @id @default(cuid())
+  category                   RetentionCategory
+  jurisdictionState          String
+  version                    Int
+  retentionDays              Int
+  active                     Boolean           @default(false)
+  counselReviewer            String?
+  counselApprovedAt          DateTime?
+  counselApprovalEvidenceUrl String?
+  ownerApprovedBy            String?
+  ownerApprovedAt            DateTime?
+  effectiveAt                DateTime?
+  expiresAt                  DateTime?
+  createdAt                  DateTime          @default(now())
+  reviews                    RetentionReviewRecord[]
+
+  @@unique([category, jurisdictionState, version])
+  @@index([category, jurisdictionState, active])
+}
+
+model RetentionReviewRecord {
+  id                 String                @id @default(cuid())
+  policyId           String
+  recordType         String
+  recordIdHash       String
+  dueAt              DateTime
+  status             RetentionReviewStatus @default(PENDING)
+  legalHoldReason    String?
+  decidedBy          String?
+  decidedAt          DateTime?
+  decisionReason     String?
+  createdAt          DateTime              @default(now())
+  policy             DataRetentionPolicy   @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
+  @@unique([policyId, recordType, recordIdHash])
+  @@index([status, dueAt])
 }
 
 enum AcquisitionStage {
@@ -1418,11 +1564,15 @@ model AcquisitionStagePolicy {
   reviewIntervalHours Int
   expiryAction       AcquisitionExpiryAction
   requiredGateTypes  AcquisitionGateType[]
+  entryCriteria      Json?
+  exitCriteria       Json?
   highValueThresholdCents BigInt?
   reason             String
   effectiveAt        DateTime?
   expiresAt          DateTime?
   createdBy          String
+  activatedBy        String?
+  activatedAt        DateTime?
   createdAt          DateTime                @default(now())
   expirationEvents   AcquisitionExpirationEvent[]
 
@@ -2121,9 +2271,26 @@ model ProfitPriorityScoreHistory {
   expiresAt                DateTime
   funnel                   AcquisitionFunnel                @relation(fields: [funnelId], references: [id], onDelete: Restrict)
   configuration            ProfitPriorityScoreConfiguration @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+  outcomes                 TransactionOutcome[]
 
   @@unique([funnelId, version])
   @@index([funnelId, calculatedAt])
   @@index([totalScore, expiresAt])
   @@index([configurationId])
+}
+
+model WeightChangeProposal {
+  id               String   @id @default(cuid())
+  version          Int      @unique
+  status           String   @default("DRAFT")
+  minimumSampleSize Int
+  actualSampleSize Int
+  proposedWeights  Json
+  rationale        String
+  sourceOutcomeIds String[]
+  createdBy        String
+  createdAt        DateTime @default(now())
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  reviewReason     String?
 }

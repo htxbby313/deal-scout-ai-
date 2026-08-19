@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildModelValidationReport } from "@/lib/model-validation";
+import { buildModelValidationReport,evaluateWeightProposalEligibility } from "@/lib/model-validation";
 
 describe("outcome model validation", () => {
   it("warns against claims and tuning with a tiny sample", () => {
@@ -9,8 +9,10 @@ describe("outcome model validation", () => {
     expect(report.warnings.length).toBe(2);
   });
   it("computes error only from prediction/outcome pairs", () => {
-    const report = buildModelValidationReport([{ status: "CLOSED_ASSIGNED", assignmentFee: 10_000, predictedAssignmentFee: 12_000 }, { status: "FAILED" }], 1);
+    const report = buildModelValidationReport([{ status: "CLOSED_ASSIGNED", assignmentFee: 10_000, predictedAssignmentFee: 12_000,predictedProbabilityBps:8000 }, { status: "FAILED",predictedProbabilityBps:3000 }], 1);
     expect(report.meanAbsoluteError).toBe(2_000);
     expect(report.pairedPredictionSampleSize).toBe(1);
+    expect(report.probabilityAbsoluteErrorBps).toBe(2500);
   });
+  it("does not propose weight changes before every paired sample is meaningful",()=>{expect(evaluateWeightProposalEligibility({finalizedOutcomes:40,pairedFinancialOutcomes:40,pairedProbabilityOutcomes:2}).eligible).toBe(false);expect(evaluateWeightProposalEligibility({finalizedOutcomes:40,pairedFinancialOutcomes:40,pairedProbabilityOutcomes:40}).automaticApplicationAllowed).toBe(false);});
 });

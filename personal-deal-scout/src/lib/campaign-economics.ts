@@ -1,4 +1,14 @@
 export type CampaignBoundarySnapshot = { allowedStates: readonly string[]; allowedCounties: readonly string[]; allowedCities: readonly string[]; allowedZipCodes: readonly string[]; allowedNeighborhoods: readonly string[]; includedPropertyTypes: readonly string[]; excludedPropertyTypes: readonly string[]; minimumRequiredProfitCents?: bigint | null; maximumEarnestMoneyCents?: bigint | null; maximumResearchCostCents?: bigint | null; maximumOutreachCostCents?: bigint | null; evidenceFreshnessHours?: number | null };
+export function evaluateCampaignLifecycle(input: { status: string; ownerApprovedAt?: Date | null; startsAt?: Date | null; endsAt?: Date | null; boundaryCount: number; requiredCountyCount: number; coveredCountyCount: number; now: Date }) {
+  const blockers: string[] = [];
+  if (input.status !== "APPROVED") blockers.push("campaign_not_approved");
+  if (!input.ownerApprovedAt) blockers.push("owner_approval_missing");
+  if (!input.startsAt || input.startsAt > input.now) blockers.push("campaign_not_started");
+  if (!input.endsAt || input.endsAt <= input.now) blockers.push("campaign_expired");
+  if (input.boundaryCount !== 1) blockers.push("current_boundary_missing_or_ambiguous");
+  if (input.coveredCountyCount < input.requiredCountyCount) blockers.push("county_coverage_incomplete");
+  return { allowed: blockers.length === 0, blockers };
+}
 export function evaluateCampaignOpportunity(input: { boundary: CampaignBoundarySnapshot; property: { state: string; county?: string | null; city: string; zipCode: string; neighborhood?: string | null; propertyType: string }; projectedProfitCents?: bigint | null; earnestMoneyCents?: bigint | null; evidenceObservedAt?: Date | null; countyCoverageStatus?: string | null; researchCostCents: bigint; outreachCostCents: bigint; now: Date }) {
   const blockers: string[] = []; const b = input.boundary; const upper = (items: readonly string[]) => items.map((item) => item.toUpperCase());
   if (b.allowedStates.length && !upper(b.allowedStates).includes(input.property.state.toUpperCase())) blockers.push("state_outside_campaign");

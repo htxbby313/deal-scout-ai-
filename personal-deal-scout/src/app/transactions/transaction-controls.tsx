@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { createTransactionAction, registerTransactionDocumentAction, setTransactionControlAction, type TransactionActionState } from "@/app/transaction-actions";
+import { createTransactionAction, registerProfessionalDiligenceAction, registerTransactionDocumentAction, setTransactionControlAction, type TransactionActionState } from "@/app/transaction-actions";
 
 const initial: TransactionActionState = { status: "idle", message: "" };
 function Result({ state }: { state: TransactionActionState }) { return state.message ? <p className={`text-xs ${state.status === "error" ? "text-red-700" : "text-emerald-700"}`} role="status">{state.message}</p> : null; }
@@ -23,4 +23,9 @@ function ControlForm({ transactionId, control, disabled }: { transactionId: stri
 export function RegisterDocumentForm({ transactionId, stopped }: { transactionId: string; stopped: boolean }) {
   const [state, action, pending] = useActionState(registerTransactionDocumentAction.bind(null, transactionId), initial);
   return <form action={action} className="grid gap-3 md:grid-cols-4"><input className="rounded-xl border px-3 py-2.5 text-sm" name="type" placeholder="Type: purchase agreement" required /><input className="rounded-xl border px-3 py-2.5 text-sm" name="title" placeholder="Document title" required /><input className="rounded-xl border px-3 py-2.5 text-sm" name="sourceUrl" placeholder="Secure document URL" type="url" required /><button className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" disabled={stopped || pending}>{pending ? "Registering…" : "Register document"}</button><Result state={state} /></form>;
+}
+
+export function ProfessionalDiligenceForm({ transactionId, stopped }: { transactionId: string; stopped: boolean }) {
+  const [state, action, pending] = useActionState(registerProfessionalDiligenceAction.bind(null, transactionId), initial);
+  return <form action={action} className="grid gap-3 md:grid-cols-2"><select className="rounded-xl border px-3 py-2.5 text-sm" name="category" required>{["TITLE","SURVEY","ZONING","UTILITIES","ACCESS","ENVIRONMENTAL","LEGAL_DOCUMENTS","CLOSING_CONDITIONS"].map((item) => <option key={item}>{item}</option>)}</select><input className="rounded-xl border px-3 py-2.5 text-sm" name="artifactHash" placeholder="SHA-256 artifact hash" required /><input className="rounded-xl border px-3 py-2.5 text-sm" name="sourceUrl" placeholder="Secure artifact URL" type="url" required /><input className="rounded-xl border px-3 py-2.5 text-sm" name="professionalName" placeholder="Professional name" required /><input className="rounded-xl border px-3 py-2.5 text-sm" name="professionalRole" placeholder="Professional role" required /><input className="rounded-xl border px-3 py-2.5 text-sm" name="verifiedAt" type="datetime-local" required /><input className="rounded-xl border px-3 py-2.5 text-sm" name="expiresAt" type="datetime-local" /><input className="rounded-xl border px-3 py-2.5 text-sm" name="notes" placeholder="Scope or limitations" /><button className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50 md:col-span-2" disabled={stopped || pending}>{pending ? "Registering…" : "Register professional evidence"}</button><Result state={state} /></form>;
 }

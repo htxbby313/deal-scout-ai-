@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { appendAuditEvent } from "@/lib/transaction-control";
 import { calculateFinancialProjection, calculateSettlementReviewedProfit, financialAuditDetails, type MoneyCents, type ProjectionInput } from "@/lib/financial-truth";
+import { realizedProfitBuckets,reconcileFinancials,validateExpenseLines,type ExpenseLine } from "@/lib/financial-reconciliation";
+import{validateProjectionCostEvidence,type ProjectionCostEvidenceInput}from"@/lib/projection-cost-evidence";
 
 type ItemizedProjection = ProjectionInput & {
   sellerAskingPriceCents?: MoneyCents;
@@ -38,12 +40,14 @@ export async function createFinancialProjectionRecord(input: {
   projection: ItemizedProjection;
   evidenceNotes: string;
   correctionReason?: string;
+  costEvidence:ProjectionCostEvidenceInput[];
 }) {
   const now = new Date();
   const sourceUrl = secureUrl(input.projection.buyerPriceSourceUrl);
   if (input.projection.buyerPriceObservedAt > now || input.projection.buyerPriceExpiresAt <= now) throw new Error("Buyer pricing must be currently observable and unexpired.");
   if (input.evidenceNotes.trim().length < 10) throw new Error("Financial evidence notes are required.");
   const result = calculateFinancialProjection(input.projection);
+  const costDecision=validateProjectionCostEvidence(input.projection,input.costEvidence,now);if(!costDecision.valid)throw new Error(costDecision.blockers.join(" "));
   const db = getPrisma();
   return withVersionRetry(() => db.$transaction(async (tx) => {
     const transaction = await tx.dealTransaction.findUnique({ where: { id: input.transactionId } });
@@ -62,12 +66,14 @@ export async function createFinancialProjectionRecord(input: {
       feeLowCents: result.feeLowCents, feeBaseCents: result.feeBaseCents, feeHighCents: result.feeHighCents, probabilityWeightedCents: result.probabilityWeightedCents, sellerSafeMaximumCents: result.sellerSafeMaximumCents, targetFeeLowCents: result.targetFeeLowCents, targetFeeHighCents: result.targetFeeHighCents,
       evidence: { buyerPriceSourceUrl: sourceUrl, buyerPriceObservedAt: input.projection.buyerPriceObservedAt.toISOString(), buyerPriceExpiresAt: input.projection.buyerPriceExpiresAt.toISOString(), notes: input.evidenceNotes.trim() }, createdBy: input.actor, correctionReason: input.correctionReason?.trim(), supersedesId: latest?.id,
     } });
+    if(input.costEvidence.length)await tx.financialCostEvidence.createMany({data:input.costEvidence.map(item=>({projectionId:record.id,category:item.category,version:1,amountCents:item.amountCents,evidenceStatus:item.evidenceStatus,sourceUrl:secureUrl(item.sourceUrl),artifactHash:item.artifactHash,observedAt:item.observedAt,expiresAt:item.expiresAt,createdBy:input.actor}))});
     await appendAuditEvent(tx, input.transactionId, "financial.projection.recorded", input.actor, `Recorded projected financial scenario version ${record.version}.`, financialAuditDetails({ recordId: record.id, version: record.version, kind: "PROJECTED", amountCents: record.feeBaseCents, correctsId: record.supersedesId }) as Prisma.InputJsonValue);
     return record;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
-export async function createSettlementReviewRecord(input: { transactionId: string; actor: string; grossAssignmentFeeCents: MoneyCents; actualExpensesCents: MoneyCents; settlementDocumentUrl: string; settlementDocumentHash: string; reviewedAt: Date; correctionReason?: string }) {
+export async function createSettlementReviewRecord(input: { transactionId: string; actor: string; grossAssignmentFeeCents: MoneyCents; actualExpensesCents: MoneyCents; expenseLines:ExpenseLine[]; settlementDocumentUrl: string; settlementDocumentHash: string; reviewedAt: Date; correctionReason?: string }) {
+  const expenseValidation=validateExpenseLines(input.expenseLines,input.actualExpensesCents);if(!expenseValidation.valid)throw new Error(expenseValidation.blockers.join(" "));
   const calculated = calculateSettlementReviewedProfit({ grossAssignmentFeeCents: input.grossAssignmentFeeCents, actualExpensesCents: input.actualExpensesCents, settlementDocumentUrl: secureUrl(input.settlementDocumentUrl), settlementDocumentHash: input.settlementDocumentHash, reviewedBy: input.actor, reviewedAt: input.reviewedAt.toISOString() });
   const db = getPrisma();
   return withVersionRetry(() => db.$transaction(async (tx) => {
@@ -77,6 +83,7 @@ export async function createSettlementReviewRecord(input: { transactionId: strin
     const latest = await tx.settlementReview.findFirst({ where: { transactionId: input.transactionId }, orderBy: { version: "desc" } });
     if (latest && (!input.correctionReason || input.correctionReason.trim().length < 10)) throw new Error("A meaningful correction reason is required for a settlement correction.");
     const record = await tx.settlementReview.create({ data: { transactionId: input.transactionId, version: (latest?.version ?? 0) + 1, settlementDocumentUrl: input.settlementDocumentUrl, settlementDocumentHash: input.settlementDocumentHash, grossAssignmentFeeCents: input.grossAssignmentFeeCents, actualExpensesCents: input.actualExpensesCents, realizedProfitCents: calculated.realizedProfitCents, reviewedBy: input.actor, reviewedAt: input.reviewedAt, correctionReason: input.correctionReason?.trim(), correctsId: latest?.id } });
+    await tx.settlementExpenseLine.createMany({data:input.expenseLines.map(line=>({settlementReviewId:record.id,category:line.category.trim(),amountCents:line.amountCents,sourceReference:line.sourceReference.trim()}))});
     await appendAuditEvent(tx, input.transactionId, "financial.settlement.reviewed", input.actor, `Recorded settlement-backed realized profit version ${record.version}.`, financialAuditDetails({ recordId: record.id, version: record.version, kind: "REALIZED", amountCents: record.realizedProfitCents, correctsId: record.correctsId }) as Prisma.InputJsonValue);
     return record;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
@@ -84,9 +91,12 @@ export async function createSettlementReviewRecord(input: { transactionId: strin
 
 export const __profitabilityServiceTestables = { VERSION_RETRY_LIMIT, withVersionRetry };
 
+export async function recordFinancialCostEvidence(input:{projectionId:string;category:string;amountCents:bigint;evidenceStatus:"ESTIMATE"|"INVOICE"|"TITLE_FIGURE"|"COMMITMENT";sourceUrl:string;artifactHash?:string;observedAt:Date;expiresAt?:Date;actor:string}){if(input.amountCents<BigInt(0))throw new Error("Cost evidence cannot be negative.");if(input.observedAt>new Date()||(input.expiresAt&&input.expiresAt<=new Date()))throw new Error("Cost evidence is future-dated or stale.");if(input.artifactHash&&!/^[a-f\d]{64}$/i.test(input.artifactHash))throw new Error("Cost artifact hash must be SHA-256.");const sourceUrl=secureUrl(input.sourceUrl);return getPrisma().$transaction(async tx=>{await tx.financialProjection.findUniqueOrThrow({where:{id:input.projectionId}});const latest=await tx.financialCostEvidence.findFirst({where:{projectionId:input.projectionId,category:input.category},orderBy:{version:"desc"}});return tx.financialCostEvidence.create({data:{projectionId:input.projectionId,category:input.category.trim(),version:(latest?.version??0)+1,amountCents:input.amountCents,evidenceStatus:input.evidenceStatus,sourceUrl,artifactHash:input.artifactHash,observedAt:input.observedAt,expiresAt:input.expiresAt,createdBy:input.actor}});},{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});}
+
 export async function readProfitabilityWorkspace() {
-  const transactions = await getPrisma().dealTransaction.findMany({ include: { property: true, developer: true, financialProjections: { orderBy: { version: "desc" }, take: 1 }, settlementReviews: { orderBy: { version: "desc" }, take: 1 }, acquisitionFunnel: { include: { buyerCoverage: true, gates: true } } }, orderBy: { updatedAt: "desc" } });
+  const transactions = await getPrisma().dealTransaction.findMany({ include: { property: true, developer: true, financialProjections: { orderBy: { version: "desc" }, take: 1 }, settlementReviews: { orderBy: { version: "desc" }, take: 1,include:{expenseLines:true} }, acquisitionFunnel: { include: { buyerCoverage: true, gates: true } } }, orderBy: { updatedAt: "desc" } });
   const rows = transactions.map((transaction) => { const projection = transaction.financialProjections[0]; const settlement = transaction.settlementReviews[0]; return { id: transaction.id, property: transaction.property.address, market: `${transaction.property.city}, ${transaction.property.state}`, buyer: transaction.developer?.companyName ?? null, controlStatus: transaction.controlStatus, stage: transaction.acquisitionFunnel?.stage ?? "DISCOVERED", projectedLowCents: projection?.feeLowCents.toString() ?? null, projectedBaseCents: projection?.feeBaseCents.toString() ?? null, projectedHighCents: projection?.feeHighCents.toString() ?? null, probabilityWeightedCents: projection?.probabilityWeightedCents.toString() ?? null, sellerSafeMaximumCents: projection?.sellerSafeMaximumCents.toString() ?? null, buyerPriceStatus: projection?.buyerPriceStatus ?? null, buyerPriceExpiresAt: projection?.buyerPriceExpiresAt.toISOString() ?? null, realizedProfitCents: settlement?.realizedProfitCents.toString() ?? null, realizedReviewedAt: settlement?.reviewedAt.toISOString() ?? null, buyerCoverageCount: transaction.acquisitionFunnel?.buyerCoverage.filter((item) => item.status === "CONFIRMED").length ?? 0, blockers: transaction.acquisitionFunnel?.gates.filter((gate) => !["SATISFIED", "WAIVED"].includes(gate.status)).length ?? 0 }; });
   const sum = (values: Array<string | null>) => values.reduce((total, value) => total + BigInt(value ?? 0), BigInt(0)).toString();
-  return { rows, totals: { projectedPipelineCents: sum(rows.filter((row) => row.realizedProfitCents == null).map((row) => row.projectedBaseCents)), probabilityWeightedPipelineCents: sum(rows.filter((row) => row.realizedProfitCents == null).map((row) => row.probabilityWeightedCents)), realizedProfitCents: sum(rows.map((row) => row.realizedProfitCents)), closedCount: rows.filter((row) => row.realizedProfitCents != null).length } };
+  const reviewed=transactions.flatMap(item=>item.settlementReviews.map(review=>({reviewedAt:review.reviewedAt,realizedProfitCents:review.realizedProfitCents})));const reconciliations=transactions.flatMap(item=>{const projection=item.financialProjections[0],settlement=item.settlementReviews[0];return projection&&settlement?[{transactionId:item.id,...reconcileFinancials({projectedNetCents:projection.feeBaseCents,actualGrossCents:settlement.grossAssignmentFeeCents,actualExpenses:settlement.expenseLines})}]:[];});
+  return { rows, reconciliations, realizedBuckets:realizedProfitBuckets(reviewed,new Date()),totals: { projectedPipelineCents: sum(rows.filter((row) => row.realizedProfitCents == null).map((row) => row.projectedBaseCents)), probabilityWeightedPipelineCents: sum(rows.filter((row) => row.realizedProfitCents == null).map((row) => row.probabilityWeightedCents)), realizedProfitCents: sum(rows.map((row) => row.realizedProfitCents)), closedCount: rows.filter((row) => row.realizedProfitCents != null).length } };
 }

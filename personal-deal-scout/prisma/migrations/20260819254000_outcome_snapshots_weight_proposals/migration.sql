@@ -1,0 +1,17 @@
+ALTER TABLE "TransactionOutcome" ADD COLUMN "version" INTEGER;
+ALTER TABLE "TransactionOutcome" ADD COLUMN "predictedProbabilityBps" INTEGER;
+ALTER TABLE "TransactionOutcome" ADD COLUMN "projectionId" TEXT;
+ALTER TABLE "TransactionOutcome" ADD COLUMN "priorityScoreId" TEXT;
+ALTER TABLE "TransactionOutcome" ADD COLUMN "decisionSnapshot" JSONB;
+ALTER TABLE "TransactionOutcome" ADD COLUMN "correctionReason" TEXT;
+ALTER TABLE "TransactionOutcome" ADD COLUMN "correctsId" TEXT;
+WITH ranked AS (SELECT "id", ROW_NUMBER() OVER (PARTITION BY "transactionId" ORDER BY "createdAt", "id") AS version FROM "TransactionOutcome") UPDATE "TransactionOutcome" outcome SET "version" = ranked.version FROM ranked WHERE outcome."id" = ranked."id";
+ALTER TABLE "TransactionOutcome" ALTER COLUMN "version" SET NOT NULL;
+CREATE UNIQUE INDEX "TransactionOutcome_transactionId_version_key" ON "TransactionOutcome"("transactionId","version");
+CREATE INDEX "TransactionOutcome_projectionId_idx" ON "TransactionOutcome"("projectionId");
+CREATE INDEX "TransactionOutcome_priorityScoreId_idx" ON "TransactionOutcome"("priorityScoreId");
+ALTER TABLE "TransactionOutcome" ADD CONSTRAINT "TransactionOutcome_projectionId_fkey" FOREIGN KEY ("projectionId") REFERENCES "FinancialProjection"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TransactionOutcome" ADD CONSTRAINT "TransactionOutcome_priorityScoreId_fkey" FOREIGN KEY ("priorityScoreId") REFERENCES "ProfitPriorityScoreHistory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TransactionOutcome" ADD CONSTRAINT "TransactionOutcome_correctsId_fkey" FOREIGN KEY ("correctsId") REFERENCES "TransactionOutcome"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE TABLE "WeightChangeProposal" ("id" TEXT NOT NULL,"version" INTEGER NOT NULL,"status" TEXT NOT NULL DEFAULT 'DRAFT',"minimumSampleSize" INTEGER NOT NULL,"actualSampleSize" INTEGER NOT NULL,"proposedWeights" JSONB NOT NULL,"rationale" TEXT NOT NULL,"sourceOutcomeIds" TEXT[],"createdBy" TEXT NOT NULL,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"reviewedBy" TEXT,"reviewedAt" TIMESTAMP(3),CONSTRAINT "WeightChangeProposal_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "WeightChangeProposal_version_key" ON "WeightChangeProposal"("version");
