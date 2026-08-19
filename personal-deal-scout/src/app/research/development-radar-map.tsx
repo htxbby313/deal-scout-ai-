@@ -6,6 +6,7 @@ import type { FeatureCollection, Geometry } from "geojson";
 import "leaflet/dist/leaflet.css";
 import type { RadarMapListing, RadarMapSignal } from "@/app/research/development-radar-map-shell";
 import { rankColor, US_MAP_BOUNDS, US_STATE_CODES } from "@/lib/map-ranking";
+import { useThemeColor } from "@/lib/theme-color";
 
 type BoundaryProperties = { GEOID?: string; BASENAME?: string };
 type Boundaries = FeatureCollection<Geometry, BoundaryProperties>;
@@ -32,7 +33,7 @@ async function fetchBoundaries(layer: 24 | 25, geoids: string[]) {
 const money = (value?: number) => value ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value) : "Value unknown";
 
 export default function DevelopmentRadarMap({ signals, listings, rankCategory }: { signals: RadarMapSignal[]; listings: RadarMapListing[]; rankCategory: string }) {
-  const [baseColor, setBaseColor] = useState("#2563eb");
+  const baseColor = useThemeColor();
   const [counties, setCounties] = useState<Boundaries | null>(null);
   const [states, setStates] = useState<Boundaries | null>(null);
   const [boundaryError, setBoundaryError] = useState("");
@@ -49,7 +50,7 @@ export default function DevelopmentRadarMap({ signals, listings, rankCategory }:
   }, [signals]);
 
   return <section className="mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm">
-    <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><h2 className="text-xl font-bold">United States development and listing map</h2><p className="mt-1 text-sm text-slate-500">Official Census county and state boundaries correspond to the ranked radar. Exact listing markers show saved address, county, and neighborhood data.</p><p className="mt-2 text-xs font-bold text-blue-700">Darkest = #1 in {rankCategory}; lighter areas rank lower.</p></div><label className="flex items-center gap-3 text-xs font-bold text-slate-600">Rank color <input aria-label="Map rank color" className="h-10 w-14 cursor-pointer rounded border bg-white p-1" onChange={(event) => { setBaseColor(event.target.value); window.localStorage.setItem("deal-scout-map-rank-color", event.target.value); }} type="color" value={baseColor} /></label></div>
+    <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><h2 className="text-xl font-bold">United States development and listing map</h2><p className="mt-1 text-sm text-slate-500">Official Census county and state boundaries correspond to the ranked radar. Exact listing markers show saved address, county, and neighborhood data.</p><p className="mt-2 text-xs font-bold text-blue-700">Darkest = #1 in {rankCategory}; lighter areas rank lower. The gradient follows the application color.</p></div></div>
     <MapContainer center={[39, -98]} className="h-[560px] w-full" maxBounds={US_MAP_BOUNDS} maxBoundsViscosity={1} minZoom={3} scrollWheelZoom zoom={4}>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Boundaries: U.S. Census Bureau' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {states ? <GeoJSON data={states} key={`states-${baseColor}-${rankCategory}`} onEachFeature={(feature, layer) => { const index = stateRanks.get(feature.properties?.GEOID ?? "") ?? signals.length - 1; layer.bindTooltip(`${feature.properties?.BASENAME ?? "State"} · best county #${index + 1} in ${rankCategory}`); }} style={(feature) => { const index = stateRanks.get(feature?.properties?.GEOID ?? "") ?? signals.length - 1; return { color: rankColor(baseColor, index, signals.length), fillColor: rankColor(baseColor, index, signals.length), fillOpacity: 0.08, weight: 3 }; }} /> : null}

@@ -1,0 +1,90 @@
+import "server-only";
+
+import { getPrisma } from "@/lib/prisma";
+
+const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+function safePublicUrl(raw: string) {
+  const url = new URL(raw);
+  if (url.protocol !== "https:") throw new Error("Developer research sources must use HTTPS.");
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".local") || /^(127\.|10\.|192\.168\.|169\.254\.)/.test(host)) throw new Error("Private network sources are not allowed.");
+  return url;
+}
+
+async function fetchPublicPage(raw: string) {
+  const url = safePublicUrl(raw);
+  const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 public-developer-research", Accept: "text/html,application/xhtml+xml" } });
+  if (!response.ok || !(response.headers.get("content-type") || "").includes("text/html")) throw new Error(`Public source returned HTTP ${response.status}.`);
+  const html = (await response.text()).slice(0, 2_000_000);
+  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
+  return { finalUrl: response.url || url.toString(), title: html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim(), phones: [...new Set(text.match(PHONE_PATTERN) || [])], emails: [...new Set(text.match(EMAIL_PATTERN) || [])] };
+}
+
+export async function enqueueDeveloperResearch(developerId: string) {
+  const db = getPrisma();
+  const developer = await db.developer.findUnique({ where: { id: developerId }, select: { id: true, companyName: true, active: true } });
+  if (!developer) throw new Error("Developer was not found.");
+  if (!developer.active) throw new Error("Inactive developers cannot be queued for research.");
+  const existing = await db.developerResearchRun.findFirst({ where: { developerId, status: { in: ["QUEUED", "RUNNING"] } }, orderBy: { startedAt: "desc" } });
+  if (existing) return existing;
+  const queued = await db.developerResearchRun.create({ data: { developerId, status: "QUEUED" } });
+  await db.auditLog.create({ data: { type: "research.developer_dossier", summary: `Queued automatic public-source research for ${developer.companyName}.`, details: { developerId, runId: queued.id, trigger: "automatic" } } });
+  return queued;
+}
+
+async function researchDeveloper(developerId: string, runId: string) {
+  const db = getPrisma();
+  const developer = await db.developer.findUniqueOrThrow({ where: { id: developerId }, include: { projects: true } });
+  const run = await db.developerResearchRun.update({ where: { id: runId }, data: { status: "RUNNING", startedAt: new Date(), error: null } });
+  const urls = [...new Set([developer.website, developer.contactUrl].filter(Boolean) as string[])];
+  const errors: string[] = [];
+  const pages: Awaited<ReturnType<typeof fetchPublicPage>>[] = [];
+  for (const url of urls) {
+    try { pages.push(await fetchPublicPage(url)); }
+    catch (error) { errors.push(`${url}: ${error instanceof Error ? error.message : "source failed"}`); }
+  }
+  const publicPhone = pages.flatMap((page) => page.phones)[0];
+  const publicEmail = pages.flatMap((page) => page.emails)[0];
+  const verifiedProjects = developer.projects.filter((project) => project.sourceUrl && project.verifiedAt).length;
+  const verifiedWebPresence = pages.some((page) => page.title?.toLowerCase().includes(developer.companyName.toLowerCase().split(/\s+/)[0]));
+  const verifiedContact = Boolean(publicPhone || publicEmail);
+  const findingsFound = Number(verifiedWebPresence) + Number(verifiedContact) + Number(verifiedProjects > 0);
+  const channels = [developer.phone || publicPhone, developer.email || publicEmail, developer.contactUrl].filter(Boolean).length;
+  const qualificationStatus = verifiedProjects > 0 && channels >= 2 && developer.contactName ? "PRIORITY" : verifiedProjects > 0 && channels >= 1 ? "QUALIFIED" : verifiedContact ? "LIMITED_CONTACT" : "RESEARCH_NEEDED";
+  await db.$transaction(async (tx) => {
+    await tx.developer.update({ where: { id: developerId }, data: { phone: developer.phone || publicPhone || undefined, email: developer.email || publicEmail || undefined, contactUrl: developer.contactUrl || pages[0]?.finalUrl, contactVerifiedAt: verifiedContact ? new Date() : developer.contactVerifiedAt, lastResearchedAt: new Date(), qualificationStatus } });
+    await tx.developerResearchRun.update({ where: { id: run.id }, data: { status: findingsFound === 3 ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked: pages.length, findingsFound, manualNeeded: 3 - findingsFound, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
+    await tx.auditLog.create({ data: { type: "research.developer_dossier", summary: `Researched ${developer.companyName}; ${findingsFound} of 3 evidence categories verified.`, details: { developerId, runId: run.id, sourcesChecked: pages.length, verifiedWebPresence, verifiedContact, verifiedProjects } } });
+  });
+  return { findingsFound, manualNeeded: 3 - findingsFound };
+}
+
+export async function runQueuedDeveloperResearch(runId: string) {
+  const db = getPrisma();
+  const run = await db.developerResearchRun.findUnique({ where: { id: runId } });
+  if (!run || run.status !== "QUEUED") return { status: "skipped" as const };
+  try { return { status: "completed" as const, developerId: run.developerId, ...await researchDeveloper(run.developerId, run.id) }; }
+  catch (error) {
+    const message = error instanceof Error ? error.message : "Automatic developer research failed.";
+    await db.developerResearchRun.updateMany({ where: { id: run.id, status: { in: ["QUEUED", "RUNNING"] } }, data: { status: "FAILED", error: message.slice(0, 4000), finishedAt: new Date() } });
+    return { status: "failed" as const, developerId: run.developerId, error: message };
+  }
+}
+
+export async function runAutomaticDeveloperResearchBatch(limit = 5) {
+  const db = getPrisma();
+  const safeLimit = Math.max(1, Math.min(limit, 10));
+  const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000);
+  const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
+  await db.developerResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic developer research run." } });
+  const stale = await db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ lastResearchedAt: null }, { lastResearchedAt: { lt: staleCutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
+  for (const developer of stale) await enqueueDeveloperResearch(developer.id);
+  const queued = await db.developerResearchRun.findMany({ where: { status: "QUEUED", developer: { active: true } }, orderBy: { startedAt: "asc" }, take: safeLimit });
+  const results = [];
+  for (const run of queued) results.push(await runQueuedDeveloperResearch(run.id));
+  return { processed: results.length, completed: results.filter((result) => result.status === "completed").length, failed: results.filter((result) => result.status === "failed").length, results };
+}
+
+export const __developerResearchTestables = { safePublicUrl };

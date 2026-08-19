@@ -3,7 +3,14 @@
 :root {
   --background: #dfe7ef;
   --foreground: #172033;
+  --accent: #1d4ed8;
 }
+
+.bg-blue-700 { background-color: var(--accent) !important; }
+.bg-blue-50 { background-color: color-mix(in srgb, var(--accent) 10%, white) !important; }
+.text-blue-700, .text-blue-800 { color: color-mix(in srgb, var(--accent) 88%, #0f172a) !important; }
+.border-blue-200 { border-color: color-mix(in srgb, var(--accent) 28%, white) !important; }
+.decoration-blue-200 { text-decoration-color: color-mix(in srgb, var(--accent) 32%, white) !important; }
 
 @theme inline {
   --color-background: var(--background);

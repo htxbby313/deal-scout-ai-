@@ -13,7 +13,7 @@ export type AuditType =
   | "developer.created" | "developer.project.created" | "developer.matches.scored"
   | "developer.pricing_request.created" | "csv.foreclosure_imported" | "csv.developers_imported"
   | "csv.properties_imported" | "property.evidence_updated" | "property.retired" | "provider.blocked"
-  | "webhook.received" | "scheduler.followups" | "research.census_permits" | "research.property_dossier" | "property.media_added" | "property.media_reviewed";
+  | "webhook.received" | "scheduler.followups" | "research.census_permits" | "research.property_dossier" | "research.developer_dossier" | "property.media_added" | "property.media_reviewed";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SENT_BLOCKED";
 export type QualificationStatus = "RESEARCH_NEEDED" | "LIMITED_CONTACT" | "QUALIFIED" | "PRIORITY" | "REJECTED";
 export type OpportunityStatus = "NEEDS_VERIFICATION" | "DEVELOPMENT_SIGNAL" | "CONFIRMED_AVAILABLE" | "GOVERNMENT_SALE" | "REJECTED";
@@ -25,7 +25,7 @@ export type LeadRecord = { id: string; propertyId: string; ownerName: string; st
 export type TaskRecord = { id: string; leadId: string; title: string; type: string; priority: string; status: "OPEN" | "DONE"; dueAt: string; createdAt: string; updatedAt: string };
 export type MessageTemplate = { id: string; type: string; channel: "SMS" | "EMAIL" | "VOICE" | "INTERNAL"; body: string; active: boolean; createdAt: string; updatedAt: string };
 export type MessageApproval = { id: string; leadId?: string; templateId?: string; channel: "SMS" | "EMAIL" | "VOICE" | "INTERNAL"; recipientLabel: string; subject?: string; body: string; status: ApprovalStatus; provider: string; createdAt: string; updatedAt: string };
-export type DeveloperRecord = { id: string; companyName: string; contactName?: string; phone?: string; email?: string; website?: string; contactUrl?: string; targetZipCodes: string[]; maximumPurchasePrice?: number; typicalBuildPrice?: number; notes?: string; active: boolean; qualificationStatus: QualificationStatus; contactVerifiedAt?: string; lastResearchedAt?: string; createdAt: string; updatedAt: string };
+export type DeveloperRecord = { id: string; companyName: string; contactName?: string; phone?: string; email?: string; website?: string; contactUrl?: string; targetZipCodes: string[]; maximumPurchasePrice?: number; typicalBuildPrice?: number; notes?: string; active: boolean; qualificationStatus: QualificationStatus; contactVerifiedAt?: string; lastResearchedAt?: string; researchRuns: Array<{ id: string; status: string; sourcesChecked: number; findingsFound: number; manualNeeded: number; error?: string; startedAt: string; finishedAt?: string }>; createdAt: string; updatedAt: string };
 export type DeveloperProjectRecord = { id: string; developerId: string; address: string; city: string; state: string; zipCode: string; originalPurchasePrice?: number; newBuildSalePrice?: number; lotSquareFeet?: number; notes?: string; sourceName?: string; sourceUrl?: string; sourceRecordDate?: string; verifiedAt?: string; confidence: number; createdAt: string; updatedAt: string };
 export type DeveloperMatch = { developerId: string; score: number; reasons: string[] };
 export type AuditLog = { id: string; type: AuditType; summary: string; details?: Record<string, unknown>; createdAt: string };
@@ -82,7 +82,7 @@ export async function readDatabase(): Promise<Database> {
       db.systemSetting.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton", mode: "RESEARCH" } }),
       Promise.all(["SMS", "EMAIL", "VOICE"].map((provider) => db.providerSetting.upsert({ where: { provider }, update: {}, create: { provider, enabled: false, configured: false } }))),
       db.property.findMany({ orderBy: { createdAt: "desc" }, include: { researchFindings: { orderBy: { topic: "asc" } }, media: { orderBy: { position: "asc" } }, researchRuns: { orderBy: { startedAt: "desc" }, take: 1 } } }), db.lead.findMany({ orderBy: { createdAt: "desc" } }),
-      db.task.findMany({ orderBy: { createdAt: "desc" } }), db.developer.findMany({ orderBy: { createdAt: "desc" } }),
+      db.task.findMany({ orderBy: { createdAt: "desc" } }), db.developer.findMany({ orderBy: { createdAt: "desc" }, include: { researchRuns: { orderBy: { startedAt: "desc" }, take: 1 } } }),
       db.developerProject.findMany({ orderBy: { createdAt: "desc" } }), db.messageTemplate.findMany({ orderBy: { createdAt: "desc" } }),
       db.messageApproval.findMany({ orderBy: { createdAt: "desc" } }), db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
     ]);
@@ -92,7 +92,7 @@ export async function readDatabase(): Promise<Database> {
       properties: properties.map((p) => ({ ...p, county: optional(p.county), neighborhood: optional(p.neighborhood), latitude: optional(p.latitude), longitude: optional(p.longitude), marketFips: optional(p.marketFips), opportunityStatus: p.opportunityStatus as OpportunityStatus, yearBuilt: optional(p.yearBuilt), lotSize: optional(p.lotSize), estimatedValue: optional(p.estimatedValue), notes: optional(p.notes), contactName: optional(p.contactName), contactPhone: optional(p.contactPhone), contactEmail: optional(p.contactEmail), contactUrl: optional(p.contactUrl), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), verificationSourceUrl: optional(p.verificationSourceUrl), verificationDate: optional(p.verificationDate), lastVerifiedAt: p.lastVerifiedAt ? iso(p.lastVerifiedAt) : undefined, researchFindings: p.researchFindings.map((f) => ({ ...f, status: f.status as PropertyResearchFindingRecord["status"], value: optional(f.value), sourceName: optional(f.sourceName), sourceUrl: optional(f.sourceUrl), notes: optional(f.notes), observedAt: iso(f.observedAt) })), media: p.media.map((m) => ({ ...m, kind: m.kind as PropertyMediaRecord["kind"], caption: optional(m.caption), discoveredAt: iso(m.discoveredAt), reviewedAt: m.reviewedAt ? iso(m.reviewedAt) : undefined })), researchRuns: p.researchRuns.map((r) => ({ ...r, error: optional(r.error), startedAt: iso(r.startedAt), finishedAt: r.finishedAt ? iso(r.finishedAt) : undefined })), createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
       leads: leads.map((l) => ({ ...l, notes: optional(l.notes), createdAt: iso(l.createdAt), updatedAt: iso(l.updatedAt) })),
       tasks: tasks.map((t) => ({ ...t, status: t.status as "OPEN" | "DONE", createdAt: iso(t.createdAt), updatedAt: iso(t.updatedAt) })),
-      developers: developers.map((d) => ({ ...d, qualificationStatus: d.qualificationStatus as QualificationStatus, contactName: optional(d.contactName), phone: optional(d.phone), email: optional(d.email), website: optional(d.website), contactUrl: optional(d.contactUrl), maximumPurchasePrice: optional(d.maximumPurchasePrice), typicalBuildPrice: optional(d.typicalBuildPrice), notes: optional(d.notes), contactVerifiedAt: d.contactVerifiedAt ? iso(d.contactVerifiedAt) : undefined, lastResearchedAt: d.lastResearchedAt ? iso(d.lastResearchedAt) : undefined, createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt) })),
+      developers: developers.map((d) => ({ ...d, qualificationStatus: d.qualificationStatus as QualificationStatus, contactName: optional(d.contactName), phone: optional(d.phone), email: optional(d.email), website: optional(d.website), contactUrl: optional(d.contactUrl), maximumPurchasePrice: optional(d.maximumPurchasePrice), typicalBuildPrice: optional(d.typicalBuildPrice), notes: optional(d.notes), contactVerifiedAt: d.contactVerifiedAt ? iso(d.contactVerifiedAt) : undefined, lastResearchedAt: d.lastResearchedAt ? iso(d.lastResearchedAt) : undefined, researchRuns: d.researchRuns.map((run) => ({ ...run, error: optional(run.error), startedAt: iso(run.startedAt), finishedAt: run.finishedAt ? iso(run.finishedAt) : undefined })), createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt) })),
       developerProjects: developerProjects.map((p) => ({ ...p, originalPurchasePrice: optional(p.originalPurchasePrice), newBuildSalePrice: optional(p.newBuildSalePrice), lotSquareFeet: optional(p.lotSquareFeet), notes: optional(p.notes), sourceName: optional(p.sourceName), sourceUrl: optional(p.sourceUrl), sourceRecordDate: optional(p.sourceRecordDate), verifiedAt: p.verifiedAt ? iso(p.verifiedAt) : undefined, createdAt: iso(p.createdAt), updatedAt: iso(p.updatedAt) })),
       messageTemplates: templates.map((t) => ({ ...t, channel: t.channel as MessageTemplate["channel"], createdAt: iso(t.createdAt), updatedAt: iso(t.updatedAt) })),
       messageApprovals: approvals.map((a) => ({ ...a, leadId: optional(a.leadId), templateId: optional(a.templateId), subject: optional(a.subject), channel: a.channel as MessageApproval["channel"], status: a.status as ApprovalStatus, createdAt: iso(a.createdAt), updatedAt: iso(a.updatedAt) })),
@@ -341,7 +341,7 @@ function normalizeDeveloperRow(row: Record<string, string>) {
 export async function importDevelopersCsv(input: z.infer<typeof crmCsvImportSchema>) {
   const parsed = crmCsvImportSchema.parse(input);
   const rows = parseCsvRows(parsed.csvText);
-  let created = 0; let skipped = 0;
+  let created = 0; let skipped = 0; const createdIds: string[] = [];
   await getPrisma().$transaction(async (tx) => {
     for (const row of rows) {
       const normalized = normalizeDeveloperRow(row);
@@ -350,7 +350,7 @@ export async function importDevelopersCsv(input: z.infer<typeof crmCsvImportSche
       const existing = await tx.developer.findUnique({ where: { companyName } });
       if (existing) { skipped += 1; continue; }
       const targetZipCodes = csvValue(row, "Target ZIP Codes", "Target ZIPs", "ZIP Codes", "ZIPs", "Zip Code", "ZIP").split(/[;,]/).map((zip) => zip.trim()).filter(Boolean);
-      await tx.developer.create({ data: {
+      const developer = await tx.developer.create({ data: {
         companyName,
         contactName: normalized.contactName || undefined,
         phone: validPhone(normalized.phone) || undefined,
@@ -376,11 +376,12 @@ export async function importDevelopersCsv(input: z.infer<typeof crmCsvImportSche
           ["Additional notes", csvValue(row, "Notes", "Additional Notes")],
         ]),
       } });
+      createdIds.push(developer.id);
       created += 1;
     }
     await audit(tx, "csv.developers_imported", `Imported developer CSV: ${created} buyer(s) created, ${skipped} row(s) skipped.`, { sourceName: parsed.sourceName, rows: rows.length, created, skipped });
   });
-  return { rows: rows.length, created, skipped };
+  return { rows: rows.length, created, skipped, createdIds };
 }
 
 export async function importPropertiesCsv(input: z.infer<typeof crmCsvImportSchema>) {

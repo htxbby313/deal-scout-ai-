@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { runCensusPermitResearch } from "@/lib/government-research";
 import { importHudReoCounty } from "@/lib/hud-reo";
+import { enqueueDeveloperResearch, runAutomaticDeveloperResearchBatch, runQueuedDeveloperResearch } from "@/lib/developer-research";
 import { addSourcedPropertyMedia, enqueuePropertyResearch, researchProperty, runAutomaticPropertyResearchBatch, runQueuedPropertyResearch, setPropertyMediaApproval } from "@/lib/property-research";
 
 import {
@@ -165,7 +166,7 @@ export async function createDeveloperAction(formData: FormData) {
     labeled("Acquisition criteria", formData, "notes"),
   ].filter(Boolean).join("\n");
 
-  await createDeveloper({
+  const developer = await createDeveloper({
     companyName: value(formData, "companyName"),
     contactName: value(formData, "contactName"),
     phone: value(formData, "phone"),
@@ -177,6 +178,8 @@ export async function createDeveloperAction(formData: FormData) {
     typicalBuildPrice: Number(value(formData, "typicalBuildPrice") || 0),
     notes: crmNotes,
   });
+  const queued = await enqueueDeveloperResearch(developer.id);
+  after(async () => { await runQueuedDeveloperResearch(queued.id); });
   revalidatePath("/developers");
 }
 
@@ -261,8 +264,10 @@ export async function importDevelopersCsvAction(_previousState: CsvImportState, 
   await requireOwner();
   try {
     const result = await importDevelopersCsv(await csvFile(formData));
+    for (const developerId of result.createdIds) await enqueueDeveloperResearch(developerId);
+    if (result.createdIds.length) after(async () => { await runAutomaticDeveloperResearchBatch(5); });
     revalidatePath("/developers");
-    return { status: "success", message: `Imported ${result.created} buyer(s). Skipped ${result.skipped} duplicate or incomplete row(s).` };
+    return { status: "success", message: `Imported ${result.created} buyer(s) and queued ${result.createdIds.length} for automatic public-source research. Skipped ${result.skipped} duplicate or incomplete row(s).` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "The developer CSV could not be imported." };
   }
