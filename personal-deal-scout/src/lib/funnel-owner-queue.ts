@@ -19,7 +19,6 @@ export async function readFunnelOwnerQueue() {
     ...approvals.map((item) => ({ id: item.id, kind: "TRANSACTION_APPROVAL" as const, label: `${item.type} · ${item.transaction.property.address}`, createdAt: item.requestedAt, urgent: item.expiresAt ? item.expiresAt.getTime() - Date.now() < 24 * 60 * 60_000 : false, href: `/transactions?id=${item.transactionId}` })),
     ...blockers.map((item) => ({ id: item.id, kind: "FUNNEL_BLOCKER" as const, label: `${item.code} · ${item.funnel.property.address}`, createdAt: item.openedAt, urgent: item.expiresAt ? item.expiresAt.getTime() - Date.now() < 24 * 60 * 60_000 : false, href: "/pipeline" })),
     ...engagements.map((item) => ({ id: item.id, kind: "SELLER_ENGAGEMENT" as const, label: `${item.channel} · ${item.transaction.property.address}`, createdAt: item.createdAt, urgent: false, href: "/seller-crm" })),
-    ...templates.map((item) => ({ id: item.id, kind: "CONTRACT_TEMPLATE" as const, label: `${item.type} · ${item.jurisdictionState} · v${item.version}`, createdAt: item.createdAt, urgent: false, href: "/transactions" })),
+    ...templates.map((item) => ({ id: item.id, kind: "CONTRACT_TEMPLATE" as const, label: `${item.type} · ${item.jurisdictionState} · v${item.version}`, createdAt: item.createdAt, urgent: false, href: "/contracts" })),
   ]);
 }
-

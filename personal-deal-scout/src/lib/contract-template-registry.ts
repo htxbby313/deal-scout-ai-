@@ -23,11 +23,17 @@ export async function registerUserSuppliedContractArtifact(input: { name: string
   const artifactHash = createHash("sha256").update(input.content).digest("hex");
   const db = getPrisma();
   return db.$transaction(async (tx) => {
+    const existing = await tx.contractTemplateVersion.findFirst({ where: { jurisdictionState, type: input.type, artifactHash }, orderBy: { version: "desc" } });
+    if (existing) return existing;
     const latest = await tx.contractTemplateVersion.findFirst({ where: { jurisdictionState, type: input.type }, orderBy: { version: "desc" } });
     const version = await tx.contractTemplateVersion.create({ data: { name: input.name.trim(), type: input.type, jurisdictionState, version: (latest?.version ?? 0) + 1, status: "REVIEW_PENDING", artifactHash, storageKey: input.storageKey, sourceUrl: input.sourceUrl ? httpsUrl(input.sourceUrl) : undefined, userSuppliedBy: input.suppliedBy.trim(), userSuppliedAt: new Date() } });
     await tx.auditLog.create({ data: { type: "contract.template.artifact_registered", summary: `Registered user-supplied ${input.type} artifact for review; it remains inactive.`, details: { templateVersionId: version.id, artifactHash, suppliedBy: input.suppliedBy } } });
     return version;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function readContractTemplateVersions() {
+  return getPrisma().contractTemplateVersion.findMany({ orderBy: [{ jurisdictionState: "asc" }, { type: "asc" }, { version: "desc" }] });
 }
 
 export async function recordContractCounselApproval(input: { templateVersionId: string; reviewer: string; approvedAt: Date; evidenceUrl: string }) {
