@@ -12,7 +12,7 @@ import { evaluateTransactionGate } from "@/lib/transaction-policy";
 
 type TransactionClient = Prisma.TransactionClient;
 
-async function appendAuditEvent(
+export async function appendAuditEvent(
   tx: TransactionClient,
   transactionId: string,
   type: string,
@@ -55,6 +55,12 @@ export async function createControlledTransaction(input: {
         controlStatus: "ON_HOLD",
       },
     });
+    const existingFunnel = await tx.acquisitionFunnel.findFirst({ where: { propertyId: input.propertyId, transactionId: null }, orderBy: { createdAt: "desc" } });
+    if (existingFunnel) await tx.acquisitionFunnel.update({ where: { id: existingFunnel.id }, data: { transactionId: transaction.id } });
+    else {
+      const funnel = await tx.acquisitionFunnel.create({ data: { propertyId: input.propertyId, transactionId: transaction.id, stage: "DISCOVERED", expiresAt: new Date(Date.now() + 7 * 86_400_000) } });
+      await tx.acquisitionStageHistory.create({ data: { funnelId: funnel.id, sequence: 1, toStage: "DISCOVERED", actor: input.actor, reason: "Transaction created and attached to the acquisition funnel.", evidence: { transactionId: transaction.id } } });
+    }
     await appendAuditEvent(tx, transaction.id, "transaction.created", input.actor,
       "Transaction created on owner hold; no contact, contract, payment, or closing action is authorized.");
     return transaction;
