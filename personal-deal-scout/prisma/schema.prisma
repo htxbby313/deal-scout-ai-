@@ -141,10 +141,15 @@ model Property {
   transactions   DealTransaction[]
   agentTasks     AgentTask[]
   acquisitionFunnels AcquisitionFunnel[]
+  countyRegistryId String?
+  countyRegistry CountySourceRegistry? @relation(fields: [countyRegistryId], references: [id], onDelete: SetNull)
+  countyObservations CountyFactObservation[]
+  countyEntityMatches CountyEntityMatch[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
   @@index([marketFips])
+  @@index([countyRegistryId])
 }
 
 model PropertyResearchRun {
@@ -261,6 +266,7 @@ model Developer {
   demandVersions        BuyerDemandVersion[]
   capacityEvidence      BuyerCapacityEvidence[]
   reliabilityEvidence   BuyerReliabilityEvidence[]
+  countyEntityMatches   CountyEntityMatch[]
 
   @@index([qualificationStatus])
 }
@@ -347,8 +353,13 @@ model DeveloperProject {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   developer             Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  countyRegistryId      String?
+  countyRegistry        CountySourceRegistry? @relation(fields: [countyRegistryId], references: [id], onDelete: SetNull)
+  countyObservations    CountyFactObservation[]
+  countyEntityMatches   CountyEntityMatch[]
 
   @@unique([developerId, address, zipCode])
+  @@index([countyRegistryId])
 }
 
 model MessageTemplate {
@@ -1182,9 +1193,211 @@ model AcquisitionCampaign {
   updatedAt             DateTime                  @updatedAt
   funnel                AcquisitionFunnel?        @relation(fields: [funnelId], references: [id], onDelete: SetNull)
   boundaries            AcquisitionCampaignBoundary[]
+  countyCoverage        CampaignCountyCoverage[]
 
   @@index([status, startsAt, endsAt])
   @@index([funnelId])
+}
+
+enum CountyCoverageStatus {
+  AUTOMATED
+  MANUAL_ONLY
+  RESTRICTED
+  PAYWALLED
+  TEMPORARILY_UNAVAILABLE
+  NOT_FOUND
+  NEEDS_REVIEW
+}
+
+enum CountyAutomationStatus {
+  PERMITTED
+  RESTRICTED
+  UNKNOWN
+  PROHIBITED
+}
+
+enum CountyAgencyType {
+  ASSESSOR
+  APPRAISAL_DISTRICT
+  PROPERTY_APPRAISER
+  TAX
+  GIS
+  RECORDER
+  DEEDS
+  TREASURER
+  AUDITOR
+  OTHER
+}
+
+enum CountyObservationStatus {
+  VERIFIED
+  CONFLICTED
+  NEEDS_MANUAL_VERIFICATION
+  REJECTED
+  EXPIRED
+}
+
+enum CountyEntityMatchStatus {
+  PROPOSED
+  NEEDS_MANUAL_VERIFICATION
+  VERIFIED
+  REJECTED
+  CONFLICTED
+}
+
+model CountySourceRegistry {
+  id                       String               @id @default(cuid())
+  stateCode                String
+  countyName               String
+  countyEquivalentType     String?
+  fipsCode                 String               @unique
+  coverageStatus           CountyCoverageStatus @default(NEEDS_REVIEW)
+  coverageReason           String?
+  manualSearchInstructions String?
+  lastAccessibilityCheckAt DateTime?
+  lastSuccessfulRunAt      DateTime?
+  nextReviewAt             DateTime?
+  failureReason            String?
+  reviewedBy               String?
+  reviewedAt               DateTime?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  sources                  CountyOfficialSource[]
+  properties               Property[]
+  developerProjects        DeveloperProject[]
+  campaignCoverage         CampaignCountyCoverage[]
+
+  @@unique([stateCode, countyName])
+  @@index([coverageStatus, nextReviewAt])
+}
+
+model CountyOfficialSource {
+  id                    String                   @id @default(cuid())
+  registryId            String
+  version               Int
+  agencyName            String
+  agencyType            CountyAgencyType
+  officialDomain        String
+  delegationEvidenceUrl String?
+  propertySearchUrl     String?
+  parcelGisUrl          String?
+  taxUrl                String?
+  recorderUrl           String?
+  bulkDataUrl           String?
+  queryEndpointUrl      String?
+  termsUrl              String?
+  robotsUrl             String?
+  accessMethod          String
+  authenticationRequired Boolean                @default(false)
+  subscriptionRequired  Boolean                 @default(false)
+  costStatus            String?
+  automationStatus      CountyAutomationStatus  @default(UNKNOWN)
+  robotsStatus          String?
+  rateLimitStatus       String?
+  supportedSearches     String[]
+  availableFields       String[]
+  coverageNotes         String?
+  sourceConfidence      Int
+  adapterVersion        String?
+  parserVersion         String?
+  effectiveAt           DateTime                 @default(now())
+  supersededAt          DateTime?
+  createdBy             String
+  createdAt             DateTime                 @default(now())
+  registry              CountySourceRegistry     @relation(fields: [registryId], references: [id], onDelete: Restrict)
+  checks                 CountySourceCheck[]
+  observations           CountyFactObservation[]
+  entityMatches          CountyEntityMatch[]
+
+  @@unique([registryId, agencyName, agencyType, version])
+  @@index([registryId, supersededAt])
+  @@index([automationStatus])
+}
+
+model CountySourceCheck {
+  id                 String               @id @default(cuid())
+  sourceId           String
+  status             CountyCoverageStatus
+  httpStatus         Int?
+  retrievalMethod    String
+  responseHash       String?
+  failureReason      String?
+  circuitOpenUntil   DateTime?
+  retryCount         Int                  @default(0)
+  checkedAt          DateTime             @default(now())
+  source             CountyOfficialSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([sourceId, checkedAt])
+  @@index([status, circuitOpenUntil])
+}
+
+model CountyFactObservation {
+  id                 String                  @id @default(cuid())
+  sourceId           String
+  propertyId         String?
+  developerProjectId String?
+  fieldName          String
+  value              Json
+  status             CountyObservationStatus @default(NEEDS_MANUAL_VERIFICATION)
+  sourceRecordId     String?
+  queryKeyHash       String
+  rawRecordHash      String
+  effectiveYear      Int?
+  observedAt         DateTime
+  confidence         Int
+  conflictDetails    Json?
+  retrievalMethod    String
+  adapterVersion     String
+  parserVersion      String
+  createdAt          DateTime                @default(now())
+  source             CountyOfficialSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  property           Property?               @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  developerProject   DeveloperProject?       @relation(fields: [developerProjectId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceId, queryKeyHash, fieldName, rawRecordHash])
+  @@index([propertyId, fieldName, observedAt])
+  @@index([developerProjectId, fieldName, observedAt])
+  @@index([status, observedAt])
+}
+
+model CountyEntityMatch {
+  id                 String                  @id @default(cuid())
+  sourceId           String
+  developerId        String
+  propertyId         String?
+  developerProjectId String?
+  status             CountyEntityMatchStatus @default(NEEDS_MANUAL_VERIFICATION)
+  matchedName        String
+  rationale          String
+  supportingEvidence Json
+  conflictingEvidence Json?
+  confidence         Int
+  observedAt         DateTime
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  createdAt          DateTime                @default(now())
+  source             CountyOfficialSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  developer          Developer               @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  property           Property?               @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  developerProject   DeveloperProject?       @relation(fields: [developerProjectId], references: [id], onDelete: Restrict)
+
+  @@index([developerId, status, observedAt])
+  @@index([propertyId, status])
+}
+
+model CampaignCountyCoverage {
+  id           String               @id @default(cuid())
+  campaignId   String
+  registryId   String
+  status       CountyCoverageStatus
+  reason       String?
+  evaluatedAt  DateTime             @default(now())
+  expiresAt    DateTime?
+  campaign     AcquisitionCampaign  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  registry     CountySourceRegistry @relation(fields: [registryId], references: [id], onDelete: Restrict)
+
+  @@unique([campaignId, registryId])
+  @@index([status, expiresAt])
 }
 
 model AcquisitionCampaignBoundary {

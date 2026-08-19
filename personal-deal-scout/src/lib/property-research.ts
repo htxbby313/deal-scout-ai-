@@ -117,9 +117,9 @@ async function censusGeocode(property: { address: string; city: string; state: s
   endpoint.search = new URLSearchParams({ street: property.address, city: property.city, state: property.state, zip: property.zipCode, benchmark: "Public_AR_Current", vintage: "Current_Current", format: "json" }).toString();
   const response = await fetch(endpoint, { cache: "no-store", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 source-backed-property-research" } });
   if (!response.ok) throw new Error(`Census Geocoder returned ${response.status}.`);
-  const payload = await response.json() as { result?: { addressMatches?: Array<{ matchedAddress?: string; coordinates?: { x?: number; y?: number }; geographies?: { Counties?: Array<{ NAME?: string }> } }> } };
+  const payload = await response.json() as { result?: { addressMatches?: Array<{ matchedAddress?: string; coordinates?: { x?: number; y?: number }; geographies?: { Counties?: Array<{ NAME?: string; GEOID?: string }> } }> } };
   const match = payload.result?.addressMatches?.[0];
-  return match?.coordinates?.x !== undefined && match.coordinates.y !== undefined ? { address: match.matchedAddress || "Census address match", longitude: match.coordinates.x, latitude: match.coordinates.y, county: match.geographies?.Counties?.[0]?.NAME, sourceUrl: endpoint.toString() } : null;
+  return match?.coordinates?.x !== undefined && match.coordinates.y !== undefined ? { address: match.matchedAddress || "Census address match", longitude: match.coordinates.x, latitude: match.coordinates.y, county: match.geographies?.Counties?.[0]?.NAME, fips: match.geographies?.Counties?.[0]?.GEOID, sourceUrl: endpoint.toString() } : null;
 }
 
 async function openStreetMapGeocode(property: { address: string; city: string; state: string; zipCode: string }) {
@@ -129,7 +129,7 @@ async function openStreetMapGeocode(property: { address: string; city: string; s
   if (!response.ok) throw new Error(`OpenStreetMap geocoder returned ${response.status}.`);
   const [match] = await response.json() as Array<{ lat?: string; lon?: string; display_name?: string; address?: { county?: string; neighbourhood?: string; suburb?: string } }>;
   const latitude = Number(match?.lat); const longitude = Number(match?.lon);
-  return Number.isFinite(latitude) && Number.isFinite(longitude) ? { address: match.display_name || "OpenStreetMap address match", latitude, longitude, county: match.address?.county, neighborhood: match.address?.neighbourhood || match.address?.suburb, sourceUrl: endpoint.toString() } : null;
+  return Number.isFinite(latitude) && Number.isFinite(longitude) ? { address: match.display_name || "OpenStreetMap address match", latitude, longitude, county: match.address?.county, neighborhood: match.address?.neighbourhood || match.address?.suburb, fips: undefined, sourceUrl: endpoint.toString() } : null;
 }
 
 export async function researchProperty(propertyId: string, queuedRunId?: string) {
@@ -183,7 +183,7 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
   const geocodedNeighborhood = geocode && "neighborhood" in geocode && typeof geocode.neighborhood === "string" ? geocode.neighborhood : undefined;
 
   await db.$transaction(async (tx) => {
-    if (foundPhone || geocode) await tx.property.update({ where: { id: propertyId }, data: { contactPhone: contactPhone || undefined, contactUrl: foundPhone?.sourceUrl || undefined, latitude: geocode?.latitude, longitude: geocode?.longitude, county: property.county || geocode?.county, neighborhood: property.neighborhood || geocodedNeighborhood } });
+    if (foundPhone || geocode) await tx.property.update({ where: { id: propertyId }, data: { contactPhone: contactPhone || undefined, contactUrl: foundPhone?.sourceUrl || undefined, latitude: geocode?.latitude, longitude: geocode?.longitude, county: property.county || geocode?.county, marketFips: geocode && "fips" in geocode ? geocode.fips : undefined, neighborhood: property.neighborhood || geocodedNeighborhood } });
     for (const finding of findings.values()) await tx.propertyResearchFinding.upsert({ where: { propertyId_topic: { propertyId, topic: finding.topic } }, update: { ...finding, observedAt: new Date() }, create: { propertyId, ...finding } });
     for (const [position, item] of media.entries()) await tx.propertyMedia.upsert({ where: { propertyId_url: { propertyId, url: item.url } }, update: { sourceUrl: item.sourceUrl, sourceName: item.sourceName, altText: item.altText, position }, create: { propertyId, ...item, position } });
     const manualNeeded = [...findings.values()].filter((item) => item.status !== "VERIFIED").length;

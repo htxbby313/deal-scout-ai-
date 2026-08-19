@@ -1,0 +1,60 @@
+import "server-only";
+
+import { Prisma, type CountyAgencyType, type CountyAutomationStatus, type CountyCoverageStatus } from "@prisma/client";
+import { getPrisma } from "@/lib/prisma";
+import { validateCountyIdentity } from "@/lib/county-source-policy";
+
+function https(raw: string) { const url = new URL(raw); if (url.protocol !== "https:") throw new Error("County sources must use HTTPS."); return url; }
+function officialDomain(raw: string, delegationEvidenceUrl?: string) { const url = https(raw); const government = url.hostname.endsWith(".gov") || url.hostname.endsWith(".us"); if (!government && !delegationEvidenceUrl) throw new Error("A non-government vendor requires an official delegation evidence URL."); if (delegationEvidenceUrl) https(delegationEvidenceUrl); return url.origin; }
+
+export async function synchronizeCountyCoverageTargets(now = new Date()) {
+  const db = getPrisma();
+  const [properties, projects] = await Promise.all([
+    db.property.findMany({ where: { marketFips: { not: null }, countyRegistryId: null, opportunityStatus: { not: "REJECTED" } }, select: { id: true, state: true, county: true, marketFips: true } }),
+    db.developerProject.findMany({ where: { countyRegistryId: null }, select: { id: true, state: true, sourceName: true, zipCode: true } }),
+  ]);
+  let attachedProperties = 0;
+  for (const property of properties) {
+    if (!property.marketFips || !property.county) continue;
+    const identity = { stateCode: property.state.toUpperCase(), countyName: property.county.replace(/\s+County$/i, "").trim(), fipsCode: property.marketFips };
+    if (!validateCountyIdentity(identity).valid) continue;
+    const registry = await db.countySourceRegistry.upsert({ where: { fipsCode: identity.fipsCode }, update: { countyName: identity.countyName, stateCode: identity.stateCode }, create: { ...identity, nextReviewAt: now, coverageReason: "Created automatically from a Census-resolved active property; official sources require review." } });
+    await db.property.update({ where: { id: property.id }, data: { countyRegistryId: registry.id } });
+    attachedProperties += 1;
+  }
+  return { propertiesScanned: properties.length, attachedProperties, unresolvedProjects: projects.length };
+}
+
+export async function upsertCountyRegistry(input: { stateCode: string; countyName: string; fipsCode: string; actor: string; manualSearchInstructions?: string }) {
+  const identity = { stateCode: input.stateCode.toUpperCase(), countyName: input.countyName.trim(), fipsCode: input.fipsCode };
+  const validation = validateCountyIdentity(identity);
+  if (!validation.valid || !input.actor) throw new Error(`Invalid county identity: ${validation.errors.join(", ")}`);
+  return getPrisma().countySourceRegistry.upsert({ where: { fipsCode: identity.fipsCode }, update: { stateCode: identity.stateCode, countyName: identity.countyName, manualSearchInstructions: input.manualSearchInstructions, reviewedBy: input.actor, reviewedAt: new Date() }, create: { ...identity, manualSearchInstructions: input.manualSearchInstructions, reviewedBy: input.actor, reviewedAt: new Date(), coverageReason: "County registered; official source coverage requires evidence." } });
+}
+
+export async function registerCountySource(input: { registryId: string; agencyName: string; agencyType: CountyAgencyType; officialUrl: string; delegationEvidenceUrl?: string; propertySearchUrl?: string; parcelGisUrl?: string; taxUrl?: string; recorderUrl?: string; termsUrl?: string; robotsUrl?: string; accessMethod: string; authenticationRequired: boolean; subscriptionRequired: boolean; automationStatus: CountyAutomationStatus; supportedSearches: string[]; availableFields: string[]; sourceConfidence: number; actor: string }) {
+  if (!input.actor || input.sourceConfidence < 0 || input.sourceConfidence > 100) throw new Error("A reviewer and confidence from 0 through 100 are required.");
+  const domain = officialDomain(input.officialUrl, input.delegationEvidenceUrl);
+  for (const candidate of [input.propertySearchUrl, input.parcelGisUrl, input.taxUrl, input.recorderUrl, input.termsUrl, input.robotsUrl]) if (candidate) https(candidate);
+  return getPrisma().$transaction(async (tx) => {
+    const latest = await tx.countyOfficialSource.findFirst({ where: { registryId: input.registryId, agencyName: input.agencyName, agencyType: input.agencyType }, orderBy: { version: "desc" } });
+    if (latest && !latest.supersededAt) await tx.countyOfficialSource.update({ where: { id: latest.id }, data: { supersededAt: new Date() } });
+    const source = await tx.countyOfficialSource.create({ data: { registryId: input.registryId, version: (latest?.version ?? 0) + 1, agencyName: input.agencyName, agencyType: input.agencyType, officialDomain: domain, delegationEvidenceUrl: input.delegationEvidenceUrl, propertySearchUrl: input.propertySearchUrl, parcelGisUrl: input.parcelGisUrl, taxUrl: input.taxUrl, recorderUrl: input.recorderUrl, termsUrl: input.termsUrl, robotsUrl: input.robotsUrl, accessMethod: input.accessMethod, authenticationRequired: input.authenticationRequired, subscriptionRequired: input.subscriptionRequired, automationStatus: input.automationStatus, supportedSearches: input.supportedSearches, availableFields: input.availableFields, sourceConfidence: input.sourceConfidence, createdBy: input.actor } });
+    await tx.auditLog.create({ data: { type: "county.source.versioned", summary: `Recorded ${input.agencyName} county source version ${source.version}.`, details: { registryId: input.registryId, sourceId: source.id, automationStatus: source.automationStatus } } });
+    return source;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function recordCountySourceCheck(input: { sourceId: string; status: CountyCoverageStatus; retrievalMethod: string; httpStatus?: number; responseHash?: string; failureReason?: string; retryCount: number; checkedAt: Date }) {
+  if (input.retryCount < 0 || input.retryCount > 3) throw new Error("County connector retries are bounded at three attempts.");
+  return getPrisma().$transaction(async (tx) => {
+    const check = await tx.countySourceCheck.create({ data: { ...input, circuitOpenUntil: input.status === "TEMPORARILY_UNAVAILABLE" && input.retryCount >= 3 ? new Date(input.checkedAt.getTime() + 60 * 60_000) : undefined } });
+    const source = await tx.countyOfficialSource.findUniqueOrThrow({ where: { id: input.sourceId } });
+    await tx.countySourceRegistry.update({ where: { id: source.registryId }, data: { coverageStatus: input.status, lastAccessibilityCheckAt: input.checkedAt, lastSuccessfulRunAt: input.status === "AUTOMATED" ? input.checkedAt : undefined, failureReason: input.failureReason, nextReviewAt: new Date(input.checkedAt.getTime() + (input.status === "AUTOMATED" ? 30 : 1) * 86_400_000) } });
+    return check;
+  });
+}
+
+export async function readCountyCoverage(filters: { status?: CountyCoverageStatus } = {}) {
+  return getPrisma().countySourceRegistry.findMany({ where: filters.status ? { coverageStatus: filters.status } : undefined, include: { sources: { where: { supersededAt: null }, include: { checks: { orderBy: { checkedAt: "desc" }, take: 1 } } }, _count: { select: { properties: true, developerProjects: true, campaignCoverage: true } } }, orderBy: [{ stateCode: "asc" }, { countyName: "asc" }] });
+}

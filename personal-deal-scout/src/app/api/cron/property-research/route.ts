@@ -2,6 +2,7 @@ import { runAgentTeamBatch } from "@/lib/agent-orchestration";
 import { runAutomaticResearchCycle } from "@/lib/automatic-research";
 import { recoverAutomaticResearchWork } from "@/lib/research-automation";
 import { synchronizeAcquisitionFunnels } from "@/lib/operating-layer";
+import { synchronizeCountyCoverageTargets } from "@/lib/county-source-service";
 
 export const maxDuration = 300;
 
@@ -11,6 +12,7 @@ export async function GET(request: Request) {
   const recovery = await recoverAutomaticResearchWork();
   const research = await runAutomaticResearchCycle();
   const funnels = await synchronizeAcquisitionFunnels();
+  const counties = await synchronizeCountyCoverageTargets();
   const agents = await runAgentTeamBatch();
-  return Response.json({ ok: true, recovery, research, funnels, agents });
+  return Response.json({ ok: true, recovery, research, funnels, counties, agents });
 }
