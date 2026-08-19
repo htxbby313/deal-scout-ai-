@@ -289,10 +289,13 @@ export async function importDevelopersCsvAction(_previousState: CsvImportState, 
   await requireOwner();
   try {
     const result = await importDevelopersCsv(await csvFile(formData));
-    for (const developerId of result.createdIds) await enqueueDeveloperResearch(developerId);
-    if (result.createdIds.length) after(async () => { await runAutomaticDeveloperResearchBatch(5); });
+    const runs: Array<{ id: string }> = [];
+    for (const developerId of result.createdIds) runs.push(await enqueueDeveloperResearch(developerId));
+    if (runs.length) after(async () => {
+      for (const run of runs) await runQueuedDeveloperResearch(run.id);
+    });
     revalidatePath("/developers");
-    return { status: "success", message: `Imported ${result.created} buyer(s) and queued ${result.createdIds.length} for automatic public-source research. Skipped ${result.skipped} duplicate or incomplete row(s).` };
+    return { status: "success", message: `Imported ${result.created} buyer(s); automatic public-source research started for ${result.createdIds.length}. Skipped ${result.skipped} duplicate or incomplete row(s).` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "The developer CSV could not be imported." };
   }
@@ -302,10 +305,13 @@ export async function importPropertiesCsvAction(_previousState: CsvImportState, 
   await requireOwner();
   try {
     const result = await importPropertiesCsv(await csvFile(formData));
-    for (const propertyId of result.createdIds) await enqueuePropertyResearch(propertyId);
-    if (result.createdIds.length) after(async () => { await runAutomaticPropertyResearchBatch(2); });
+    const runs: Array<{ id: string }> = [];
+    for (const propertyId of result.createdIds) runs.push(await enqueuePropertyResearch(propertyId));
+    if (runs.length) after(async () => {
+      for (const run of runs) await runQueuedPropertyResearch(run.id);
+    });
     revalidatePath("/properties");
-    return { status: "success", message: `Imported ${result.created} propertie(s) and queued ${result.createdIds.length} for automatic public-source research. Skipped ${result.skipped} duplicate or incomplete row(s).` };
+    return { status: "success", message: `Imported ${result.created} propertie(s); automatic public-source research started for ${result.createdIds.length}. Skipped ${result.skipped} duplicate or incomplete row(s).` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "The property CSV could not be imported." };
   }
