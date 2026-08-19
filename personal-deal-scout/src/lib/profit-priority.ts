@@ -88,3 +88,11 @@ export function profitPriorityInputSnapshot(input: ProfitPriorityInputs) {
     targetProfitCents: input.targetProfitCents.toString(),
   };
 }
+
+export function evaluateStoredProfitPriority(input: { score: number; blockers: readonly string[]; expiresAt: Date; stage: string; controlStatus?: string | null; now: Date }) {
+  const blockers = [...input.blockers];
+  if (input.controlStatus === "STOPPED") blockers.push("transaction_stopped");
+  if (["DISQUALIFIED", "ARCHIVED"].includes(input.stage)) blockers.push("inactive_funnel_stage");
+  if (input.expiresAt <= input.now) blockers.push("priority_score_expired");
+  return { eligible: blockers.length === 0, visibleScore: blockers.length === 0 ? input.score : null, blockers };
+}

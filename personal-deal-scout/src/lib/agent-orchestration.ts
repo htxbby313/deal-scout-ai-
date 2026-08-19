@@ -6,6 +6,7 @@ import { AGENT_TASK_TYPES, evaluateAgentTask, type AgentTaskType } from "@/lib/a
 import { researchProperty } from "@/lib/property-research";
 import { enqueueDeveloperResearch, runQueuedDeveloperResearch } from "@/lib/developer-research";
 import { scoreDeveloperMatches } from "@/lib/database";
+import { agentTaskDedupeKey } from "@/lib/agent-task-dedup";
 
 const TEAM: Array<{ role: AgentRole; name: string; description: string }> = [
   { role: "OPERATIONS_COORDINATOR", name: "Operations Coordinator", description: "Coordinates evidence-backed work and owner handoffs." },
@@ -25,11 +26,17 @@ export async function ensureAgentTeam() {
 async function createTaskIfMissing(input: { role: AgentRole; taskType: AgentTaskType; title: string; description: string; transactionId?: string; propertyId?: string; developerId?: string; evidenceCount?: number; ownerApprovalRequired?: boolean }) {
   const db = getPrisma();
   const agent = await db.agent.findUniqueOrThrow({ where: { role: input.role } });
+  const dedupeKey = agentTaskDedupeKey({ agentId: agent.id, taskType: input.taskType, transactionId: input.transactionId, propertyId: input.propertyId, developerId: input.developerId });
   const recentCutoff = new Date(Date.now() - 24 * 60 * 60_000);
   const existing = await db.agentTask.findFirst({ where: { assignedAgentId: agent.id, taskType: input.taskType, transactionId: input.transactionId, propertyId: input.propertyId, developerId: input.developerId, OR: [{ status: { in: [...activeTaskStatuses] } }, { status: "COMPLETED", updatedAt: { gte: recentCutoff } }] } });
   if (existing) return existing;
-  const task = await db.agentTask.create({ data: { assignedAgentId: agent.id, taskType: input.taskType, title: input.title, description: input.description, transactionId: input.transactionId, propertyId: input.propertyId, developerId: input.developerId, evidenceCount: input.evidenceCount ?? 0, ownerApprovalRequired: input.ownerApprovalRequired ?? false } });
-  await db.agentEvent.create({ data: { taskId: task.id, actorAgentId: agent.id, type: "TASK_CREATED", summary: `${agent.name} queued ${task.title}.` } });
+  let task; let created = false;
+  try { task = await db.agentTask.create({ data: { dedupeKey, assignedAgentId: agent.id, taskType: input.taskType, title: input.title, description: input.description, transactionId: input.transactionId, propertyId: input.propertyId, developerId: input.developerId, evidenceCount: input.evidenceCount ?? 0, ownerApprovalRequired: input.ownerApprovalRequired ?? false } }); created = true; }
+  catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+    task = await db.agentTask.findUniqueOrThrow({ where: { dedupeKey } });
+  }
+  if (created) await db.agentEvent.create({ data: { taskId: task.id, actorAgentId: agent.id, type: "TASK_CREATED", summary: `${agent.name} queued ${task.title}.` } });
   return task;
 }
 

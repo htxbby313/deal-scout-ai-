@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org",
+  "project_id": "wholesale_creative_acquisition",
+  "version": "2026.8.19",
+  "status": "REVIEW_PENDING",
+  "governing_law_fallback": "State where the underlying real property is physically located",
+  "data_binding_targets": [
+    "Assignable_Creative_Financing_Contract.md",
+    "Closing_and_Assignment_Contract.md"
+  ],
+  "variable_schema": "contract-variables.schema.json",
+  "activation_authorized": false,
+  "required_external_reviews": [
+    "state-specific real-estate counsel",
+    "licensed closing or title professional",
+    "mortgage and seller-financing compliance review when applicable",
+    "owner approval for the exact jurisdiction and version"
+  ]
+}

@@ -1,3 +1,4 @@
+/** @deprecated Legacy whole-dollar artifact fields. Never use for authoritative realized profit; use financial-truth and SettlementReview. */
 export type SettlementFields = {
   closingDate: Date;
   sellerProceeds?: number;
@@ -5,6 +6,7 @@ export type SettlementFields = {
   transactionCosts?: number;
 };
 
+/** @deprecated Validation for legacy evidence ingestion only, not authoritative financial reporting. */
 export function validateSettlementFields(input: SettlementFields, now = new Date()) {
   const reasons: string[] = [];
   if (input.closingDate > now) reasons.push("Closing date cannot be in the future.");
@@ -15,6 +17,9 @@ export function validateSettlementFields(input: SettlementFields, now = new Date
   return { valid: reasons.length === 0, reasons };
 }
 
+/** @deprecated Read-time legacy overlay only. Authoritative corrections must be append-only SettlementReview versions. */
 export function applySettlementCorrections<T extends SettlementFields>(original: T, corrections: Array<Partial<SettlementFields>>) {
   return corrections.reduce<T>((current, correction) => ({ ...current, ...correction }), original);
 }
+
+export const LEGACY_SETTLEMENT_POLICY_IS_AUTHORITATIVE = false as const;

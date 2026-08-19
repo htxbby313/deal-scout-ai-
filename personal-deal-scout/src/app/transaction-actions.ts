@@ -6,6 +6,7 @@ import { createControlledTransaction, registerTransactionDocument, setOwnerContr
 import { enqueuePropertyResearch, runQueuedPropertyResearch } from "@/lib/property-research";
 import { enqueueDeveloperResearch, runQueuedDeveloperResearch } from "@/lib/developer-research";
 import { after } from "next/server";
+import { registerProfessionalDiligenceArtifact, runDiligenceReview } from "@/lib/diligence-service";
 
 export type TransactionActionState = { status: "idle" | "success" | "error"; message: string };
 const value = (data: FormData, key: string) => String(data.get(key) ?? "").trim();
@@ -43,4 +44,14 @@ export async function registerTransactionDocumentAction(transactionId: string, _
     revalidatePath("/transactions");
     return { status: "success", message: "Document registered with an audit event." };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Document could not be registered." }; }
+}
+
+export async function registerProfessionalDiligenceAction(transactionId: string, _state: TransactionActionState, data: FormData): Promise<TransactionActionState> {
+  await requireOwner();
+  try {
+    await registerProfessionalDiligenceArtifact({ transactionId, category: value(data, "category"), artifactHash: value(data, "artifactHash"), sourceUrl: value(data, "sourceUrl"), professionalName: value(data, "professionalName"), professionalRole: value(data, "professionalRole"), verifiedAt: new Date(value(data, "verifiedAt")), expiresAt: value(data, "expiresAt") ? new Date(value(data, "expiresAt")) : undefined, notes: value(data, "notes") || undefined });
+    await runDiligenceReview(transactionId, "ENHANCED", "owner");
+    revalidatePath("/transactions");
+    return { status: "success", message: "Professional artifact registered and enhanced diligence rechecked." };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Professional artifact could not be registered." }; }
 }

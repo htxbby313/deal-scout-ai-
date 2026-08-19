@@ -10,5 +10,5 @@ describe("seller engagement safety", () => {
     expect(result.allowed).toBe(false);
     expect(result.reasons.length).toBeGreaterThanOrEqual(2);
   });
-  it("requires every provider readiness control", () => expect(evaluateProviderReadiness({ credentialsConfigured: true, webhookVerified: true, suppressionIntegrated: false, auditIntegrated: true, ownerEnabled: true })).toEqual({ ready: false, missing: ["suppressionIntegrated"] }));
+  it("requires every provider readiness control", () => expect(evaluateProviderReadiness({ credentialsConfigured: true, webhookVerified: true, suppressionIntegrated: false, auditIntegrated: true, ownerEnabled: true, environment: "SANDBOX", environmentConfigured: true, authenticationVerified: true, allowedOperations: ["DRAFT"], idempotencyVerified: true, retryBoundariesVerified: true, sandboxVerified: true })).toEqual({ ready: false, missing: ["suppressionIntegrated"] }));
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateProfitPriorityScore, profitPriorityInputSnapshot, validateScoreConfigurationWindow } from "@/lib/profit-priority";
+import { calculateProfitPriorityScore, evaluateStoredProfitPriority, profitPriorityInputSnapshot, validateScoreConfigurationWindow } from "@/lib/profit-priority";
 
 const weights = { projectedProfit: 2500, probability: 2500, sellerFit: 1000, evidence: 1500, buyerCoverage: 1500, velocity: 1000, riskPenalty: 2000 };
 
@@ -23,5 +23,14 @@ describe("profit priority score", () => {
 
   it("serializes BigInt inputs without mixing their financial truth classes", () => {
     expect(profitPriorityInputSnapshot({ projectedBaseCents: BigInt(20), probabilityWeightedCents: BigInt(10), contractedFeeCents: BigInt(8), realizedProfitCents: BigInt(6), sellerFitScore: 1, evidenceScore: 2, buyerCoverageScore: 3, velocityScore: 4, riskPenaltyScore: 5, targetProfitCents: BigInt(25) })).toMatchObject({ projectedBaseCents: "20", probabilityWeightedCents: "10", contractedFeeCents: "8", realizedProfitCents: "6" });
+  });
+
+  it("excludes stopped, inactive, stale, or blocked records from priority ranking", () => {
+    const base = { score: 91, blockers: [], expiresAt: new Date("2026-09-01"), stage: "BUYER_FIT", controlStatus: "ACTIVE", now: new Date("2026-08-19") };
+    expect(evaluateStoredProfitPriority(base).visibleScore).toBe(91);
+    expect(evaluateStoredProfitPriority({ ...base, controlStatus: "STOPPED" }).visibleScore).toBeNull();
+    expect(evaluateStoredProfitPriority({ ...base, stage: "ARCHIVED" }).visibleScore).toBeNull();
+    expect(evaluateStoredProfitPriority({ ...base, expiresAt: new Date("2026-08-01") }).visibleScore).toBeNull();
+    expect(evaluateStoredProfitPriority({ ...base, blockers: ["title_unverified"] }).visibleScore).toBeNull();
   });
 });

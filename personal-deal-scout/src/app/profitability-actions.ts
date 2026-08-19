@@ -13,7 +13,15 @@ const date = (data: FormData, key: string) => { const parsed = new Date(value(da
 export async function createProjectionAction(_state: ProfitabilityActionState, data: FormData): Promise<ProfitabilityActionState> {
   await requireOwner();
   try {
-    await createFinancialProjectionRecord({ transactionId: value(data, "transactionId"), actor: "owner", evidenceNotes: value(data, "evidenceNotes"), correctionReason: value(data, "correctionReason") || undefined, projection: {
+    const rawEvidence = JSON.parse(value(data, "costEvidence")) as Array<{ category: string; amount: string; evidenceStatus: "ESTIMATE" | "INVOICE" | "TITLE_FIGURE" | "COMMITMENT"; sourceUrl: string; observedAt: string; expiresAt?: string; artifactHash?: string }>;
+    if (!Array.isArray(rawEvidence)) throw new Error("costEvidence requires a JSON array.");
+    const costEvidence = rawEvidence.map((item) => ({
+      category: String(item.category), amountCents: parseMoneyToCents(String(item.amount)), evidenceStatus: item.evidenceStatus,
+      sourceUrl: String(item.sourceUrl), observedAt: new Date(item.observedAt),
+      expiresAt: item.expiresAt ? new Date(item.expiresAt) : undefined, artifactHash: item.artifactHash ? String(item.artifactHash) : undefined,
+    }));
+    if (costEvidence.some((item) => Number.isNaN(item.observedAt.getTime()) || (item.expiresAt && Number.isNaN(item.expiresAt.getTime())))) throw new Error("Every cost evidence record requires valid observation and expiry dates.");
+    await createFinancialProjectionRecord({ transactionId: value(data, "transactionId"), actor: "owner", costEvidence, evidenceNotes: value(data, "evidenceNotes"), correctionReason: value(data, "correctionReason") || undefined, projection: {
       sellerAskingPriceCents: money(data, "sellerAskingPrice"), sellerMinimumNetCents: money(data, "sellerMinimumNet"), sellerContractPriceCents: money(data, "sellerContractPrice", true),
       buyerPriceLowCents: money(data, "buyerPriceLow", true), buyerPriceBaseCents: money(data, "buyerPriceBase", true), buyerPriceHighCents: money(data, "buyerPriceHigh", true), buyerPriceStatus: value(data, "buyerPriceStatus") as "DOCUMENTED" | "COMMITTED", buyerPriceSourceUrl: value(data, "buyerPriceSourceUrl"), buyerPriceObservedAt: date(data, "buyerPriceObservedAt"), buyerPriceExpiresAt: date(data, "buyerPriceExpiresAt"),
       transactionCostsCents: money(data, "transactionCosts"), doubleClosingCostsCents: money(data, "doubleClosingCosts"), titleExpensesCents: money(data, "titleExpenses"), closingExpensesCents: money(data, "closingExpenses"), transactionalFundingCents: money(data, "transactionalFunding"), financingCostsCents: money(data, "financingCosts"), taxesCents: money(data, "taxes"), liensAndPayoffsCents: money(data, "liensAndPayoffs"), concessionsCents: money(data, "concessions"), inspectionExpensesCents: money(data, "inspectionExpenses"), legalExpensesCents: money(data, "legalExpenses"), dataMarketingCostsCents: money(data, "dataMarketingCosts"), insuranceExpensesCents: money(data, "insuranceExpenses"), otherExpensesCents: money(data, "otherExpenses"), riskReserveCents: money(data, "riskReserve"), contingencyReserveCents: money(data, "contingencyReserve"), earnestMoneyDepositedCents: money(data, "earnestMoneyDeposited"), earnestMoneyAtRiskCents: money(data, "earnestMoneyAtRisk"),
@@ -27,7 +35,8 @@ export async function createProjectionAction(_state: ProfitabilityActionState, d
 export async function createSettlementReviewAction(_state: ProfitabilityActionState, data: FormData): Promise<ProfitabilityActionState> {
   await requireOwner();
   try {
-    await createSettlementReviewRecord({ transactionId: value(data, "transactionId"), actor: "owner", grossAssignmentFeeCents: money(data, "grossAssignmentFee", true), actualExpensesCents: money(data, "actualExpenses", true), settlementDocumentUrl: value(data, "settlementDocumentUrl"), settlementDocumentHash: value(data, "settlementDocumentHash"), reviewedAt: date(data, "reviewedAt"), correctionReason: value(data, "correctionReason") || undefined });
+    const rawLines=JSON.parse(value(data,"expenseLines")) as Array<{category:string;amount:string;sourceReference:string}>;const expenseLines=rawLines.map(line=>({category:String(line.category),amountCents:parseMoneyToCents(String(line.amount)),sourceReference:String(line.sourceReference)}));
+    await createSettlementReviewRecord({ transactionId: value(data, "transactionId"), actor: "owner", grossAssignmentFeeCents: money(data, "grossAssignmentFee", true), actualExpensesCents: money(data, "actualExpenses", true), expenseLines, settlementDocumentUrl: value(data, "settlementDocumentUrl"), settlementDocumentHash: value(data, "settlementDocumentHash"), reviewedAt: date(data, "reviewedAt"), correctionReason: value(data, "correctionReason") || undefined });
     revalidatePath("/profitability"); revalidatePath("/transactions");
     return { status: "success", message: "Settlement-backed realized profit recorded." };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Settlement result could not be recorded." }; }

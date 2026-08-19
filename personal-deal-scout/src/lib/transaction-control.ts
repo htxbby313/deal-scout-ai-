@@ -231,7 +231,7 @@ export async function readTransactionWorkspace() {
   const db = getPrisma();
   const [transactions, properties, developers] = await Promise.all([
     db.dealTransaction.findMany({
-      include: { property: true, developer: true, documents: { orderBy: [{ type: "asc" }, { version: "desc" }] }, approvals: { orderBy: { requestedAt: "desc" } }, auditEvents: { orderBy: { sequence: "asc" } } },
+      include: { property: true, developer: true, documents: { orderBy: [{ type: "asc" }, { version: "desc" }] }, diligenceReviews: { include: { professionalArtifacts: { orderBy: { verifiedAt: "desc" } } }, orderBy: { level: "asc" } }, approvals: { orderBy: { requestedAt: "desc" } }, auditEvents: { orderBy: { sequence: "asc" } } },
       orderBy: { updatedAt: "desc" },
     }),
     db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true, city: true, state: true, estimatedValue: true }, orderBy: { address: "asc" } }),

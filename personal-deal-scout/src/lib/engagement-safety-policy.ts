@@ -33,7 +33,23 @@ export function evaluateProviderReadiness(input: {
   suppressionIntegrated: boolean;
   auditIntegrated: boolean;
   ownerEnabled: boolean;
+  environment: string;
+  environmentConfigured: boolean;
+  authenticationVerified: boolean;
+  allowedOperations: string[];
+  idempotencyVerified: boolean;
+  retryBoundariesVerified: boolean;
+  sandboxVerified: boolean;
+  productionOwnerApprovedAt?: Date | null;
 }) {
-  const missing = Object.entries(input).filter(([, value]) => !value).map(([key]) => key);
+  const missing = [
+    !input.credentialsConfigured && "credentialsConfigured", !input.webhookVerified && "webhookVerified",
+    !input.suppressionIntegrated && "suppressionIntegrated", !input.auditIntegrated && "auditIntegrated",
+    !input.ownerEnabled && "ownerEnabled", !input.environmentConfigured && "environmentConfigured",
+    !input.authenticationVerified && "authenticationVerified", !input.allowedOperations.length && "allowedOperations",
+    !input.idempotencyVerified && "idempotencyVerified", !input.retryBoundariesVerified && "retryBoundariesVerified",
+    !input.sandboxVerified && "sandboxVerified",
+    input.environment === "PRODUCTION" && !input.productionOwnerApprovedAt && "productionOwnerApprovedAt",
+  ].filter(Boolean) as string[];
   return { ready: missing.length === 0, missing };
 }
