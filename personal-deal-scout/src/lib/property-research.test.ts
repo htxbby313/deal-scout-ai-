@@ -17,4 +17,10 @@ describe("property research source parsing", () => {
     expect(__propertyResearchTestables.phoneNumbers(html)).toEqual(["(210) 386-7583"]);
     expect(__propertyResearchTestables.listingImageUrls(html, "https://listing.example.com/0-claymore", "0 Claymore")).toContain("https://images.example.com/claymore.jpg");
   });
+
+  it("requires a public page to match the property before treating it as evidence", () => {
+    const property = { address: "1200 Main Street", city: "Jackson", state: "MS", zipCode: "39201" };
+    expect(__propertyResearchTestables.pageMatchesProperty("<title>1200 Main Street, Jackson MS 39201</title>", property)).toBe(true);
+    expect(__propertyResearchTestables.pageMatchesProperty("<title>1400 Oak Avenue, Biloxi MS 39530</title>", property)).toBe(false);
+  });
 });
