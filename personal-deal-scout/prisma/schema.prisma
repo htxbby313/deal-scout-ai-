@@ -44,6 +44,65 @@ enum PropertyMediaKind {
   OTHER
 }
 
+enum AgentRole {
+  OPERATIONS_COORDINATOR
+  RESEARCH
+  SELLER_ACQUISITION
+  BUYER_DEVELOPER
+  TRANSACTION_COMPLIANCE
+}
+
+enum AgentStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum AgentAutonomyMode {
+  LOCKED
+  SUPERVISED
+  APPROVED_AUTONOMOUS
+}
+
+enum AgentTaskStatus {
+  QUEUED
+  IN_PROGRESS
+  WAITING_FOR_APPROVAL
+  BLOCKED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum AgentTaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AgentRunStatus {
+  RUNNING
+  WAITING_FOR_APPROVAL
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AgentEventType {
+  TASK_CREATED
+  TASK_STARTED
+  TASK_UPDATED
+  HANDOFF_REQUESTED
+  HANDOFF_ACCEPTED
+  APPROVAL_REQUESTED
+  APPROVAL_DECIDED
+  RUN_COMPLETED
+  RUN_FAILED
+  TASK_COMPLETED
+  TASK_CANCELLED
+}
+
 model Property {
   id             String   @id @default(cuid())
   address        String
@@ -80,6 +139,7 @@ model Property {
   researchFindings PropertyResearchFinding[]
   media          PropertyMedia[]
   transactions   DealTransaction[]
+  agentTasks     AgentTask[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
@@ -196,6 +256,7 @@ model Developer {
   matches               DeveloperMatch[]
   researchRuns          DeveloperResearchRun[]
   transactions          DealTransaction[]
+  agentTasks            AgentTask[]
 
   @@index([qualificationStatus])
 }
@@ -412,6 +473,7 @@ model DealTransaction {
   documents            TransactionDocument[]
   approvals            TransactionApproval[]
   auditEvents          TransactionAuditEvent[]
+  agentTasks           AgentTask[]
 
   @@index([status, controlStatus])
   @@index([propertyId, createdAt])
@@ -467,4 +529,104 @@ model TransactionAuditEvent {
 
   @@unique([transactionId, sequence])
   @@index([transactionId, occurredAt])
+}
+
+model Agent {
+  id                       String            @id @default(cuid())
+  name                     String
+  role                     AgentRole         @unique
+  status                   AgentStatus       @default(ACTIVE)
+  autonomyMode             AgentAutonomyMode @default(LOCKED)
+  description              String?
+  autonomousOutbound       Boolean           @default(false)
+  legalStandardsProvenAt   DateTime?
+  ethicalStandardsProvenAt DateTime?
+  complianceApprovedAt     DateTime?
+  counselApprovedAt        DateTime?
+  ownerAutonomyApprovedAt  DateTime?
+  ownerAutonomyApprovedBy  String?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  assignedTasks            AgentTask[]       @relation("AssignedAgentTasks")
+  runs                     AgentRun[]
+  eventsCreated            AgentEvent[]      @relation("AgentEventActor")
+  handoffsSent             AgentEvent[]      @relation("AgentEventSource")
+  handoffsReceived         AgentEvent[]      @relation("AgentEventTarget")
+
+  @@index([status, autonomyMode])
+}
+
+model AgentTask {
+  id                    String            @id @default(cuid())
+  assignedAgentId       String
+  taskType              String
+  title                 String
+  description           String?
+  status                AgentTaskStatus   @default(QUEUED)
+  priority              AgentTaskPriority @default(NORMAL)
+  ownerApprovalRequired Boolean           @default(true)
+  ownerApprovedAt       DateTime?
+  ownerApprovedBy       String?
+  approvalReason        String?
+  evidenceCount         Int               @default(0)
+  attemptCount          Int               @default(0)
+  output                Json?
+  transactionId         String?
+  propertyId            String?
+  developerId           String?
+  dueAt                 DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  assignedAgent         Agent             @relation("AssignedAgentTasks", fields: [assignedAgentId], references: [id], onDelete: Restrict)
+  transaction           DealTransaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  property              Property?         @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  developer             Developer?        @relation(fields: [developerId], references: [id], onDelete: SetNull)
+  runs                  AgentRun[]
+  events                AgentEvent[]
+
+  @@index([assignedAgentId, status, priority])
+  @@index([transactionId, status])
+  @@index([propertyId])
+  @@index([developerId])
+}
+
+model AgentRun {
+  id         String         @id @default(cuid())
+  agentId    String
+  taskId     String
+  status     AgentRunStatus @default(RUNNING)
+  summary    String?
+  error      String?
+  startedAt  DateTime       @default(now())
+  finishedAt DateTime?
+  agent      Agent          @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  task       AgentTask      @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  events     AgentEvent[]
+
+  @@index([taskId, startedAt])
+  @@index([agentId, status, startedAt])
+}
+
+model AgentEvent {
+  id            String         @id @default(cuid())
+  taskId        String
+  runId         String?
+  actorAgentId  String?
+  sourceAgentId String?
+  targetAgentId String?
+  type          AgentEventType
+  summary       String
+  details       Json?
+  createdAt     DateTime       @default(now())
+  task          AgentTask      @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  run           AgentRun?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+  actorAgent    Agent?         @relation("AgentEventActor", fields: [actorAgentId], references: [id], onDelete: SetNull)
+  sourceAgent   Agent?         @relation("AgentEventSource", fields: [sourceAgentId], references: [id], onDelete: SetNull)
+  targetAgent   Agent?         @relation("AgentEventTarget", fields: [targetAgentId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+  @@index([targetAgentId, type, createdAt])
+  @@index([runId])
 }
