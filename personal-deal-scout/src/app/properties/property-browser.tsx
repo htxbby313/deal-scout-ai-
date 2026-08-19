@@ -30,7 +30,7 @@ function ResearchPanel({ property }: { property: PropertyView }) {
   const [state, action, pending] = useActionState(boundAction, { status: "idle", message: "" } satisfies ResearchRunState);
   const manual = property.researchFindings.filter((finding) => finding.status !== "VERIFIED").length;
   return <section className="mt-7 border-t pt-6">
-    <div className="flex items-start justify-between gap-4"><div><h3 className="font-bold">Property research dossier</h3><p className="mt-1 text-xs leading-5 text-slate-500">Integrated sources are checked automatically. Unsupported topics go to manual verification, never assumptions.</p></div><form action={action}><button className="whitespace-nowrap rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60" disabled={pending}>{pending ? "Researching…" : property.researchRuns.length ? "Refresh research" : "Research property"}</button></form></div>
+    <div className="flex items-start justify-between gap-4"><div><h3 className="font-bold">Property details</h3><p className="mt-1 text-xs leading-5 text-slate-500">Integrated sources are checked automatically. Unsupported topics go to manual verification, never assumptions.</p></div><form action={action}><button className="whitespace-nowrap rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60" disabled={pending}>{pending ? "Finding details…" : property.researchRuns.length ? "Update property details" : "Find property details"}</button></form></div>
     {state.message ? <p aria-live="polite" className={`mt-3 text-xs font-semibold ${state.status === "error" ? "text-red-700" : "text-emerald-700"}`}>{state.message}</p> : null}
     {property.researchRuns[0] ? <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Latest run: {property.researchRuns[0].status.toLowerCase().replaceAll("_", " ")} · {property.researchRuns[0].findingsFound} verified · {property.researchRuns[0].manualNeeded} manual · {property.researchRuns[0].sourcesChecked} sources checked</p> : <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Automatic public-source research will be queued. Manual refresh remains available.</p>}
     <div className="mt-4 grid gap-2 sm:grid-cols-2">{property.researchFindings.map((finding) => <article className={`rounded-xl border p-3 ${finding.status === "VERIFIED" ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`} key={finding.id}><p className="text-[11px] font-bold uppercase tracking-wide">{finding.status === "VERIFIED" ? "Verified" : "Needs manual verification"}</p><b className="mt-1 block text-sm">{finding.label}</b>{finding.value ? <p className="mt-1 text-xs">{finding.value}</p> : null}{finding.sourceUrl ? <a className="mt-2 block text-xs font-bold text-blue-700 underline" href={finding.sourceUrl} rel="noreferrer" target="_blank">Open source</a> : null}</article>)}</div>
@@ -62,7 +62,7 @@ function EvidenceForm({ property }: { property: PropertyView }) {
       <input className="rounded-xl border px-3 py-2.5 text-sm sm:col-span-2" defaultValue={property.contactUrl} name="contactUrl" placeholder="Official contact or listing page" type="url" />
       <input className="rounded-xl border px-3 py-2.5 text-sm sm:col-span-2" defaultValue={property.verificationDate} name="verificationDate" required type="date" />
       <textarea className="min-h-24 rounded-xl border p-3 text-sm sm:col-span-2" defaultValue={property.notes} name="notes" placeholder="Verification notes and contact context" />
-      <button className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60 sm:col-span-2" disabled={pending}>{pending ? "Recalculating readiness…" : "Save verified evidence"}</button>
+      <button className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60 sm:col-span-2" disabled={pending}>{pending ? "Updating property…" : "Save property details"}</button>
       {state.message ? <p aria-live="polite" className={`text-xs font-semibold sm:col-span-2 ${state.status === "error" ? "text-red-700" : "text-emerald-700"}`}>{state.message}</p> : null}
     </form>
   </section>;
@@ -72,7 +72,7 @@ function RetirementForm({ property }: { property: PropertyView }) {
   const boundAction = retirePropertyAction.bind(null, property.id);
   const [state, action, pending] = useActionState(boundAction, { status: "idle", message: "" } satisfies EvidenceUpdateState);
   return <details className="mt-7 rounded-xl border border-red-200 bg-red-50 p-4">
-    <summary className="cursor-pointer font-bold text-red-900">Retire stale or unavailable property</summary>
+    <summary className="cursor-pointer font-bold text-red-900">Remove from active properties</summary>
     <p className="mt-2 text-xs leading-5 text-red-800">Use contradictory or closing evidence to remove a property from matching without deleting its source history.</p>
     <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2">
       <select className="rounded-xl border px-3 py-2.5 text-sm" name="retirementReason"><option value="OFF_MARKET">Off market</option><option value="SOLD">Sold</option><option value="SOURCE_CONFLICT">Source conflict</option><option value="DUPLICATE">Duplicate</option><option value="OTHER">Other</option></select>
@@ -80,7 +80,7 @@ function RetirementForm({ property }: { property: PropertyView }) {
       <input className="rounded-xl border px-3 py-2.5 text-sm sm:col-span-2" defaultValue={property.verificationSourceUrl} name="verificationSourceUrl" placeholder="Contradictory or closing evidence URL" required type="url" />
       <input className="rounded-xl border px-3 py-2.5 text-sm sm:col-span-2" defaultValue={property.verificationDate} name="verificationDate" required type="date" />
       <textarea className="min-h-24 rounded-xl border p-3 text-sm sm:col-span-2" defaultValue={property.notes} name="notes" placeholder="Explain why the property is no longer actionable" required />
-      <button className="rounded-xl bg-red-800 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60 sm:col-span-2" disabled={pending}>{pending ? "Retiring property…" : "Retire with evidence"}</button>
+      <button className="rounded-xl bg-red-800 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60 sm:col-span-2" disabled={pending}>{pending ? "Removing property…" : "Remove property"}</button>
       {state.message ? <p aria-live="polite" className={`text-xs font-semibold sm:col-span-2 ${state.status === "error" ? "text-red-700" : "text-emerald-700"}`}>{state.message}</p> : null}
     </form>
   </details>;
