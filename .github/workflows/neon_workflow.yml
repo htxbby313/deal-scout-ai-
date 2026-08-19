@@ -35,6 +35,17 @@ jobs:
       || github.event.action == 'reopened')
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: personal-deal-scout/package-lock.json
+      - name: Install dependencies
+        working-directory: personal-deal-scout
+        run: npm ci
       - name: Get branch expiration date as an env variable (2 weeks from now)
         id: get_expiration_date
         run: echo "EXPIRES_AT=$(date -u --date '+14 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
@@ -46,6 +57,11 @@ jobs:
           branch_name: preview/pr-${{ github.event.number }}-${{ needs.setup.outputs.branch }}
           api_key: ${{ secrets.NEON_API_KEY }}
           expires_at: ${{ env.EXPIRES_AT }}
+      - name: Apply migrations to preview database
+        working-directory: personal-deal-scout
+        run: npm run db:migrate:deploy
+        env:
+          DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
 
 # The step above creates a new Neon branch.
 # You may want to do something with the new branch, such as run migrations, run tests
