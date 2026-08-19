@@ -1049,6 +1049,9 @@ model AcquisitionFunnel {
   stage         AcquisitionStage @default(DISCOVERED)
   stageEnteredAt DateTime        @default(now())
   expiresAt     DateTime?
+  nextReviewAt  DateTime?
+  responsibleActor String?
+  lastActivityAt DateTime @default(now())
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   property      Property         @relation(fields: [propertyId], references: [id], onDelete: Restrict)
@@ -1059,6 +1062,8 @@ model AcquisitionFunnel {
   campaigns     AcquisitionCampaign[]
   priorityScores ProfitPriorityScoreHistory[]
   buyerPriceEvidence BuyerPropertyPriceEvidence[]
+  blockers      AcquisitionFunnelBlocker[]
+  expirationEvents AcquisitionExpirationEvent[]
 
   @@index([stage, expiresAt])
   @@index([propertyId, createdAt])
@@ -1071,13 +1076,86 @@ model AcquisitionStageHistory {
   fromStage   AcquisitionStage?
   toStage     AcquisitionStage
   actor       String
+  responsibleActor String?
   reason      String
   evidence    Json?
+  approvalEvidence Json?
+  blockerSnapshot Json?
   occurredAt  DateTime          @default(now())
+  exitedAt    DateTime?
   funnel      AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
 
   @@unique([funnelId, sequence])
   @@index([funnelId, occurredAt])
+}
+
+enum AcquisitionExpiryAction {
+  REFRESH_RESEARCH
+  MANUAL_VERIFICATION
+  NURTURE
+  DISQUALIFY
+  ARCHIVE
+}
+
+enum FunnelBlockerStatus {
+  OPEN
+  RESOLVED
+  WAIVED
+}
+
+model AcquisitionStagePolicy {
+  id                 String                  @id @default(cuid())
+  stage              AcquisitionStage
+  version            Int
+  active             Boolean                 @default(false)
+  reviewIntervalHours Int
+  expiryAction       AcquisitionExpiryAction
+  requiredGateTypes  AcquisitionGateType[]
+  highValueThresholdCents BigInt?
+  reason             String
+  effectiveAt        DateTime?
+  expiresAt          DateTime?
+  createdBy          String
+  createdAt          DateTime                @default(now())
+  expirationEvents   AcquisitionExpirationEvent[]
+
+  @@unique([stage, version])
+  @@index([stage, active, effectiveAt, expiresAt])
+}
+
+model AcquisitionFunnelBlocker {
+  id           String              @id @default(cuid())
+  funnelId     String
+  code         String
+  status       FunnelBlockerStatus @default(OPEN)
+  explanation  String
+  sourceUrl    String?
+  openedAt     DateTime            @default(now())
+  expiresAt    DateTime?
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  resolution   String?
+  funnel       AcquisitionFunnel   @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+
+  @@index([funnelId, status, openedAt])
+  @@index([status, expiresAt])
+}
+
+model AcquisitionExpirationEvent {
+  id             String                 @id @default(cuid())
+  funnelId       String
+  policyId       String
+  stageHistoryId String
+  action         AcquisitionExpiryAction
+  resultStage    AcquisitionStage?
+  reason         String
+  evidence       Json
+  occurredAt     DateTime               @default(now())
+  funnel         AcquisitionFunnel      @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  policy         AcquisitionStagePolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
+  @@unique([funnelId, stageHistoryId])
+  @@index([action, occurredAt])
 }
 
 model AcquisitionGate {

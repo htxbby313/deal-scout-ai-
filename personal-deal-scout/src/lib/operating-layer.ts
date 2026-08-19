@@ -14,7 +14,7 @@ export async function synchronizeAcquisitionFunnels(now = new Date()) {
     let funnel = property.acquisitionFunnels[0];
     if (!funnel) {
       funnel = await db.$transaction(async (tx) => {
-        const record = await tx.acquisitionFunnel.create({ data: { propertyId: property.id, stage: "DISCOVERED", expiresAt: new Date(now.getTime() + 7 * 86_400_000) } });
+        const record = await tx.acquisitionFunnel.create({ data: { propertyId: property.id, stage: "DISCOVERED", responsibleActor: "research_agent", nextReviewAt: new Date(now.getTime() + 7 * 86_400_000), expiresAt: new Date(now.getTime() + 7 * 86_400_000) } });
         await tx.acquisitionStageHistory.create({ data: { funnelId: record.id, sequence: 1, toStage: "DISCOVERED", actor: "system", reason: "Property entered the evidence-backed acquisition funnel.", evidence: { propertyId: property.id } } });
         return record;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -27,7 +27,8 @@ export async function synchronizeAcquisitionFunnels(now = new Date()) {
       const current = await tx.acquisitionFunnel.findUniqueOrThrow({ where: { id: funnel.id } });
       if (current.stage !== "DISCOVERED") return;
       const latest = await tx.acquisitionStageHistory.findFirst({ where: { funnelId: funnel.id }, orderBy: { sequence: "desc" }, select: { sequence: true } });
-      await tx.acquisitionFunnel.update({ where: { id: funnel.id }, data: { stage: "RESEARCHABLE", stageEnteredAt: now, expiresAt: new Date(now.getTime() + 7 * 86_400_000) } });
+      await tx.acquisitionStageHistory.updateMany({ where: { funnelId: funnel.id, exitedAt: null }, data: { exitedAt: now } });
+      await tx.acquisitionFunnel.update({ where: { id: funnel.id }, data: { stage: "RESEARCHABLE", stageEnteredAt: now, lastActivityAt: now, responsibleActor: "research_agent", nextReviewAt: new Date(now.getTime() + 7 * 86_400_000), expiresAt: new Date(now.getTime() + 7 * 86_400_000) } });
       await tx.acquisitionStageHistory.create({ data: { funnelId: funnel.id, sequence: (latest?.sequence ?? 0) + 1, fromStage: "DISCOVERED", toStage: "RESEARCHABLE", actor: "system", reason: "Current source-backed listing, location, price, and contact facts are verified.", evidence: { topics: RESEARCHABLE_TOPICS } } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     advanced += 1;
@@ -96,7 +97,8 @@ export async function advanceAcquisitionStage(input: { funnelId: string; nextSta
     const decision = terminal ? { allowed: funnel.transaction?.controlStatus !== "STOPPED", blockers: funnel.transaction?.controlStatus === "STOPPED" ? ["transaction_stopped"] : [] } : evaluateStageTransition({ currentStage: funnel.stage, nextStage: input.nextStage, gates: funnel.gates, transactionControlStatus: funnel.transaction?.controlStatus ?? "ON_HOLD", now: new Date() });
     if (!decision.allowed) return { advanced: false as const, blockers: decision.blockers };
     const latest = await tx.acquisitionStageHistory.findFirst({ where: { funnelId: funnel.id }, orderBy: { sequence: "desc" }, select: { sequence: true } });
-    await tx.acquisitionFunnel.update({ where: { id: funnel.id }, data: { stage: input.nextStage, stageEnteredAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86_400_000) } });
+    await tx.acquisitionStageHistory.updateMany({ where: { funnelId: funnel.id, exitedAt: null }, data: { exitedAt: new Date() } });
+    await tx.acquisitionFunnel.update({ where: { id: funnel.id }, data: { stage: input.nextStage, stageEnteredAt: new Date(), lastActivityAt: new Date(), responsibleActor: input.actor, nextReviewAt: new Date(Date.now() + 7 * 86_400_000), expiresAt: new Date(Date.now() + 7 * 86_400_000) } });
     await tx.acquisitionStageHistory.create({ data: { funnelId: funnel.id, sequence: (latest?.sequence ?? 0) + 1, fromStage: funnel.stage, toStage: input.nextStage, actor: input.actor, reason: input.reason.trim(), evidence: { gateVersions: funnel.gates.map((gate) => ({ type: gate.type, version: gate.version, status: gate.status })) } } });
     return { advanced: true as const, blockers: [] };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
