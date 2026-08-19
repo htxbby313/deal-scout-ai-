@@ -578,6 +578,7 @@ model Agent {
   eventsCreated            AgentEvent[]      @relation("AgentEventActor")
   handoffsSent             AgentEvent[]      @relation("AgentEventSource")
   handoffsReceived         AgentEvent[]      @relation("AgentEventTarget")
+  campaignAssignments     CampaignAgentAssignment[]
 
   @@index([status, autonomyMode])
 }
@@ -1321,6 +1322,7 @@ model AcquisitionFunnel {
   buyerPriceEvidence BuyerPropertyPriceEvidence[]
   blockers      AcquisitionFunnelBlocker[]
   expirationEvents AcquisitionExpirationEvent[]
+  campaignOpportunities CampaignOpportunity[]
 
   @@index([stage, expiresAt])
   @@index([propertyId, createdAt])
@@ -1686,6 +1688,10 @@ model AcquisitionCampaign {
   funnel                AcquisitionFunnel?        @relation(fields: [funnelId], references: [id], onDelete: SetNull)
   boundaries            AcquisitionCampaignBoundary[]
   countyCoverage        CampaignCountyCoverage[]
+  opportunities         CampaignOpportunity[]
+  agentAssignments      CampaignAgentAssignment[]
+  costs                 CampaignCostEntry[]
+  goals                 CampaignGoalVersion[]
 
   @@index([status, startsAt, endsAt])
   @@index([funnelId])
@@ -1897,6 +1903,25 @@ model AcquisitionCampaignBoundary {
   campaignId            String
   version               Int
   allowedStates         String[]
+  allowedCounties       String[]
+  allowedCities         String[]
+  allowedZipCodes       String[]
+  allowedNeighborhoods  String[]
+  radiusCenterLatitude  Float?
+  radiusCenterLongitude Float?
+  radiusMiles           Float?
+  mapPolygon            Json?
+  includedPropertyTypes String[]
+  excludedPropertyTypes String[]
+  acquisitionStrategy   String?
+  developmentFilters    Json?
+  priceFilters          Json?
+  targetBuyerGroup      String?
+  minimumRequiredProfitCents BigInt?
+  maximumEarnestMoneyCents BigInt?
+  maximumResearchCostCents BigInt?
+  maximumOutreachCostCents BigInt?
+  evidenceFreshnessHours Int?
   allowedChannels       String[]
   audienceCriteria      Json
   sourceRequirements    Json
@@ -1909,6 +1934,89 @@ model AcquisitionCampaignBoundary {
   createdAt             DateTime            @default(now())
   campaign              AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
 
+  @@unique([campaignId, version])
+  @@index([campaignId, effectiveAt, expiresAt])
+}
+
+enum CampaignOpportunityStatus {
+  CANDIDATE
+  INCLUDED
+  EXCLUDED
+  COMPLETED
+  CANCELLED
+}
+enum CampaignCostType {
+  RESEARCH
+  OUTREACH
+  DATA
+  COMMUNICATION
+  DILIGENCE
+  LEGAL
+  OTHER
+}
+
+model CampaignOpportunity {
+  id String @id @default(cuid())
+  campaignId String
+  funnelId String
+  status CampaignOpportunityStatus @default(CANDIDATE)
+  reason String
+  assignedAt DateTime @default(now())
+  completedAt DateTime?
+  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  funnel AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  @@unique([campaignId, funnelId])
+  @@index([campaignId, status, assignedAt])
+}
+
+model CampaignAgentAssignment {
+  id String @id @default(cuid())
+  campaignId String
+  agentId String
+  responsibility String
+  active Boolean @default(true)
+  assignedAt DateTime @default(now())
+  removedAt DateTime?
+  assignedBy String
+  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  @@unique([campaignId, agentId])
+  @@index([agentId, active])
+}
+
+model CampaignCostEntry {
+  id String @id @default(cuid())
+  campaignId String
+  funnelId String?
+  type CampaignCostType
+  amountCents BigInt
+  incurredAt DateTime
+  sourceUrl String
+  artifactHash String?
+  description String
+  recordedBy String
+  createdAt DateTime @default(now())
+  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  @@index([campaignId, type, incurredAt])
+  @@index([funnelId, incurredAt])
+}
+
+model CampaignGoalVersion {
+  id String @id @default(cuid())
+  campaignId String
+  version Int
+  discoveredTarget Int?
+  researchedTarget Int?
+  sellerContactTarget Int?
+  offerTarget Int?
+  contractTarget Int?
+  closeTarget Int?
+  realizedProfitTargetCents BigInt?
+  effectiveAt DateTime
+  expiresAt DateTime?
+  createdBy String
+  createdAt DateTime @default(now())
+  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
   @@unique([campaignId, version])
   @@index([campaignId, effectiveAt, expiresAt])
 }
