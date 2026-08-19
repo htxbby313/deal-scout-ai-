@@ -1,0 +1,10 @@
+import { describe, expect, it } from "vitest";
+import { calculateBuyerReliability, validateBuyerReliabilityWeights, validatePropertyBuyerPrice } from "@/lib/buyer-reliability";
+
+describe("buyer reliability and property pricing", () => {
+  const weights = { financialCapacity: 2000, marketActivity: 1200, criteriaSpecificity: 1000, responseTime: 800, closingRate: 1800, pofFreshness: 1200, retradePenalty: 700, failedClosingPenalty: 800, unresolvedIssuePenalty: 500 };
+  it("requires explicit weights totaling 10,000", () => { expect(() => validateBuyerReliabilityWeights({ ...weights, financialCapacity: 1999 })).toThrow(); expect(() => validateBuyerReliabilityWeights(weights)).not.toThrow(); });
+  it("scores verified facts and applies retrade, failure, and issue penalties", () => { const result = calculateBuyerReliability({ financialCapacity: 90, marketActivity: 80, criteriaSpecificity: 100, responseTime: 70, closingRate: 90, pofFreshness: 100, retradeRate: 20, failedClosingRate: 10, unresolvedIssueSeverity: 0, pofExpiresAt: new Date("2026-10-01"), demandExpiresAt: new Date("2026-10-01"), communicationAllowed: true, now: new Date("2026-08-19") }, weights); expect(result.totalScore).toBe(69); expect(result.eligible).toBe(true); });
+  it("blocks expired evidence and missing communication permission regardless of score", () => expect(calculateBuyerReliability({ financialCapacity: 100, marketActivity: 100, criteriaSpecificity: 100, responseTime: 100, closingRate: 100, pofFreshness: 100, retradeRate: 0, failedClosingRate: 0, unresolvedIssueSeverity: 0, pofExpiresAt: new Date("2026-01-01"), demandExpiresAt: new Date("2027-01-01"), communicationAllowed: false, now: new Date("2026-08-19") }, weights).eligible).toBe(false));
+  it("does not turn general or unreviewed interest into documented property pricing", () => expect(validatePropertyBuyerPrice({ lowCents: BigInt(100), baseCents: BigInt(110), highCents: BigInt(120), status: "INDICATIVE", sourceUrl: "https://buyer.example/evidence", observedAt: new Date("2026-08-19"), expiresAt: new Date("2026-09-01"), now: new Date("2026-08-19") }).verified).toBe(false));
+});

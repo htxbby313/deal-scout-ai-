@@ -267,6 +267,10 @@ model Developer {
   capacityEvidence      BuyerCapacityEvidence[]
   reliabilityEvidence   BuyerReliabilityEvidence[]
   countyEntityMatches   CountyEntityMatch[]
+  buyerPriceEvidence    BuyerPropertyPriceEvidence[]
+  buyerPerformanceIssues BuyerPerformanceIssue[]
+  buyerPermissions      BuyerCommunicationPermission[]
+  buyerReliabilityScores BuyerReliabilityScoreHistory[]
 
   @@index([qualificationStatus])
 }
@@ -1054,6 +1058,7 @@ model AcquisitionFunnel {
   buyerCoverage BuyerCoverage[]
   campaigns     AcquisitionCampaign[]
   priorityScores ProfitPriorityScoreHistory[]
+  buyerPriceEvidence BuyerPropertyPriceEvidence[]
 
   @@index([stage, expiresAt])
   @@index([propertyId, createdAt])
@@ -1102,10 +1107,34 @@ model BuyerDemandVersion {
   counties             String[]
   zipCodes             String[]
   assetTypes           String[]
+  excludedAreas        String[]
+  marketPolygons       Json?
   minPurchasePriceCents BigInt?
   maxPurchasePriceCents BigInt?
+  minCompletedValueCents BigInt?
+  maxCompletedValueCents BigInt?
   minAcres             Float?
   maxAcres             Float?
+  minLotWidthFeet      Float?
+  maxLotWidthFeet      Float?
+  minLotDepthFeet      Float?
+  maxLotDepthFeet      Float?
+  minFrontageFeet      Float?
+  accessPreferences    String[]
+  utilityPreferences   String[]
+  zoningPreferences    String[]
+  floodPreferences     String[]
+  entitlementPreferences String[]
+  redevelopmentPreferences String[]
+  requiredClosingDays  Int?
+  assignmentAcceptance String?
+  doubleCloseAcceptance String?
+  earnestMoneyExpectationCents BigInt?
+  inspectionRequirements String?
+  decisionMakerName    String?
+  approvedChannel      EngagementChannel?
+  currentBuyingStatus  String?
+  criteriaConfirmedAt DateTime?
   maxAssignmentFeeCents BigInt?
   strategy             String?
   sourceUrl            String
@@ -1116,6 +1145,8 @@ model BuyerDemandVersion {
   createdAt            DateTime          @default(now())
   developer            Developer         @relation(fields: [developerId], references: [id], onDelete: Restrict)
   coverage             BuyerCoverage[]
+  priceEvidence        BuyerPropertyPriceEvidence[]
+  reliabilityScores    BuyerReliabilityScoreHistory[]
 
   @@unique([developerId, version])
   @@index([status, expiresAt])
@@ -1129,6 +1160,8 @@ model BuyerCapacityEvidence {
   status      BuyerEvidenceStatus @default(PENDING)
   amountCents BigInt?
   sourceUrl   String
+  artifactHash String?
+  observedAt DateTime
   verifiedBy  String?
   verifiedAt  DateTime?
   expiresAt   DateTime
@@ -1146,6 +1179,10 @@ model BuyerReliabilityEvidence {
   status            BuyerEvidenceStatus @default(PENDING)
   completedClosings Int                 @default(0)
   failedClosings    Int                 @default(0)
+  retrades          Int                 @default(0)
+  responsesMeasured Int                 @default(0)
+  averageResponseHours Float?
+  unresolvedIssues  Int                 @default(0)
   averageCloseDays  Int?
   sourceUrl         String
   verifiedBy        String?
@@ -1153,9 +1190,129 @@ model BuyerReliabilityEvidence {
   expiresAt         DateTime
   createdAt         DateTime            @default(now())
   developer         Developer           @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  scores            BuyerReliabilityScoreHistory[]
 
   @@unique([developerId, version])
   @@index([developerId, status, expiresAt])
+}
+
+enum BuyerPriceStatus {
+  INDICATIVE
+  CONDITIONAL
+  DOCUMENTED
+  COMMITTED
+  EXPIRED
+}
+enum BuyerPermissionStatus {
+  UNKNOWN
+  GRANTED
+  DENIED
+  REVOKED
+  EXPIRED
+}
+enum BuyerIssueStatus {
+  OPEN
+  DISPUTED
+  RESOLVED
+  DISMISSED
+}
+
+model BuyerPropertyPriceEvidence {
+  id String @id @default(cuid())
+  developerId String
+  demandVersionId String
+  funnelId String
+  version Int
+  status BuyerPriceStatus
+  lowCents BigInt
+  baseCents BigInt
+  highCents BigInt
+  assumptions String[]
+  sourceUrl String
+  observedAt DateTime
+  expiresAt DateTime
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  demandVersion BuyerDemandVersion @relation(fields: [demandVersionId], references: [id], onDelete: Restrict)
+  funnel AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  @@unique([developerId, funnelId, version])
+  @@index([funnelId, status, expiresAt])
+}
+
+model BuyerCommunicationPermission {
+  id String @id @default(cuid())
+  developerId String
+  channel EngagementChannel
+  status BuyerPermissionStatus @default(UNKNOWN)
+  sourceUrl String?
+  capturedAt DateTime
+  expiresAt DateTime?
+  reviewedBy String?
+  createdAt DateTime @default(now())
+  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  @@index([developerId, channel, capturedAt])
+}
+
+model BuyerPerformanceIssue {
+  id String @id @default(cuid())
+  developerId String
+  type String
+  status BuyerIssueStatus @default(OPEN)
+  occurredAt DateTime
+  description String
+  sourceUrl String
+  resolution String?
+  resolvedAt DateTime?
+  reviewedBy String
+  createdAt DateTime @default(now())
+  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  @@index([developerId, status, occurredAt])
+}
+
+model BuyerReliabilityScoreConfiguration {
+  id String @id @default(cuid())
+  version Int @unique
+  status ProfitPriorityConfigurationStatus @default(DRAFT)
+  financialCapacityWeight Int
+  marketActivityWeight Int
+  criteriaSpecificityWeight Int
+  responseTimeWeight Int
+  closingRateWeight Int
+  pofFreshnessWeight Int
+  retradePenaltyWeight Int
+  failedClosingPenaltyWeight Int
+  unresolvedIssuePenaltyWeight Int
+  reason String
+  effectiveAt DateTime?
+  expiresAt DateTime?
+  createdBy String
+  createdAt DateTime @default(now())
+  scores BuyerReliabilityScoreHistory[]
+}
+
+model BuyerReliabilityScoreHistory {
+  id String @id @default(cuid())
+  developerId String
+  demandVersionId String
+  reliabilityEvidenceId String
+  configurationId String
+  version Int
+  totalScore Int
+  componentScores Json
+  inputSnapshot Json
+  reasons String[]
+  blockers String[]
+  calculatedAt DateTime @default(now())
+  expiresAt DateTime
+  calculatedBy String
+  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  demandVersion BuyerDemandVersion @relation(fields: [demandVersionId], references: [id], onDelete: Restrict)
+  reliabilityEvidence BuyerReliabilityEvidence @relation(fields: [reliabilityEvidenceId], references: [id], onDelete: Restrict)
+  configuration BuyerReliabilityScoreConfiguration @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+  @@unique([developerId, version])
+  @@index([totalScore, expiresAt])
 }
 
 model BuyerCoverage {
