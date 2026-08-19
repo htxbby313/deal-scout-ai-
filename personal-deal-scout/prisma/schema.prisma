@@ -79,6 +79,7 @@ model Property {
   researchRuns   PropertyResearchRun[]
   researchFindings PropertyResearchFinding[]
   media          PropertyMedia[]
+  transactions   DealTransaction[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
@@ -152,6 +153,7 @@ model Lead {
   property               Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   tasks                  Task[]
   approvals              MessageApproval[]
+  transactions           DealTransaction[]
 
   @@unique([propertyId])
 }
@@ -193,8 +195,56 @@ model Developer {
   projects              DeveloperProject[]
   matches               DeveloperMatch[]
   researchRuns          DeveloperResearchRun[]
+  transactions          DealTransaction[]
 
   @@index([qualificationStatus])
+}
+
+enum DealTransactionStatus {
+  DRAFT
+  RESEARCH
+  DUE_DILIGENCE
+  OFFER_PENDING
+  UNDER_CONTRACT
+  BUYER_MATCHING
+  ASSIGNMENT_PENDING
+  CLOSING_PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionControlStatus {
+  ACTIVE
+  ON_HOLD
+  STOPPED
+}
+
+enum TransactionApprovalType {
+  SELLER_CONTACT
+  BUYER_CONTACT
+  OFFER
+  CONTRACT
+  ASSIGNMENT_MARKETING
+  ASSIGNMENT
+  EARNEST_MONEY
+  CLOSING_INSTRUCTION
+  PHOTO_REDISTRIBUTION
+  OTHER
+}
+
+enum TransactionApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+enum TransactionDocumentStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  EXECUTED
+  VOIDED
 }
 
 model DeveloperResearchRun {
@@ -336,4 +386,85 @@ model MarketSignal {
 
   @@unique([source, fips, period])
   @@index([period, rank])
+}
+
+model DealTransaction {
+  id                   String                   @id @default(cuid())
+  propertyId           String
+  leadId               String?
+  developerId          String?
+  status               DealTransactionStatus    @default(DRAFT)
+  controlStatus        TransactionControlStatus @default(ON_HOLD)
+  ownerHoldReason      String?
+  ownerHoldAt          DateTime?
+  ownerStoppedAt       DateTime?
+  targetSellerPrice    Int?
+  targetBuyerPrice     Int?
+  targetAssignmentFee  Int?
+  jurisdictionState    String
+  counselApprovedAt    DateTime?
+  complianceVerifiedAt DateTime?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  property             Property                 @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  lead                 Lead?                    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  developer            Developer?               @relation(fields: [developerId], references: [id], onDelete: SetNull)
+  documents            TransactionDocument[]
+  approvals            TransactionApproval[]
+  auditEvents          TransactionAuditEvent[]
+
+  @@index([status, controlStatus])
+  @@index([propertyId, createdAt])
+  @@index([developerId])
+}
+
+model TransactionDocument {
+  id              String                    @id @default(cuid())
+  transactionId   String
+  type            String
+  title           String
+  status          TransactionDocumentStatus @default(DRAFT)
+  version         Int                       @default(1)
+  storageKey      String?
+  sourceUrl       String?
+  contentHash     String?
+  counselApproved Boolean                   @default(false)
+  executedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  transaction     DealTransaction           @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@unique([transactionId, type, version])
+  @@index([transactionId, status])
+}
+
+model TransactionApproval {
+  id            String                    @id @default(cuid())
+  transactionId String
+  type          TransactionApprovalType
+  status        TransactionApprovalStatus @default(PENDING)
+  requestedBy   String
+  decidedBy     String?
+  reason        String?
+  requestedAt   DateTime                  @default(now())
+  decidedAt     DateTime?
+  expiresAt     DateTime?
+  transaction   DealTransaction           @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId, type, status])
+}
+
+model TransactionAuditEvent {
+  id            String          @id @default(cuid())
+  transactionId String
+  sequence      Int
+  type          String
+  actor         String
+  summary       String
+  details       Json?
+  occurredAt    DateTime        @default(now())
+  transaction   DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@unique([transactionId, sequence])
+  @@index([transactionId, occurredAt])
 }
