@@ -157,6 +157,7 @@ model Property {
 model PropertyResearchRun {
   id             String   @id @default(cuid())
   propertyId     String
+  researchVersion Int     @default(1)
   status         String
   sourcesChecked Int      @default(0)
   findingsFound  Int      @default(0)
@@ -167,6 +168,7 @@ model PropertyResearchRun {
   property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId, startedAt])
+  @@index([propertyId, researchVersion])
 }
 
 model PropertyResearchFinding {
@@ -327,6 +329,7 @@ enum TransactionDocumentStatus {
 model DeveloperResearchRun {
   id             String    @id @default(cuid())
   developerId    String
+  researchVersion Int      @default(1)
   status         String
   sourcesChecked Int       @default(0)
   findingsFound  Int       @default(0)
@@ -337,6 +340,7 @@ model DeveloperResearchRun {
   developer      Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
 
   @@index([developerId, startedAt])
+  @@index([developerId, researchVersion])
   @@index([status, startedAt])
 }
 

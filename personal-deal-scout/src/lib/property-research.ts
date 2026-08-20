@@ -1,6 +1,9 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/prisma";
+import { researchOfficialPropertySources } from "@/lib/official-property-sources";
+
+export const PROPERTY_RESEARCH_VERSION = 2;
 
 const TOPICS = [
   ["LISTING", "Current listing or opportunity source"],
@@ -44,7 +47,7 @@ export async function enqueuePropertyResearch(propertyId: string) {
   if (property.opportunityStatus === "REJECTED") throw new Error("Retired properties cannot be queued for automatic research.");
   const existing = await db.propertyResearchRun.findFirst({ where: { propertyId, status: { in: ["QUEUED", "RUNNING"] } }, orderBy: { startedAt: "desc" } });
   if (existing) return existing;
-  const queued = await db.propertyResearchRun.create({ data: { propertyId, status: "QUEUED" } });
+  const queued = await db.propertyResearchRun.create({ data: { propertyId, status: "QUEUED", researchVersion: PROPERTY_RESEARCH_VERSION } });
   await db.auditLog.create({ data: { type: "research.property_dossier", summary: `Queued automatic public-source research for ${property.address}.`, details: { propertyId, runId: queued.id, trigger: "automatic" } } });
   return queued;
 }
@@ -144,7 +147,7 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
   const property = await db.property.findUniqueOrThrow({ where: { id: propertyId } });
   const existingFindings = new Map((await db.propertyResearchFinding.findMany({ where: { propertyId } })).map((finding) => [finding.topic, finding]));
   const queuedRun = queuedRunId ? await db.propertyResearchRun.findFirst({ where: { id: queuedRunId, propertyId, status: "QUEUED" } }) : await db.propertyResearchRun.findFirst({ where: { propertyId, status: "QUEUED" }, orderBy: { startedAt: "asc" } });
-  const run = queuedRun ? await db.propertyResearchRun.update({ where: { id: queuedRun.id }, data: { status: "RUNNING", startedAt: new Date(), error: null } }) : await db.propertyResearchRun.create({ data: { propertyId, status: "RUNNING" } });
+  const run = queuedRun ? await db.propertyResearchRun.update({ where: { id: queuedRun.id }, data: { status: "RUNNING", startedAt: new Date(), error: null, researchVersion: PROPERTY_RESEARCH_VERSION } }) : await db.propertyResearchRun.create({ data: { propertyId, status: "RUNNING", researchVersion: PROPERTY_RESEARCH_VERSION } });
   const findings = new Map<string, Finding>();
   const media: DiscoveredMedia[] = [];
   const errors: string[] = [];
@@ -176,6 +179,21 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
   } catch (error) { errors.push(`Census Geocoder: ${error instanceof Error ? error.message : "lookup failed"}`); }
   if (!geocode) try { geocode = await openStreetMapGeocode(property); } catch (error) { errors.push(`OpenStreetMap Geocoder: ${error instanceof Error ? error.message : "lookup failed"}`); }
   if (geocode) findings.set("LOCATION", { topic: "LOCATION", label: "Mapped location", value: `${geocode.latitude.toFixed(6)}, ${geocode.longitude.toFixed(6)} — ${geocode.address}`, status: "VERIFIED", sourceName: geocode.sourceUrl.includes("openstreetmap") ? "OpenStreetMap Nominatim" : "U.S. Census Geocoder", sourceUrl: geocode.sourceUrl, confidence: 80, notes: "Geocoder coordinates are address estimates, not a parcel survey." });
+
+  if (geocode) {
+    const official = await researchOfficialPropertySources({
+      address: property.address,
+      city: property.city,
+      state: property.state,
+      zipCode: property.zipCode,
+      county: property.county || geocode.county,
+      latitude: geocode.latitude,
+      longitude: geocode.longitude,
+    });
+    sourcesChecked += official.sourcesChecked;
+    errors.push(...official.errors);
+    for (const finding of official.findings) findings.set(finding.topic, finding);
+  }
 
   if (media.length) findings.set("PHOTOS", { topic: "PHOTOS", label: "Property photos", value: `${media.length} verified-source image${media.length === 1 ? "" : "s"} found`, status: "VERIFIED", sourceName: media[0].sourceName, sourceUrl: media[0].sourceUrl, confidence: 80, notes: "Images came from a responding public source page that matched the property address. Usage rights must still be reviewed before external distribution." });
   if (property.estimatedValue && property.verificationSourceUrl) findings.set("PRICE", { topic: "PRICE", label: "Current asking price", value: `$${property.estimatedValue.toLocaleString("en-US")}`, status: "VERIFIED", sourceName: "Dated property verification", sourceUrl: property.verificationSourceUrl, confidence: property.confidence });
@@ -217,15 +235,15 @@ export async function runQueuedPropertyResearch(runId: string) {
 
 export async function runAutomaticPropertyResearchBatch(limit = 2) {
   const db = getPrisma();
-  const safeLimit = Math.max(1, Math.min(limit, 10));
+  const safeLimit = Math.max(1, Math.min(limit, 25));
   const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000);
   const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
   await db.propertyResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic research run." } });
-  const stale = await db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" }, AND: [{ researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } } }, { researchRuns: { none: { startedAt: { gte: staleCutoff } } } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
+  const stale = await db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" }, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: PROPERTY_RESEARCH_VERSION } } } }, { researchRuns: { none: { startedAt: { gte: staleCutoff } } } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
   for (const property of stale) await enqueuePropertyResearch(property.id);
   const queued = await db.propertyResearchRun.findMany({ where: { status: "QUEUED", property: { opportunityStatus: { not: "REJECTED" } } }, orderBy: { startedAt: "asc" }, take: safeLimit });
-  const results = [];
-  for (const run of queued) results.push(await runQueuedPropertyResearch(run.id));
+  const results: Awaited<ReturnType<typeof runQueuedPropertyResearch>>[] = [];
+  for (let index = 0; index < queued.length; index += 5) results.push(...await Promise.all(queued.slice(index, index + 5).map((run) => runQueuedPropertyResearch(run.id))));
   return { processed: results.length, completed: results.filter((result) => result.status === "completed").length, failed: results.filter((result) => result.status === "failed").length, results };
 }
 

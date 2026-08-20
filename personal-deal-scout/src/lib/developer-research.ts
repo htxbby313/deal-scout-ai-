@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/prisma";
 
 const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+export const DEVELOPER_RESEARCH_VERSION = 2;
 
 function safePublicUrl(raw: string) {
   const url = new URL(raw);
@@ -29,7 +30,7 @@ export async function enqueueDeveloperResearch(developerId: string) {
   if (!developer.active) throw new Error("Inactive developers cannot be queued for research.");
   const existing = await db.developerResearchRun.findFirst({ where: { developerId, status: { in: ["QUEUED", "RUNNING"] } }, orderBy: { startedAt: "desc" } });
   if (existing) return existing;
-  const queued = await db.developerResearchRun.create({ data: { developerId, status: "QUEUED" } });
+  const queued = await db.developerResearchRun.create({ data: { developerId, status: "QUEUED", researchVersion: DEVELOPER_RESEARCH_VERSION } });
   await db.auditLog.create({ data: { type: "research.developer_dossier", summary: `Queued automatic public-source research for ${developer.companyName}.`, details: { developerId, runId: queued.id, trigger: "automatic" } } });
   return queued;
 }
@@ -37,7 +38,7 @@ export async function enqueueDeveloperResearch(developerId: string) {
 async function researchDeveloper(developerId: string, runId: string) {
   const db = getPrisma();
   const developer = await db.developer.findUniqueOrThrow({ where: { id: developerId }, include: { projects: true } });
-  const run = await db.developerResearchRun.update({ where: { id: runId }, data: { status: "RUNNING", startedAt: new Date(), error: null } });
+  const run = await db.developerResearchRun.update({ where: { id: runId }, data: { status: "RUNNING", startedAt: new Date(), error: null, researchVersion: DEVELOPER_RESEARCH_VERSION } });
   const urls = [...new Set([developer.website, developer.contactUrl].filter(Boolean) as string[])];
   const errors: string[] = [];
   const pages: Awaited<ReturnType<typeof fetchPublicPage>>[] = [];
@@ -75,15 +76,15 @@ export async function runQueuedDeveloperResearch(runId: string) {
 
 export async function runAutomaticDeveloperResearchBatch(limit = 5) {
   const db = getPrisma();
-  const safeLimit = Math.max(1, Math.min(limit, 10));
+  const safeLimit = Math.max(1, Math.min(limit, 25));
   const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000);
   const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
   await db.developerResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic developer research run." } });
-  const stale = await db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ lastResearchedAt: null }, { lastResearchedAt: { lt: staleCutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
+  const stale = await db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: DEVELOPER_RESEARCH_VERSION } } } }, { lastResearchedAt: null }, { lastResearchedAt: { lt: staleCutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
   for (const developer of stale) await enqueueDeveloperResearch(developer.id);
   const queued = await db.developerResearchRun.findMany({ where: { status: "QUEUED", developer: { active: true } }, orderBy: { startedAt: "asc" }, take: safeLimit });
-  const results = [];
-  for (const run of queued) results.push(await runQueuedDeveloperResearch(run.id));
+  const results: Awaited<ReturnType<typeof runQueuedDeveloperResearch>>[] = [];
+  for (let index = 0; index < queued.length; index += 5) results.push(...await Promise.all(queued.slice(index, index + 5).map((run) => runQueuedDeveloperResearch(run.id))));
   return { processed: results.length, completed: results.filter((result) => result.status === "completed").length, failed: results.filter((result) => result.status === "failed").length, results };
 }
 

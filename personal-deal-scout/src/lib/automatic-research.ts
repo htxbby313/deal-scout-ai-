@@ -1,8 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/prisma";
-import { enqueueDeveloperResearch, runAutomaticDeveloperResearchBatch } from "@/lib/developer-research";
-import { enqueuePropertyResearch, runAutomaticPropertyResearchBatch } from "@/lib/property-research";
+import { DEVELOPER_RESEARCH_VERSION, enqueueDeveloperResearch, runAutomaticDeveloperResearchBatch } from "@/lib/developer-research";
+import { enqueuePropertyResearch, PROPERTY_RESEARCH_VERSION, runAutomaticPropertyResearchBatch } from "@/lib/property-research";
 import { runCensusPermitResearch } from "@/lib/government-research";
 import { importHudReoCounty, HUD_REO_SOURCE } from "@/lib/hud-reo";
 
@@ -13,8 +13,8 @@ export async function ensureAutomaticResearchBacklog(limit = 250) {
   const cutoff = new Date(Date.now() - REFRESH_DAYS * 86_400_000);
   const safeLimit = Math.max(1, Math.min(limit, 1000));
   const [properties, developers] = await Promise.all([
-    db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" }, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: {} } }, { researchRuns: { none: { startedAt: { gte: cutoff } } } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit }),
-    db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ lastResearchedAt: null }, { lastResearchedAt: { lt: cutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit }),
+    db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" }, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: PROPERTY_RESEARCH_VERSION } } } }, { researchRuns: { none: { startedAt: { gte: cutoff } } } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit }),
+    db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: DEVELOPER_RESEARCH_VERSION } } } }, { lastResearchedAt: null }, { lastResearchedAt: { lt: cutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit }),
   ]);
   const [propertyRuns, developerRuns] = await Promise.all([
     Promise.all(properties.map(({ id }) => enqueuePropertyResearch(id))),
@@ -25,7 +25,7 @@ export async function ensureAutomaticResearchBacklog(limit = 250) {
 
 export async function runAutomaticResearchCycle() {
   const queued = await ensureAutomaticResearchBacklog();
-  const [properties, developers] = await Promise.all([runAutomaticPropertyResearchBatch(5), runAutomaticDeveloperResearchBatch(10)]);
+  const [properties, developers] = await Promise.all([runAutomaticPropertyResearchBatch(25), runAutomaticDeveloperResearchBatch(25)]);
   const government = await runAutomaticGovernmentResearch();
   return { queued, properties, developers, government };
 }
