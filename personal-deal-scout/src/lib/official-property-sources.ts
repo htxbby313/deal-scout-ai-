@@ -25,7 +25,24 @@ type ArcGisResponse = { features?: Array<{ attributes?: Record<string, unknown> 
 
 const BEXAR_PARCELS = "https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0/query";
 const SAN_ANTONIO_ADDRESSES = "https://qagis.sanantonio.gov/arcgis/rest/services/311/311_OneView/MapServer/0/query";
+const SAN_ANTONIO_PARCELS = "https://qagis.sanantonio.gov/arcgis/rest/services/311/311_OneView/MapServer/2/query";
 const FEMA_FLOOD_ZONES = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query";
+
+type OfficialAdapter = { id: string; scope: "US" | "COUNTY" | "CITY"; state?: string; county?: string; city?: string; topics: string[] };
+
+const OFFICIAL_ADAPTERS: OfficialAdapter[] = [
+  { id: "fema-nfhl", scope: "US", topics: ["FLOOD"] },
+  { id: "bexar-parcels", scope: "COUNTY", state: "TX", county: "bexar", topics: ["OWNERSHIP", "PARCEL", "TAX", "DIMENSIONS", "ZONING"] },
+  { id: "san-antonio-addresses", scope: "CITY", state: "TX", city: "san antonio", topics: ["HISTORIC", "UTILITIES"] },
+  { id: "san-antonio-parcels", scope: "CITY", state: "TX", city: "san antonio", topics: ["ZONING"] },
+];
+
+function applicableAdapters(property: Pick<PropertyIdentity, "state" | "county" | "city">) {
+  const state = property.state.trim().toLowerCase();
+  const county = property.county?.trim().toLowerCase().replace(/\s+county$/, "") || "";
+  const city = property.city.trim().toLowerCase();
+  return OFFICIAL_ADAPTERS.filter((adapter) => adapter.scope === "US" || (adapter.state?.toLowerCase() === state && (adapter.scope === "COUNTY" ? county === adapter.county : city === adapter.city)));
+}
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : value === null || value === undefined ? "" : String(value);
@@ -94,6 +111,12 @@ export function sanAntonioAddressFindings(attributes: Record<string, unknown>, s
   ];
 }
 
+export function sanAntonioParcelFindings(attributes: Record<string, unknown>, sourceUrl: string): OfficialPropertyFinding[] {
+  const overlay = text(attributes.ZoningOverlay);
+  if (!overlay) return [];
+  return [{ topic: "ZONING", label: "Zoning and permitted use", value: `City parcel zoning overlay: ${overlay}`, status: "VERIFIED", sourceName: "City of San Antonio GIS", sourceUrl, confidence: 80, notes: "Official city GIS overlay screening; base zoning, permitted use, and project approval still require city confirmation." }];
+}
+
 export function femaFloodFinding(attributes: Record<string, unknown>, sourceUrl: string): OfficialPropertyFinding {
   const zone = text(attributes.FLD_ZONE) || "Not reported";
   const subtype = text(attributes.ZONE_SUBTY) || "No subtype reported";
@@ -113,7 +136,8 @@ export async function researchOfficialPropertySources(property: PropertyIdentity
     if (flood) findings.push(femaFloodFinding(flood, floodUrl.toString()));
   } catch (error) { errors.push(`FEMA NFHL: ${error instanceof Error ? error.message : "lookup failed"}`); }
 
-  const isBexar = property.state.toUpperCase() === "TX" && (property.county?.toLowerCase().includes("bexar") || property.city.toLowerCase() === "san antonio");
+  const adapters = new Set(applicableAdapters(property).map((adapter) => adapter.id));
+  const isBexar = adapters.has("bexar-parcels") || property.city.toLowerCase() === "san antonio";
   if (isBexar) {
     const search = addressSearch(property.address);
     const parcelUrl = queryUrl(BEXAR_PARCELS, { where: `UPPER(SITUS) LIKE '${search}'`, outFields: "PropID,Situs,Owner,AcctNumb,LglDesc,LandVal,ImprVal,TotVal,YrBlt,LglAcres,Acres,PropUse", returnGeometry: "false" });
@@ -129,9 +153,16 @@ export async function researchOfficialPropertySources(property: PropertyIdentity
       const address = await arcGis(addressUrl);
       if (address) findings.push(...sanAntonioAddressFindings(address, addressUrl.toString()));
     } catch (error) { errors.push(`City of San Antonio GIS: ${error instanceof Error ? error.message : "lookup failed"}`); }
+
+    const cityParcelUrl = queryUrl(SAN_ANTONIO_PARCELS, { where: `UPPER(BCADSitusAddress) LIKE '${search}%'`, outFields: "BCADParcelID,BCADSitusAddress,ZoningOverlay,ETJ", returnGeometry: "false" });
+    sourcesChecked += 1;
+    try {
+      const cityParcel = await arcGis(cityParcelUrl);
+      if (cityParcel) findings.push(...sanAntonioParcelFindings(cityParcel, cityParcelUrl.toString()));
+    } catch (error) { errors.push(`City of San Antonio parcel GIS: ${error instanceof Error ? error.message : "lookup failed"}`); }
   }
 
   return { findings, errors, sourcesChecked };
 }
 
-export const __officialPropertySourceTestables = { addressSearch, bexarParcelFindings, sanAntonioAddressFindings, femaFloodFinding };
+export const __officialPropertySourceTestables = { addressSearch, applicableAdapters, bexarParcelFindings, sanAntonioAddressFindings, sanAntonioParcelFindings, femaFloodFinding };
