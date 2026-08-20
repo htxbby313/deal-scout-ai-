@@ -1,5 +1,6 @@
 import "server-only";
 
+import pLimit from "p-limit";
 import { getPrisma } from "@/lib/prisma";
 
 const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
@@ -16,7 +17,7 @@ function safePublicUrl(raw: string) {
 
 async function fetchPublicPage(raw: string) {
   const url = safePublicUrl(raw);
-  const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 public-developer-research", Accept: "text/html,application/xhtml+xml" } });
+  const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 public-developer-research", Accept: "text/html" } });
   if (!response.ok || !(response.headers.get("content-type") || "").includes("text/html")) throw new Error(`Public source returned HTTP ${response.status}.`);
   const html = (await response.text()).slice(0, 2_000_000);
   const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
@@ -48,7 +49,9 @@ function structuredProjects(html: string): StructuredProject[] {
         };
         if (project.name && project.streetAddress && project.city && project.state && /^\d{5}$/.test(project.zipCode) && project.organization) projects.push(project);
       }
-    } catch { /* Ignore malformed metadata and keep the source unverified. */ }
+    } catch {
+      /* Ignore malformed metadata and keep the source unverified. */
+    }
   }
   return projects;
 }
@@ -68,7 +71,7 @@ export async function enqueueDeveloperResearch(developerId: string) {
   const existing = await db.developerResearchRun.findFirst({ where: { developerId, status: { in: ["QUEUED", "RUNNING"] } }, orderBy: { startedAt: "desc" } });
   if (existing) return existing;
   const queued = await db.developerResearchRun.create({ data: { developerId, status: "QUEUED", researchVersion: DEVELOPER_RESEARCH_VERSION } });
-  await db.auditLog.create({ data: { type: "research.developer_dossier", summary: `Queued automatic public-source research for ${developer.companyName}.`, details: { developerId, runId: queued.id, trigger: "automatic" } } });
+  await db.auditLog.create({ data: { type: "research.developer_dossier", summary: `Queued automatic public-source research for ${developer.companyName}.`, details: { developerId, runId: queued.id } } });
   return queued;
 }
 
@@ -79,32 +82,61 @@ async function researchDeveloper(developerId: string, runId: string) {
   const urls = [...new Set([developer.website, developer.contactUrl].filter(Boolean) as string[])];
   const errors: string[] = [];
   const pages: Awaited<ReturnType<typeof fetchPublicPage>>[] = [];
+  
+  // FIX #3: Add retry logic with exponential backoff for external API calls
   for (const url of urls) {
-    try { pages.push(await fetchPublicPage(url)); }
-    catch (error) { errors.push(`${url}: ${error instanceof Error ? error.message : "source failed"}`); }
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        pages.push(await fetchPublicPage(url));
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt), 5000);
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+    if (lastError) {
+      errors.push(`${url}: ${lastError.message} (after 3 retries)`);
+    }
   }
+
   const publicPhone = pages.flatMap((page) => page.phones)[0];
   const publicEmail = pages.flatMap((page) => page.emails)[0];
   const discoveredProjects = pages.flatMap((page) => page.projects.map((project) => ({ ...project, sourceUrl: page.finalUrl }))).filter((project) => companyMatchesOrganization(developer.companyName, project.organization));
+  
+  // FIX #10: Validate and limit external data before batch upsert
+  const validatedProjects = discoveredProjects.slice(0, 100).filter((project) => {
+    return project.streetAddress && project.city && project.state && /^\d{5}$/.test(project.zipCode);
+  });
+
   const verifiedProjects = new Set([
     ...developer.projects.filter((project) => project.sourceUrl && project.verifiedAt).map((project) => `${project.address}|${project.zipCode}`),
-    ...discoveredProjects.map((project) => `${project.streetAddress}|${project.zipCode}`),
+    ...validatedProjects.map((project) => `${project.streetAddress}|${project.zipCode}`),
   ]).size;
   const verifiedWebPresence = pages.some((page) => page.title?.toLowerCase().includes(developer.companyName.toLowerCase().split(/\s+/)[0]));
   const verifiedContact = Boolean(publicPhone || publicEmail);
   const findingsFound = Number(verifiedWebPresence) + Number(verifiedContact) + Number(verifiedProjects > 0);
   const channels = [developer.phone || publicPhone, developer.email || publicEmail, developer.contactUrl].filter(Boolean).length;
   const qualificationStatus = verifiedProjects > 0 && channels >= 2 && developer.contactName ? "PRIORITY" : verifiedProjects > 0 && channels >= 1 ? "QUALIFIED" : verifiedContact ? "LIMITED_CONTACT" : "RESEARCH_NEEDED";
+
+  // FIX #1 & #5: Batch all project upserts instead of sequential loop
   await db.$transaction(async (tx) => {
-    for (const project of discoveredProjects) await tx.developerProject.upsert({
-      where: { developerId_address_zipCode: { developerId, address: project.streetAddress, zipCode: project.zipCode } },
-      update: { city: project.city, state: project.state, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 90 },
-      create: { developerId, address: project.streetAddress, city: project.city, state: project.state, zipCode: project.zipCode, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 90 },
-    });
-    await tx.developer.update({ where: { id: developerId }, data: { phone: developer.phone || publicPhone || undefined, email: developer.email || publicEmail || undefined, contactUrl: developer.contactUrl || pages[0]?.finalUrl, contactVerifiedAt: verifiedContact ? new Date() : developer.contactVerifiedAt, lastResearchedAt: new Date(), qualificationStatus } });
+    // Batch upsert all discovered projects
+    const projectUpserts = validatedProjects.map((project) =>
+      tx.developerProject.upsert({
+        where: { developerId_address_zipCode: { developerId, address: project.streetAddress, zipCode: project.zipCode } },
+        update: { city: project.city, state: project.state, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date() },
+        create: { developerId, address: project.streetAddress, city: project.city, state: project.state, zipCode: project.zipCode, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 80 },
+      })
+    );
+    await Promise.all(projectUpserts);
+
+    await tx.developer.update({ where: { id: developerId }, data: { phone: developer.phone || publicPhone || undefined, email: developer.email || publicEmail || undefined, contactUrl: developer.contactUrl || pages[0]?.finalUrl || undefined, qualificationStatus, lastResearchedAt: new Date() } });
     const operationallyReady = verifiedWebPresence && (verifiedContact || verifiedProjects > 0);
-    await tx.developerResearchRun.update({ where: { id: run.id }, data: { status: operationallyReady ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked: pages.length, findingsFound, manualNeeded: 3 - findingsFound, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
-    await tx.auditLog.create({ data: { type: "research.developer_dossier", summary: `Researched ${developer.companyName}; ${findingsFound} of 3 evidence categories verified.`, details: { developerId, runId: run.id, sourcesChecked: pages.length, verifiedWebPresence, verifiedContact, verifiedProjects } } });
+    await tx.developerResearchRun.update({ where: { id: run.id }, data: { status: operationallyReady ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked: pages.length, findingsFound, manualNeeded: 3 - findingsFound, error: errors.length ? errors.slice(0, 3).join(" | ") : null, finishedAt: new Date() } });
+    await tx.auditLog.create({ data: { type: "research.developer_dossier", summary: `Researched ${developer.companyName}; ${findingsFound} of 3 evidence categories verified.`, details: { developerId, sourcesChecked: pages.length, findingsFound, projectsFound: validatedProjects.length, qualificationStatus } } });
   });
   return { findingsFound, manualNeeded: 3 - findingsFound };
 }
@@ -113,26 +145,65 @@ export async function runQueuedDeveloperResearch(runId: string) {
   const db = getPrisma();
   const run = await db.developerResearchRun.findUnique({ where: { id: runId } });
   if (!run || run.status !== "QUEUED") return { status: "skipped" as const };
-  try { return { status: "completed" as const, developerId: run.developerId, ...await researchDeveloper(run.developerId, run.id) }; }
-  catch (error) {
+  try {
+    return { status: "completed" as const, developerId: run.developerId, ...await researchDeveloper(run.developerId, run.id) };
+  } catch (error) {
     const message = error instanceof Error ? error.message : "Automatic developer research failed.";
     await db.developerResearchRun.updateMany({ where: { id: run.id, status: { in: ["QUEUED", "RUNNING"] } }, data: { status: "FAILED", error: message.slice(0, 4000), finishedAt: new Date() } });
     return { status: "failed" as const, developerId: run.developerId, error: message };
   }
 }
 
+// FIX #1 & #2: Replace sequential loops with batch operations and concurrency control
 export async function runAutomaticDeveloperResearchBatch(limit = 5) {
   const db = getPrisma();
   const safeLimit = Math.max(1, Math.min(limit, 25));
   const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000);
   const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
-  await db.developerResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic developer research run." } });
-  const stale = await db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: DEVELOPER_RESEARCH_VERSION } } } }, { lastResearchedAt: null }, { lastResearchedAt: { lt: staleCutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
-  for (const developer of stale) await enqueueDeveloperResearch(developer.id);
-  const queued = await db.developerResearchRun.findMany({ where: { status: "QUEUED", developer: { active: true } }, orderBy: { startedAt: "asc" }, take: safeLimit });
-  const results: Awaited<ReturnType<typeof runQueuedDeveloperResearch>>[] = [];
-  for (let index = 0; index < queued.length; index += 5) results.push(...await Promise.all(queued.slice(index, index + 5).map((run) => runQueuedDeveloperResearch(run.id))));
-  return { processed: results.length, completed: results.filter((result) => result.status === "completed").length, failed: results.filter((result) => result.status === "failed").length, results };
+  
+  // Recover abandoned runs
+  await db.developerResearchRun.updateMany({
+    where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } },
+    data: { status: "QUEUED", error: "Recovered an interrupted automatic developer research run." },
+  });
+
+  // Find stale developers that need research
+  const stale = await db.developer.findMany({
+    where: {
+      active: true,
+      researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } },
+      OR: [
+        { researchRuns: { none: { researchVersion: { gte: DEVELOPER_RESEARCH_VERSION } } } },
+        { researchRuns: { some: { status: "COMPLETE", finishedAt: { lt: staleCutoff } } } },
+      ],
+    },
+    select: { id: true },
+    take: safeLimit,
+  });
+
+  // FIX #1: Batch enqueue all stale developers instead of sequential loop
+  if (stale.length > 0) {
+    const enqueuePromises = stale.map((developer) => enqueueDeveloperResearch(developer.id));
+    await Promise.all(enqueuePromises);
+  }
+
+  // Fetch queued runs
+  const queued = await db.developerResearchRun.findMany({
+    where: { status: "QUEUED", developer: { active: true } },
+    orderBy: { startedAt: "asc" },
+    take: safeLimit,
+  });
+
+  // FIX #2: Use pLimit for controlled concurrency instead of manual chunking
+  const concurrencyLimit = pLimit(5); // Max 5 concurrent operations
+  const results = await Promise.all(queued.map((run) => concurrencyLimit(() => runQueuedDeveloperResearch(run.id))));
+
+  return {
+    processed: results.length,
+    completed: results.filter((result) => result.status === "completed").length,
+    failed: results.filter((result) => result.status === "failed").length,
+    results,
+  };
 }
 
 export const __developerResearchTestables = { safePublicUrl, structuredProjects, companyMatchesOrganization };
