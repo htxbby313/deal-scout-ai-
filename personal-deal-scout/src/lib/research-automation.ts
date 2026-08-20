@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/prisma";
+import { DEVELOPER_RESEARCH_VERSION } from "@/lib/developer-research";
+import { PROPERTY_RESEARCH_VERSION } from "@/lib/property-research";
 import {
   AUTOMATIC_RESEARCH_TASK_TYPES,
   RESEARCH_MAX_ATTEMPTS,
@@ -91,7 +93,7 @@ export async function recoverAutomaticResearchWork(now = new Date()) {
       db.property.findUnique({ where: { id: run.propertyId }, select: { address: true, opportunityStatus: true } }),
     ]);
     if (active || !property || property.opportunityStatus === "REJECTED" || recentFailures >= RESEARCH_MAX_ATTEMPTS) continue;
-    const retry = await db.propertyResearchRun.create({ data: { propertyId: run.propertyId, status: "QUEUED" } });
+    const retry = await db.propertyResearchRun.create({ data: { propertyId: run.propertyId, status: "QUEUED", researchVersion: PROPERTY_RESEARCH_VERSION } });
     await db.auditLog.create({ data: { type: "research.property_dossier", summary: `Queued bounded automatic retry for ${property.address}.`, details: { priorRunId: run.id, runId: retry.id, retry: recentFailures + 1 } } });
     dossierRetries += 1;
   }
@@ -103,7 +105,7 @@ export async function recoverAutomaticResearchWork(now = new Date()) {
       db.developer.findUnique({ where: { id: run.developerId }, select: { companyName: true, active: true } }),
     ]);
     if (active || !developer?.active || recentFailures >= RESEARCH_MAX_ATTEMPTS) continue;
-    const retry = await db.developerResearchRun.create({ data: { developerId: run.developerId, status: "QUEUED" } });
+    const retry = await db.developerResearchRun.create({ data: { developerId: run.developerId, status: "QUEUED", researchVersion: DEVELOPER_RESEARCH_VERSION } });
     await db.auditLog.create({ data: { type: "research.developer_dossier", summary: `Queued bounded automatic retry for ${developer.companyName}.`, details: { priorRunId: run.id, runId: retry.id, retry: recentFailures + 1 } } });
     dossierRetries += 1;
   }

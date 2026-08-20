@@ -48,9 +48,9 @@ function PhotoPanel({ property }: { property: PropertyView }) {
 function EvidenceForm({ property }: { property: PropertyView }) {
   const boundAction = updatePropertyEvidenceAction.bind(null, property.id);
   const [state, action, pending] = useActionState(boundAction, { status: "idle", message: "" } satisfies EvidenceUpdateState);
-  return <section className="mt-7 border-t pt-6">
-    <h3 className="font-bold">Verify price and seller contact</h3>
-    <p className="mt-1 text-xs leading-5 text-slate-500">The original source remains unchanged. Add a separate URL that proves the current price and contact details.</p>
+  return <details className="mt-7 rounded-xl border border-slate-200 p-4">
+    <summary className="cursor-pointer text-sm font-bold text-slate-700">Correct or add a missing result</summary>
+    <p className="mt-2 text-xs leading-5 text-slate-500">Use this only when you have newer source evidence than the automatic research found.</p>
     <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2">
       <input className="rounded-xl border px-3 py-2.5 text-sm" defaultValue={property.estimatedValue || ""} min="1" name="estimatedValue" placeholder="Current asking price" required type="number" />
       <select className="rounded-xl border px-3 py-2.5 text-sm" defaultValue={["CONFIRMED_AVAILABLE", "GOVERNMENT_SALE"].includes(property.opportunityStatus) ? property.opportunityStatus : "CONFIRMED_AVAILABLE"} name="opportunityStatus"><option value="CONFIRMED_AVAILABLE">Confirmed available</option><option value="GOVERNMENT_SALE">Government sale</option></select>
@@ -65,7 +65,7 @@ function EvidenceForm({ property }: { property: PropertyView }) {
       <button className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60 sm:col-span-2" disabled={pending}>{pending ? "Updating property…" : "Save property details"}</button>
       {state.message ? <p aria-live="polite" className={`text-xs font-semibold sm:col-span-2 ${state.status === "error" ? "text-red-700" : "text-emerald-700"}`}>{state.message}</p> : null}
     </form>
-  </section>;
+  </details>;
 }
 
 function RetirementForm({ property }: { property: PropertyView }) {
