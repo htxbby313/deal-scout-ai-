@@ -24,9 +24,9 @@ export async function ensureAutomaticResearchBacklog(limit = 250) {
 }
 
 export async function runAutomaticResearchCycle() {
+  const government = await runAutomaticGovernmentResearch();
   const queued = await ensureAutomaticResearchBacklog();
   const [properties, developers] = await Promise.all([runAutomaticPropertyResearchBatch(25), runAutomaticDeveloperResearchBatch(25)]);
-  const government = await runAutomaticGovernmentResearch();
   return { queued, properties, developers, government };
 }
 

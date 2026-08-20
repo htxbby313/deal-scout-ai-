@@ -23,4 +23,11 @@ describe("property research source parsing", () => {
     expect(__propertyResearchTestables.pageMatchesProperty("<title>1200 Main Street, Jackson MS 39201</title>", property)).toBe(true);
     expect(__propertyResearchTestables.pageMatchesProperty("<title>1400 Oak Avenue, Biloxi MS 39530</title>", property)).toBe(false);
   });
+
+  it("treats sufficient evidence as usable without requiring every research topic", () => {
+    const verified = (topic: string) => ({ topic, status: "VERIFIED" as const });
+    expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("PARCEL"), verified("TAX")])).toBe(true);
+    expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("OWNERSHIP")], "GOVERNMENT_SALE")).toBe(true);
+    expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("PARCEL"), { topic: "PRICE", status: "CONFLICT" as const }])).toBe(false);
+  });
 });
