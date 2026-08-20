@@ -20,7 +20,44 @@ async function fetchPublicPage(raw: string) {
   if (!response.ok || !(response.headers.get("content-type") || "").includes("text/html")) throw new Error(`Public source returned HTTP ${response.status}.`);
   const html = (await response.text()).slice(0, 2_000_000);
   const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
-  return { finalUrl: response.url || url.toString(), title: html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim(), phones: [...new Set(text.match(PHONE_PATTERN) || [])], emails: [...new Set(text.match(EMAIL_PATTERN) || [])] };
+  return { finalUrl: response.url || url.toString(), title: html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim(), phones: [...new Set(text.match(PHONE_PATTERN) || [])], emails: [...new Set(text.match(EMAIL_PATTERN) || [])], projects: structuredProjects(html) };
+}
+
+type StructuredProject = { name: string; streetAddress: string; city: string; state: string; zipCode: string; organization: string; phone?: string };
+
+function structuredProjects(html: string): StructuredProject[] {
+  const projects: StructuredProject[] = [];
+  for (const match of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const parsed = JSON.parse(match[1]) as Record<string, unknown>;
+      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      for (const entry of entries) {
+        if (!entry || typeof entry !== "object") continue;
+        const item = entry as Record<string, unknown>;
+        if (item["@type"] !== "HomeAndConstructionBusiness") continue;
+        const address = item.address as Record<string, unknown> | undefined;
+        const parent = item.parentOrganization as Record<string, unknown> | undefined;
+        const project = {
+          name: typeof item.name === "string" ? item.name.trim() : "",
+          streetAddress: typeof address?.streetAddress === "string" ? address.streetAddress.trim() : "",
+          city: typeof address?.addressLocality === "string" ? address.addressLocality.trim() : "",
+          state: typeof address?.addressRegion === "string" ? address.addressRegion.trim() : "",
+          zipCode: typeof address?.postalCode === "string" ? address.postalCode.trim() : "",
+          organization: typeof parent?.name === "string" ? parent.name.trim() : "",
+          phone: typeof item.telephone === "string" ? item.telephone.trim() : undefined,
+        };
+        if (project.name && project.streetAddress && project.city && project.state && /^\d{5}$/.test(project.zipCode) && project.organization) projects.push(project);
+      }
+    } catch { /* Ignore malformed metadata and keep the source unverified. */ }
+  }
+  return projects;
+}
+
+function companyMatchesOrganization(companyName: string, organization: string) {
+  const normalize = (value: string) => value.toLowerCase().replace(/\b(llc|inc|corporation|corp|ii|company|co)\b/g, " ").replace(/[^a-z0-9]/g, "");
+  const company = normalize(companyName);
+  const parent = normalize(organization);
+  return company.length >= 5 && parent.length >= 5 && (company.includes(parent) || parent.includes(company));
 }
 
 export async function enqueueDeveloperResearch(developerId: string) {
@@ -48,13 +85,22 @@ async function researchDeveloper(developerId: string, runId: string) {
   }
   const publicPhone = pages.flatMap((page) => page.phones)[0];
   const publicEmail = pages.flatMap((page) => page.emails)[0];
-  const verifiedProjects = developer.projects.filter((project) => project.sourceUrl && project.verifiedAt).length;
+  const discoveredProjects = pages.flatMap((page) => page.projects.map((project) => ({ ...project, sourceUrl: page.finalUrl }))).filter((project) => companyMatchesOrganization(developer.companyName, project.organization));
+  const verifiedProjects = new Set([
+    ...developer.projects.filter((project) => project.sourceUrl && project.verifiedAt).map((project) => `${project.address}|${project.zipCode}`),
+    ...discoveredProjects.map((project) => `${project.streetAddress}|${project.zipCode}`),
+  ]).size;
   const verifiedWebPresence = pages.some((page) => page.title?.toLowerCase().includes(developer.companyName.toLowerCase().split(/\s+/)[0]));
   const verifiedContact = Boolean(publicPhone || publicEmail);
   const findingsFound = Number(verifiedWebPresence) + Number(verifiedContact) + Number(verifiedProjects > 0);
   const channels = [developer.phone || publicPhone, developer.email || publicEmail, developer.contactUrl].filter(Boolean).length;
   const qualificationStatus = verifiedProjects > 0 && channels >= 2 && developer.contactName ? "PRIORITY" : verifiedProjects > 0 && channels >= 1 ? "QUALIFIED" : verifiedContact ? "LIMITED_CONTACT" : "RESEARCH_NEEDED";
   await db.$transaction(async (tx) => {
+    for (const project of discoveredProjects) await tx.developerProject.upsert({
+      where: { developerId_address_zipCode: { developerId, address: project.streetAddress, zipCode: project.zipCode } },
+      update: { city: project.city, state: project.state, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 90 },
+      create: { developerId, address: project.streetAddress, city: project.city, state: project.state, zipCode: project.zipCode, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 90 },
+    });
     await tx.developer.update({ where: { id: developerId }, data: { phone: developer.phone || publicPhone || undefined, email: developer.email || publicEmail || undefined, contactUrl: developer.contactUrl || pages[0]?.finalUrl, contactVerifiedAt: verifiedContact ? new Date() : developer.contactVerifiedAt, lastResearchedAt: new Date(), qualificationStatus } });
     await tx.developerResearchRun.update({ where: { id: run.id }, data: { status: findingsFound === 3 ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked: pages.length, findingsFound, manualNeeded: 3 - findingsFound, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
     await tx.auditLog.create({ data: { type: "research.developer_dossier", summary: `Researched ${developer.companyName}; ${findingsFound} of 3 evidence categories verified.`, details: { developerId, runId: run.id, sourcesChecked: pages.length, verifiedWebPresence, verifiedContact, verifiedProjects } } });
@@ -88,4 +134,4 @@ export async function runAutomaticDeveloperResearchBatch(limit = 5) {
   return { processed: results.length, completed: results.filter((result) => result.status === "completed").length, failed: results.filter((result) => result.status === "failed").length, results };
 }
 
-export const __developerResearchTestables = { safePublicUrl };
+export const __developerResearchTestables = { safePublicUrl, structuredProjects, companyMatchesOrganization };

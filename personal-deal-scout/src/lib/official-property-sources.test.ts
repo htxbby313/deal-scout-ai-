@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { __officialPropertySourceTestables } from "@/lib/official-property-sources";
 
-const { addressSearch, bexarParcelFindings, sanAntonioAddressFindings, femaFloodFinding } = __officialPropertySourceTestables;
+const { addressSearch, applicableAdapters, bexarParcelFindings, sanAntonioAddressFindings, sanAntonioParcelFindings, femaFloodFinding } = __officialPropertySourceTestables;
 
 describe("official property source adapters", () => {
   it("builds a bounded address search from a normal street address", () => {
@@ -25,5 +25,15 @@ describe("official property source adapters", () => {
     const finding = femaFloodFinding({ FLD_ZONE: "X", ZONE_SUBTY: "AREA OF MINIMAL FLOOD HAZARD", SFHA_TF: "F" }, "https://hazards.fema.gov/query");
     expect(finding.value).toContain("special flood hazard area: no");
     expect(finding.status).toBe("VERIFIED");
+  });
+
+  it("selects national and local adapters by normalized geography", () => {
+    expect(applicableAdapters({ state: "TX", county: "Bexar County", city: "San Antonio" }).map((adapter) => adapter.id)).toEqual(["fema-nfhl", "bexar-parcels", "san-antonio-addresses", "san-antonio-parcels"]);
+    expect(applicableAdapters({ state: "MS", county: "Hinds County", city: "Jackson" }).map((adapter) => adapter.id)).toEqual(["fema-nfhl"]);
+  });
+
+  it("only verifies a city zoning overlay when the official field is populated", () => {
+    expect(sanAntonioParcelFindings({ ZoningOverlay: "AHOD" }, "https://sanantonio.gov/query")[0]?.value).toContain("AHOD");
+    expect(sanAntonioParcelFindings({ ZoningOverlay: "" }, "https://sanantonio.gov/query")).toEqual([]);
   });
 });
