@@ -200,7 +200,7 @@ export async function researchPropertyAction(
     revalidatePath("/operations");
     return {
       status: "success",
-      message: `Research saved: ${result.verified} verified topic(s), ${result.mediaFound} image(s), ${result.manualNeeded} routed to manual verification.`,
+      message: `Research updated: ${result.verified} verified detail(s), ${result.mediaFound} image(s), ${result.manualNeeded} additional detail(s) still unavailable.`,
     };
   } catch (error) {
     return {
@@ -228,7 +228,7 @@ export async function researchDeveloperAction(
       return { status: "success", message: "Research is already running." };
     return {
       status: "success",
-      message: `Research saved: ${result.findingsFound} found, ${result.manualNeeded} need verification.`,
+      message: `Research updated: ${result.findingsFound} verified category(s), ${result.manualNeeded} additional category(s) still unavailable.`,
     };
   } catch (error) {
     return {
@@ -297,8 +297,9 @@ export async function addPropertyMediaAction(formData: FormData) {
 
 export async function createLeadAction(formData: FormData) {
   await requireOwner();
+  const propertyId = value(formData, "propertyId");
   await createLead({
-    propertyId: value(formData, "propertyId"),
+    propertyId,
     ownerName: value(formData, "ownerName"),
     status: value(formData, "status"),
     priority: value(formData, "priority"),
@@ -307,7 +308,12 @@ export async function createLeadAction(formData: FormData) {
     estimatedAssignmentFee: Number(value(formData, "estimatedAssignmentFee")),
     notes: value(formData, "notes"),
   });
+  const queued = await enqueuePropertyResearch(propertyId);
+  after(async () => {
+    await runQueuedPropertyResearch(queued.id);
+  });
   revalidatePath("/");
+  revalidatePath("/properties");
 }
 
 export async function createMessageTemplateAction(formData: FormData) {

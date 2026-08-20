@@ -2,8 +2,9 @@ import "server-only";
 
 import { getPrisma } from "@/lib/prisma";
 import { researchOfficialPropertySources } from "@/lib/official-property-sources";
+import { HUD_REO_SOURCE } from "@/lib/hud-reo";
 
-export const PROPERTY_RESEARCH_VERSION = 2;
+export const PROPERTY_RESEARCH_VERSION = 3;
 
 const TOPICS = [
   ["LISTING", "Current listing or opportunity source"],
@@ -39,6 +40,15 @@ type Finding = {
 };
 
 type DiscoveredMedia = { url: string; sourceUrl: string; sourceName: string; altText: string };
+
+export function hasSufficientResearchEvidence(findings: Iterable<Pick<Finding, "topic" | "status">>, opportunityStatus?: string) {
+  const items = [...findings];
+  if (items.some((finding) => finding.status === "CONFLICT")) return false;
+  const verified = new Set(items.filter((finding) => finding.status === "VERIFIED").map((finding) => finding.topic));
+  const identifiable = ["LISTING", "OWNERSHIP", "PARCEL"].some((topic) => verified.has(topic));
+  const actionable = opportunityStatus === "GOVERNMENT_SALE" || ["PRICE", "CONTACT", "TAX", "ZONING", "FLOOD"].some((topic) => verified.has(topic));
+  return verified.has("LOCATION") && identifiable && actionable;
+}
 
 export async function enqueuePropertyResearch(propertyId: string) {
   const db = getPrisma();
@@ -155,8 +165,14 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
   let geocode: Awaited<ReturnType<typeof censusGeocode>> = null;
   let sourcesChecked = 0;
 
+  if (property.sourceName === HUD_REO_SOURCE && property.opportunityStatus === "GOVERNMENT_SALE" && property.sourceUrl && property.lastVerifiedAt) {
+    findings.set("LISTING", { topic: "LISTING", label: "Current listing or opportunity source", value: `HUD FHA REO inventory verified ${property.lastVerifiedAt.toISOString().slice(0, 10)}`, status: "VERIFIED", sourceName: HUD_REO_SOURCE, sourceUrl: property.sourceUrl, confidence: 90, notes: "Imported directly from HUD's current FHA REO ArcGIS inventory; price and availability terms require the published HUD sales channel." });
+    findings.set("OWNERSHIP", { topic: "OWNERSHIP", label: "Recorded ownership", value: property.ownerName, status: "VERIFIED", sourceName: HUD_REO_SOURCE, sourceUrl: property.sourceUrl, confidence: 85, notes: "HUD identifies the property as FHA REO inventory. A title professional must still confirm current record title and encumbrances." });
+  }
+
   const sourceUrls = [...new Set([property.sourceUrl, property.verificationSourceUrl].filter(Boolean) as string[])];
   for (const sourceUrl of sourceUrls) {
+    if (property.sourceName === HUD_REO_SOURCE && sourceUrl === property.sourceUrl) continue;
     sourcesChecked += 1;
     try {
       const { html, finalUrl } = await fetchHtml(sourceUrl);
@@ -212,7 +228,8 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
     for (const finding of findings.values()) await tx.propertyResearchFinding.upsert({ where: { propertyId_topic: { propertyId, topic: finding.topic } }, update: { ...finding, observedAt: new Date() }, create: { propertyId, ...finding } });
     for (const [position, item] of media.entries()) await tx.propertyMedia.upsert({ where: { propertyId_url: { propertyId, url: item.url } }, update: { sourceUrl: item.sourceUrl, sourceName: item.sourceName, altText: item.altText, position }, create: { propertyId, ...item, position } });
     const manualNeeded = [...findings.values()].filter((item) => item.status !== "VERIFIED").length;
-    await tx.propertyResearchRun.update({ where: { id: run.id }, data: { status: manualNeeded ? "NEEDS_MANUAL_VERIFICATION" : "COMPLETE", sourcesChecked, findingsFound: findings.size - manualNeeded, manualNeeded, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
+    const operationallyReady = hasSufficientResearchEvidence(findings.values(), property.opportunityStatus);
+    await tx.propertyResearchRun.update({ where: { id: run.id }, data: { status: operationallyReady ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked, findingsFound: findings.size - manualNeeded, manualNeeded, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
     await tx.auditLog.create({ data: { type: "research.property_dossier", summary: `Researched ${property.address}; ${findings.size - manualNeeded} verified topic(s), ${manualNeeded} routed to manual verification, ${media.length} image(s) found.`, details: { propertyId, runId: run.id, sourcesChecked, manualNeeded, mediaFound: media.length } } });
   });
 
@@ -271,4 +288,4 @@ export async function addSourcedPropertyMedia(input: { propertyId: string; url: 
   return media;
 }
 
-export const __propertyResearchTestables = { safePublicUrl, meta, imageUrls, listingImageUrls, phoneNumbers, pageMatchesProperty };
+export const __propertyResearchTestables = { safePublicUrl, meta, imageUrls, listingImageUrls, phoneNumbers, pageMatchesProperty, hasSufficientResearchEvidence };

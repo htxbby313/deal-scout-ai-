@@ -5,8 +5,7 @@ import { getPrisma } from "@/lib/prisma";
 import { evaluateStageTransition } from "@/lib/acquisition-funnel";
 import { evaluateStageCriteria, type StageCriterion } from "@/lib/stage-criteria";
 import { evaluateStoredProfitPriority } from "@/lib/profit-priority";
-
-const RESEARCHABLE_TOPICS = ["LISTING", "LOCATION", "PRICE", "CONTACT"];
+import { hasSufficientResearchEvidence } from "@/lib/property-research";
 
 export async function synchronizeAcquisitionFunnels(now = new Date()) {
   const db = getPrisma();
@@ -23,15 +22,15 @@ export async function synchronizeAcquisitionFunnels(now = new Date()) {
       created += 1;
     }
     if (funnel.stage !== "DISCOVERED") continue;
-    const verified = new Set(property.researchFindings.filter((finding) => finding.status === "VERIFIED" && finding.sourceUrl && now.getTime() - finding.observedAt.getTime() <= 7 * 86_400_000).map((finding) => finding.topic));
-    if (!RESEARCHABLE_TOPICS.every((topic) => verified.has(topic))) continue;
+    const currentFindings = property.researchFindings.filter((finding) => finding.sourceUrl && now.getTime() - finding.observedAt.getTime() <= 7 * 86_400_000);
+    if (!hasSufficientResearchEvidence(currentFindings, property.opportunityStatus)) continue;
     await db.$transaction(async (tx) => {
       const current = await tx.acquisitionFunnel.findUniqueOrThrow({ where: { id: funnel.id } });
       if (current.stage !== "DISCOVERED") return;
       const latest = await tx.acquisitionStageHistory.findFirst({ where: { funnelId: funnel.id }, orderBy: { sequence: "desc" }, select: { sequence: true } });
       await tx.acquisitionStageHistory.updateMany({ where: { funnelId: funnel.id, exitedAt: null }, data: { exitedAt: now } });
       await tx.acquisitionFunnel.update({ where: { id: funnel.id }, data: { stage: "RESEARCHABLE", stageEnteredAt: now, lastActivityAt: now, responsibleActor: "research_agent", nextReviewAt: new Date(now.getTime() + 7 * 86_400_000), expiresAt: new Date(now.getTime() + 7 * 86_400_000) } });
-      await tx.acquisitionStageHistory.create({ data: { funnelId: funnel.id, sequence: (latest?.sequence ?? 0) + 1, fromStage: "DISCOVERED", toStage: "RESEARCHABLE", actor: "system", reason: "Current source-backed listing, location, price, and contact facts are verified.", evidence: { topics: RESEARCHABLE_TOPICS } } });
+      await tx.acquisitionStageHistory.create({ data: { funnelId: funnel.id, sequence: (latest?.sequence ?? 0) + 1, fromStage: "DISCOVERED", toStage: "RESEARCHABLE", actor: "system", reason: "Current public evidence is sufficient to evaluate this opportunity; unavailable noncritical facts remain follow-up items.", evidence: { verifiedTopics: currentFindings.filter((finding) => finding.status === "VERIFIED").map((finding) => finding.topic) } } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     advanced += 1;
   }
