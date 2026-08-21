@@ -1,6 +1,8 @@
 import "server-only";
+import { z } from "zod";
 
 import { getPrisma } from "@/lib/prisma";
+import { chunkedMap, fetchWithRetry, htmlToText, stableUnique, stableUniqueBy } from "@/lib/research-runtime";
 
 const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -16,14 +18,16 @@ function safePublicUrl(raw: string) {
 
 async function fetchPublicPage(raw: string) {
   const url = safePublicUrl(raw);
-  const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 public-developer-research", Accept: "text/html,application/xhtml+xml" } });
+  const response = await fetchWithRetry(url, { cache: "no-store", redirect: "follow", attempts: 3, timeoutMs: 15_000, headers: { "User-Agent": "DealScoutAI/1.0 public-developer-research", Accept: "text/html,application/xhtml+xml" } });
   if (!response.ok || !(response.headers.get("content-type") || "").includes("text/html")) throw new Error(`Public source returned HTTP ${response.status}.`);
+  if (Number(response.headers.get("content-length") || 0) > 2_000_000) throw new Error("Public source exceeded the 2 MB research limit.");
   const html = (await response.text()).slice(0, 2_000_000);
-  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
-  return { finalUrl: response.url || url.toString(), title: html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim(), phones: [...new Set(text.match(PHONE_PATTERN) || [])], emails: [...new Set(text.match(EMAIL_PATTERN) || [])], projects: structuredProjects(html) };
+  const text = htmlToText(html);
+  return { finalUrl: response.url || url.toString(), title: html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim(), phones: stableUnique(text.match(PHONE_PATTERN) || []), emails: stableUnique(text.match(EMAIL_PATTERN) || []), projects: structuredProjects(html) };
 }
 
 type StructuredProject = { name: string; streetAddress: string; city: string; state: string; zipCode: string; organization: string; phone?: string };
+const structuredProjectSchema = z.object({ "@type": z.literal("HomeAndConstructionBusiness"), name: z.string().trim().min(1), address: z.object({ streetAddress: z.string().trim().min(1), addressLocality: z.string().trim().min(1), addressRegion: z.string().trim().min(2), postalCode: z.string().trim().regex(/^\d{5}$/) }), parentOrganization: z.object({ name: z.string().trim().min(1) }), telephone: z.string().trim().optional() });
 
 function structuredProjects(html: string): StructuredProject[] {
   const projects: StructuredProject[] = [];
@@ -33,24 +37,19 @@ function structuredProjects(html: string): StructuredProject[] {
       const entries = Array.isArray(parsed) ? parsed : [parsed];
       for (const entry of entries) {
         if (!entry || typeof entry !== "object") continue;
-        const item = entry as Record<string, unknown>;
-        if (item["@type"] !== "HomeAndConstructionBusiness") continue;
-        const address = item.address as Record<string, unknown> | undefined;
-        const parent = item.parentOrganization as Record<string, unknown> | undefined;
+        const validation = structuredProjectSchema.safeParse(entry);
+        if (!validation.success) continue;
+        const item = validation.data;
+        const address = item.address;
+        const parent = item.parentOrganization;
         const project = {
-          name: typeof item.name === "string" ? item.name.trim() : "",
-          streetAddress: typeof address?.streetAddress === "string" ? address.streetAddress.trim() : "",
-          city: typeof address?.addressLocality === "string" ? address.addressLocality.trim() : "",
-          state: typeof address?.addressRegion === "string" ? address.addressRegion.trim() : "",
-          zipCode: typeof address?.postalCode === "string" ? address.postalCode.trim() : "",
-          organization: typeof parent?.name === "string" ? parent.name.trim() : "",
-          phone: typeof item.telephone === "string" ? item.telephone.trim() : undefined,
+          name: item.name, streetAddress: address.streetAddress, city: address.addressLocality, state: address.addressRegion, zipCode: address.postalCode, organization: parent.name, phone: item.telephone,
         };
-        if (project.name && project.streetAddress && project.city && project.state && /^\d{5}$/.test(project.zipCode) && project.organization) projects.push(project);
+        projects.push(project);
       }
     } catch { /* Ignore malformed metadata and keep the source unverified. */ }
   }
-  return projects;
+  return stableUniqueBy(projects, (project) => `${project.streetAddress.toLowerCase()}|${project.zipCode}`).slice(0, 100);
 }
 
 function companyMatchesOrganization(companyName: string, organization: string) {
@@ -72,17 +71,36 @@ export async function enqueueDeveloperResearch(developerId: string) {
   return queued;
 }
 
+export async function enqueueDeveloperResearchBatch(developerIds: string[]) {
+  const ids = stableUnique(developerIds).slice(0, 1000);
+  if (!ids.length) return [];
+  const db = getPrisma();
+  return db.$transaction(async (tx) => {
+    const [developers, active] = await Promise.all([
+      tx.developer.findMany({ where: { id: { in: ids }, active: true }, select: { id: true, companyName: true } }),
+      tx.developerResearchRun.findMany({ where: { developerId: { in: ids }, status: { in: ["QUEUED", "RUNNING"] } }, select: { developerId: true } }),
+    ]);
+    const activeIds = new Set(active.map((run) => run.developerId));
+    const queuedDevelopers = developers.filter((developer) => !activeIds.has(developer.id));
+    const runs = await tx.developerResearchRun.createManyAndReturn({ data: queuedDevelopers.map((developer) => ({ developerId: developer.id, status: "QUEUED", researchVersion: DEVELOPER_RESEARCH_VERSION })), select: { id: true, developerId: true } });
+    const names = new Map(queuedDevelopers.map((developer) => [developer.id, developer.companyName]));
+    if (runs.length) await tx.auditLog.createMany({ data: runs.map((run) => ({ type: "research.developer_dossier", summary: `Queued automatic public-source research for ${names.get(run.developerId) ?? "developer"}.`, details: { developerId: run.developerId, runId: run.id, trigger: "automatic_batch" } })) });
+    return runs;
+  });
+}
+
 async function researchDeveloper(developerId: string, runId: string) {
   const db = getPrisma();
   const developer = await db.developer.findUniqueOrThrow({ where: { id: developerId }, include: { projects: true } });
   const run = await db.developerResearchRun.update({ where: { id: runId }, data: { status: "RUNNING", startedAt: new Date(), error: null, researchVersion: DEVELOPER_RESEARCH_VERSION } });
-  const urls = [...new Set([developer.website, developer.contactUrl].filter(Boolean) as string[])];
+  const urls = stableUnique([developer.website, developer.contactUrl].filter(Boolean) as string[]);
   const errors: string[] = [];
   const pages: Awaited<ReturnType<typeof fetchPublicPage>>[] = [];
-  for (const url of urls) {
-    try { pages.push(await fetchPublicPage(url)); }
-    catch (error) { errors.push(`${url}: ${error instanceof Error ? error.message : "source failed"}`); }
-  }
+  const pageResults = await chunkedMap(urls, 2, async (url) => {
+    try { return { page: await fetchPublicPage(url), error: null }; }
+    catch (error) { return { page: null, error: `${url}: ${error instanceof Error ? error.message : "source failed"}` }; }
+  });
+  for (const result of pageResults) { if (result.page) pages.push(result.page); if (result.error) errors.push(result.error); }
   const publicPhone = pages.flatMap((page) => page.phones)[0];
   const publicEmail = pages.flatMap((page) => page.emails)[0];
   const discoveredProjects = pages.flatMap((page) => page.projects.map((project) => ({ ...project, sourceUrl: page.finalUrl }))).filter((project) => companyMatchesOrganization(developer.companyName, project.organization));
@@ -96,11 +114,11 @@ async function researchDeveloper(developerId: string, runId: string) {
   const channels = [developer.phone || publicPhone, developer.email || publicEmail, developer.contactUrl].filter(Boolean).length;
   const qualificationStatus = verifiedProjects > 0 && channels >= 2 && developer.contactName ? "PRIORITY" : verifiedProjects > 0 && channels >= 1 ? "QUALIFIED" : verifiedContact ? "LIMITED_CONTACT" : "RESEARCH_NEEDED";
   await db.$transaction(async (tx) => {
-    for (const project of discoveredProjects) await tx.developerProject.upsert({
+    await Promise.all(discoveredProjects.map((project) => tx.developerProject.upsert({
       where: { developerId_address_zipCode: { developerId, address: project.streetAddress, zipCode: project.zipCode } },
       update: { city: project.city, state: project.state, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 90 },
       create: { developerId, address: project.streetAddress, city: project.city, state: project.state, zipCode: project.zipCode, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 90 },
-    });
+    })));
     await tx.developer.update({ where: { id: developerId }, data: { phone: developer.phone || publicPhone || undefined, email: developer.email || publicEmail || undefined, contactUrl: developer.contactUrl || pages[0]?.finalUrl, contactVerifiedAt: verifiedContact ? new Date() : developer.contactVerifiedAt, lastResearchedAt: new Date(), qualificationStatus } });
     const operationallyReady = verifiedWebPresence && (verifiedContact || verifiedProjects > 0);
     await tx.developerResearchRun.update({ where: { id: run.id }, data: { status: operationallyReady ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked: pages.length, findingsFound, manualNeeded: 3 - findingsFound, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
@@ -128,11 +146,10 @@ export async function runAutomaticDeveloperResearchBatch(limit = 5) {
   const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
   await db.developerResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic developer research run." } });
   const stale = await db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: DEVELOPER_RESEARCH_VERSION } } } }, { lastResearchedAt: null }, { lastResearchedAt: { lt: staleCutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
-  for (const developer of stale) await enqueueDeveloperResearch(developer.id);
+  await enqueueDeveloperResearchBatch(stale.map((developer) => developer.id));
   const queued = await db.developerResearchRun.findMany({ where: { status: "QUEUED", developer: { active: true } }, orderBy: { startedAt: "asc" }, take: safeLimit });
-  const results: Awaited<ReturnType<typeof runQueuedDeveloperResearch>>[] = [];
-  for (let index = 0; index < queued.length; index += 5) results.push(...await Promise.all(queued.slice(index, index + 5).map((run) => runQueuedDeveloperResearch(run.id))));
+  const results = await chunkedMap(queued, 5, (run) => runQueuedDeveloperResearch(run.id));
   return { processed: results.length, completed: results.filter((result) => result.status === "completed").length, failed: results.filter((result) => result.status === "failed").length, results };
 }
 
-export const __developerResearchTestables = { safePublicUrl, structuredProjects, companyMatchesOrganization };
+export const __developerResearchTestables = { safePublicUrl, structuredProjectSchema, structuredProjects, companyMatchesOrganization };

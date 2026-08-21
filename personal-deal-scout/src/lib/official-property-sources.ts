@@ -1,4 +1,6 @@
 import "server-only";
+import { z } from "zod";
+import { fetchValidatedJson, normalizeText } from "@/lib/research-runtime";
 
 export type OfficialPropertyFinding = {
   topic: string;
@@ -21,7 +23,7 @@ type PropertyIdentity = {
   longitude: number;
 };
 
-type ArcGisResponse = { features?: Array<{ attributes?: Record<string, unknown> }>; error?: { message?: string } };
+const arcGisResponseSchema = z.object({ features: z.array(z.object({ attributes: z.record(z.string(), z.unknown()).optional() })).optional(), error: z.object({ message: z.string().optional() }).optional() });
 
 const BEXAR_PARCELS = "https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0/query";
 const SAN_ANTONIO_ADDRESSES = "https://qagis.sanantonio.gov/arcgis/rest/services/311/311_OneView/MapServer/0/query";
@@ -45,7 +47,7 @@ function applicableAdapters(property: Pick<PropertyIdentity, "state" | "county" 
 }
 
 function text(value: unknown) {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : value === null || value === undefined ? "" : String(value);
+  return normalizeText(value);
 }
 
 function number(value: unknown) {
@@ -73,9 +75,7 @@ function queryUrl(base: string, params: Record<string, string>) {
 }
 
 async function arcGis(url: URL) {
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 official-public-record-research" } });
-  if (!response.ok) throw new Error(`Official source returned ${response.status}.`);
-  const payload = await response.json() as ArcGisResponse;
+  const payload = await fetchValidatedJson(url, arcGisResponseSchema, { cache: "no-store", attempts: 3, timeoutMs: 15_000, headers: { "User-Agent": "DealScoutAI/1.0 official-public-record-research" } });
   if (payload.error) throw new Error(payload.error.message || "Official ArcGIS query failed.");
   return payload.features?.[0]?.attributes;
 }
@@ -165,4 +165,4 @@ export async function researchOfficialPropertySources(property: PropertyIdentity
   return { findings, errors, sourcesChecked };
 }
 
-export const __officialPropertySourceTestables = { addressSearch, applicableAdapters, bexarParcelFindings, sanAntonioAddressFindings, sanAntonioParcelFindings, femaFloodFinding };
+export const __officialPropertySourceTestables = { addressSearch, applicableAdapters, arcGisResponseSchema, bexarParcelFindings, sanAntonioAddressFindings, sanAntonioParcelFindings, femaFloodFinding };
