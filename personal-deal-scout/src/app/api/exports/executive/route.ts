@@ -3,10 +3,11 @@ import { ownerIsAuthenticated } from "@/lib/auth";
 import { serializeOperationalCsv } from "@/lib/operational-csv";
 import { readOperationalReport, type OperationalReportFilters } from "@/lib/operational-report-service";
 import { getPrisma } from "@/lib/prisma";
+import { parseOperationalReportFilters } from "@/lib/operational-report-presentation";
 
 export async function GET(request: NextRequest) {
   if (!(await ownerIsAuthenticated())) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const filters: OperationalReportFilters = Object.fromEntries([...new URL(request.url).searchParams.entries()].filter(([, value]) => value));
+  const filters: OperationalReportFilters = parseOperationalReportFilters(new URL(request.url).searchParams);
   const report = await readOperationalReport(filters);
   const result = serializeOperationalCsv(report.metrics, filters, report.generatedAt);
   await getPrisma().auditLog.create({ data: { type: "executive.kpi_exported", summary: `Exported ${result.rowCount} operational KPI rows.`, details: { sha256: result.sha256, rowCount: result.rowCount, filters, generatedAt: report.generatedAt } } });

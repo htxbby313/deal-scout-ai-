@@ -41,8 +41,8 @@ type WorkspaceSection =
 export function WorkspaceShell({ active = "properties", children }: { active?: WorkspaceSection; children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950 lg:grid lg:grid-cols-[240px_1fr]">
-      <aside className="border-b border-slate-200 bg-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between gap-3 px-5 py-5 lg:block lg:px-6">
+      <aside className="border-b border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden lg:border-b-0 lg:border-r">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-5 lg:block lg:px-6">
           <Link className="flex items-center gap-3" href="/owner-queue">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-700 text-sm font-bold text-white">DS</span>
             <span><span className="block text-lg font-bold">Deal Scout</span><span className="block text-xs text-slate-500">Acquisitions workspace</span></span>
@@ -50,7 +50,7 @@ export function WorkspaceShell({ active = "properties", children }: { active?: W
           <span className="mt-4 hidden rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 lg:inline-block">Research active</span>
         </div>
 
-        <nav aria-label="Primary" className="flex gap-2 overflow-x-auto px-4 pb-4 lg:block lg:space-y-2 lg:px-4">
+        <nav aria-label="Primary" className="flex gap-2 overflow-x-auto px-4 pb-4 lg:min-h-0 lg:flex-1 lg:block lg:space-y-2 lg:overflow-x-hidden lg:overflow-y-auto lg:px-4">
           {primaryNavigation.map((item) => {
             const selected = (item.active as readonly string[]).includes(active);
             return (
@@ -62,11 +62,11 @@ export function WorkspaceShell({ active = "properties", children }: { active?: W
           })}
         </nav>
 
-        <details className="mx-4 mb-5 rounded-xl border border-slate-200 bg-white lg:absolute lg:inset-x-0 lg:bottom-4 lg:mb-0">
+        <details className="mx-4 mb-[max(1.25rem,env(safe-area-inset-bottom))] shrink-0 rounded-xl border border-slate-200 bg-white">
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 marker:hidden">
             <span className="flex items-center justify-between gap-3"><span><span className="mr-2 inline-grid h-7 w-7 place-items-center rounded-full bg-slate-900 text-xs text-white">O</span>Owner</span><span aria-hidden="true" className="text-slate-400">⌄</span></span>
           </summary>
-          <div className="max-h-80 overflow-y-auto border-t border-slate-100 p-2">
+          <div className="max-h-[min(20rem,calc(100dvh-10rem-env(safe-area-inset-bottom)))] overflow-x-hidden overflow-y-auto border-t border-slate-100 p-2">
             {settingsNavigation.map((group) => <div className="not-first:mt-2" key={group.label}><p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{group.label}</p>{group.items.map((item) => <Link className="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-950" href={item.href} key={item.href}>{item.label}</Link>)}</div>)}
             <div className="mt-2 border-t border-slate-100 px-2 pt-3"><ThemeColorPicker /></div>
           </div>
