@@ -93,6 +93,12 @@ export default function DevelopmentRadarMap({ signals, listings, rankCategory }:
           info.open({ map, anchor: marker });
         }));
       });
+      const updateListingVisibility = () => {
+        const visible = (map.getZoom() ?? 4) >= 6;
+        markers.forEach((marker) => marker.setVisible(visible));
+      };
+      updateListingVisibility();
+      listeners.push(map.addListener("zoom_changed", updateListingVisibility));
       setMapError("");
     }).catch((error: unknown) => { if (!disposed) setMapError(error instanceof Error ? error.message : "The development map is unavailable."); });
 
@@ -102,6 +108,6 @@ export default function DevelopmentRadarMap({ signals, listings, rankCategory }:
   return <section className="mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm">
     <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><h2 className="text-xl font-bold">United States development and listing map</h2><p className="mt-1 text-sm text-slate-500">Official Census county and state boundaries correspond to the ranked radar. Exact listing markers show saved address, county, and neighborhood data.</p></div></div>
     {apiKey ? <div aria-label="Google map of development signals and listings" className="h-[560px] w-full" ref={mapNode} /> : <div className="flex h-[560px] items-center justify-center bg-slate-100 p-8 text-center text-sm text-slate-600">Google Maps is not configured for this deployment.</div>}
-    <div className="flex flex-wrap gap-3 border-t p-4 text-xs"><span className="font-bold">{signals.length} ranked counties</span><span>·</span><span className="font-bold">{stateRanks.size} highlighted states</span><span>·</span><span className="font-bold">{mappedListings.length} exact listings</span>{mapError ? <span className="font-semibold text-red-700">· {mapError}</span> : null}</div>
+    <div className="flex flex-wrap gap-3 border-t p-4 text-xs"><span className="font-bold">{signals.length} ranked counties</span><span>·</span><span className="font-bold">{stateRanks.size} highlighted states</span><span>·</span><span className="font-bold">{mappedListings.length} exact listings appear as you zoom in</span>{mapError ? <span className="font-semibold text-red-700">· {mapError}</span> : null}</div>
   </section>;
 }

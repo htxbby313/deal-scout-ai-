@@ -12,18 +12,24 @@ const primaryNavigation = [
 ] as const;
 
 const settingsNavigation = [
-  { href: "/agents", label: "My team" },
-  { href: "/transactions", label: "Deal approvals" },
-  { href: "/seller-crm", label: "Seller conversations" },
-  { href: "/disposition", label: "Buyer matching" },
-  { href: "/campaigns", label: "Outreach plans" },
-  { href: "/contracts", label: "Contract templates" },
-  { href: "/buyer-evidence", label: "Buyer verification" },
-  { href: "/profitability", label: "Money details" },
-  { href: "/profit-priority", label: "Ranking preferences" },
-  { href: "/operations", label: "Research status" },
-  { href: "/county-coverage", label: "County data sources" },
-  { href: "/governance", label: "Privacy & records" },
+  { label: "Deal workflow", items: [
+    { href: "/transactions", label: "Approvals & documents" },
+    { href: "/seller-crm", label: "Seller conversations" },
+    { href: "/disposition", label: "Buyer matching" },
+    { href: "/campaigns", label: "Outreach plans" },
+    { href: "/contracts", label: "Contract templates" },
+    { href: "/buyer-evidence", label: "Buyer verification" },
+  ] },
+  { label: "Research & money", items: [
+    { href: "/operations", label: "Research activity" },
+    { href: "/county-coverage", label: "County data sources" },
+    { href: "/profitability", label: "Financial details" },
+    { href: "/profit-priority", label: "Ranking preferences" },
+  ] },
+  { label: "Administration", items: [
+    { href: "/agents", label: "Agent team" },
+    { href: "/governance", label: "Privacy & records" },
+  ] },
 ] as const;
 
 type WorkspaceSection =
@@ -60,9 +66,8 @@ export function WorkspaceShell({ active = "properties", children }: { active?: W
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 marker:hidden">
             <span className="flex items-center justify-between gap-3"><span><span className="mr-2 inline-grid h-7 w-7 place-items-center rounded-full bg-slate-900 text-xs text-white">O</span>Owner</span><span aria-hidden="true" className="text-slate-400">⌄</span></span>
           </summary>
-          <div className="max-h-72 overflow-y-auto border-t border-slate-100 p-2">
-            <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Settings & tools</p>
-            {settingsNavigation.map((item) => <Link className="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-950" href={item.href} key={item.href}>{item.label}</Link>)}
+          <div className="max-h-80 overflow-y-auto border-t border-slate-100 p-2">
+            {settingsNavigation.map((group) => <div className="not-first:mt-2" key={group.label}><p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{group.label}</p>{group.items.map((item) => <Link className="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-950" href={item.href} key={item.href}>{item.label}</Link>)}</div>)}
             <div className="mt-2 border-t border-slate-100 px-2 pt-3"><ThemeColorPicker /></div>
           </div>
         </details>
