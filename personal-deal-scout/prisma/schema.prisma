@@ -103,6 +103,31 @@ enum AgentEventType {
   TASK_CANCELLED
 }
 
+enum ExternalProviderStatus {
+  DISABLED
+  MOCK_ONLY
+  READY
+  ACTIVE
+  PAUSED
+  CIRCUIT_OPEN
+}
+
+enum MarketDatasetImportStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  QUARANTINED
+  FAILED
+}
+
+enum DiscoveryReferenceStatus {
+  SUBMITTED
+  MATCHED
+  CREATED_PROPERTY
+  NEEDS_REVIEW
+  REJECTED
+}
+
 model Property {
   id             String   @id @default(cuid())
   address        String
@@ -147,6 +172,7 @@ model Property {
   countyRegistry CountySourceRegistry? @relation(fields: [countyRegistryId], references: [id], onDelete: SetNull)
   countyObservations CountyFactObservation[]
   countyEntityMatches CountyEntityMatch[]
+  discoveryReferences PropertyDiscoveryReference[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
@@ -428,6 +454,145 @@ model ProviderSetting {
   enabled    Boolean  @default(false)
   configured Boolean  @default(false)
   updatedAt  DateTime @updatedAt
+}
+
+model ExternalProvider {
+  id                  String                  @id @default(cuid())
+  key                 String                  @unique
+  displayName         String
+  kind                String
+  status              ExternalProviderStatus @default(DISABLED)
+  liveRequestsEnabled Boolean                 @default(false)
+  policy              Json
+  timeoutMs           Int                     @default(15000)
+  maxAttempts         Int                     @default(3)
+  quotaLimit          Int?
+  quotaWindow         String?
+  nextEligibleAt      DateTime?
+  circuitOpenUntil    DateTime?
+  failureCount        Int                     @default(0)
+  activatedAt         DateTime?
+  activatedBy         String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  datasets            MarketDatasetDefinition[]
+  checkpoints         ProviderJobCheckpoint[]
+
+  @@index([status, nextEligibleAt])
+  @@index([circuitOpenUntil])
+}
+
+model ProviderJobCheckpoint {
+  id             String           @id @default(cuid())
+  providerId     String
+  workType       String
+  cursor         String?
+  state          Json?
+  nextEligibleAt DateTime?
+  lastStartedAt  DateTime?
+  lastFinishedAt DateTime?
+  lastError      String?
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  provider       ExternalProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
+  @@unique([providerId, workType])
+  @@index([nextEligibleAt])
+}
+
+model MarketDatasetDefinition {
+  id                   String           @id @default(cuid())
+  providerId           String
+  key                  String           @unique
+  name                 String
+  definition           String
+  canonicalCatalogUrl  String
+  directUrl            String
+  geography            String
+  propertyType         String
+  frequency            String
+  identifierColumns    String[]
+  dateColumnPattern    String
+  expectedContentType  String
+  expectedMaximumBytes Int
+  attributionNote      String
+  fixtureHash          String
+  reviewedBy           String
+  reviewedAt           DateTime
+  enabled              Boolean          @default(false)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  provider             ExternalProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  imports              MarketDatasetImport[]
+  observations         MarketObservation[]
+
+  @@index([providerId, enabled])
+}
+
+model MarketDatasetImport {
+  id                String                    @id @default(cuid())
+  definitionId      String
+  status            MarketDatasetImportStatus @default(QUEUED)
+  contentHash       String?
+  sourceUrl         String
+  sourceEffectiveAt DateTime?
+  retrievedAt       DateTime?
+  rowCount          Int                       @default(0)
+  schemaSnapshot    Json?
+  errorCode         String?
+  errorMessage      String?
+  nextEligibleAt    DateTime?
+  attemptCount      Int                       @default(0)
+  createdAt         DateTime                  @default(now())
+  finishedAt        DateTime?
+  definition        MarketDatasetDefinition   @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  observations      MarketObservation[]
+
+  @@unique([definitionId, contentHash])
+  @@index([status, nextEligibleAt])
+  @@index([definitionId, createdAt])
+}
+
+model MarketObservation {
+  id             String                  @id @default(cuid())
+  definitionId   String
+  importId       String
+  geographyType  String
+  regionId       String
+  regionName     String
+  period         DateTime
+  value          Decimal
+  unit           String
+  sourceRevision String
+  createdAt      DateTime                @default(now())
+  definition     MarketDatasetDefinition @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  import         MarketDatasetImport     @relation(fields: [importId], references: [id], onDelete: Restrict)
+
+  @@unique([importId, regionId, period])
+  @@index([definitionId, regionId, period])
+}
+
+model PropertyDiscoveryReference {
+  id                   String                   @id @default(cuid())
+  propertyId           String?
+  providerKey          String
+  originalUrl          String
+  normalizedUrl        String                   @unique
+  status               DiscoveryReferenceStatus @default(SUBMITTED)
+  submittedBy          String
+  submittedAt          DateTime                 @default(now())
+  observedAddress      String?
+  observedAskingPrice  Decimal?
+  observedAvailability String?
+  observationNotes     String?
+  verificationStatus   String                   @default("USER_OBSERVED_UNVERIFIED")
+  lastComparedAt       DateTime?
+  conflictSummary      Json?
+  property             Property?                @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, submittedAt])
+  @@index([providerKey, status, submittedAt])
 }
 
 model SystemSetting {
