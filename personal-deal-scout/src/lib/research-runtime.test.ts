@@ -13,12 +13,21 @@ describe("research runtime", () => {
   });
 
   it("retries transient HTTP failures with bounded exponential delays", async () => {
-    const request = vi.fn().mockResolvedValueOnce(new Response("busy", { status: 503 })).mockResolvedValue(new Response("ok", { status: 200 }));
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const retryable = new Response("busy", { status: 503 });
+    Object.defineProperty(retryable, "body", { value: { cancel } });
+    const request = vi.fn().mockResolvedValueOnce(retryable).mockResolvedValue(new Response("ok", { status: 200 }));
     const delays: number[] = [];
     vi.stubGlobal("fetch", request);
     expect((await fetchWithRetry("https://example.gov", { minimumHostIntervalMs: 0, random: () => 0.5, sleep: async (delay) => { delays.push(delay); } })).status).toBe(200);
     expect(request).toHaveBeenCalledTimes(2);
+    expect(cancel).toHaveBeenCalledOnce();
     expect(delays).toEqual([250]);
+  });
+
+  it("stops retries at the shared invocation deadline", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("busy", { status: 503 })));
+    await expect(fetchWithRetry("https://example.gov", { deadlineAt: Date.now() + 1, minimumHostIntervalMs: 0, sleep: async () => undefined })).rejects.toThrow("time budget");
   });
 
   it("validates external JSON before returning it", async () => {

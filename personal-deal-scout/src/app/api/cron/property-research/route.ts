@@ -8,13 +8,14 @@ import { runCountyAccessibilityChecks } from "@/lib/county-accessibility-service
 import { synchronizeCampaignCountyCoverage } from "@/lib/campaign-service";
 
 export const maxDuration = 300;
+const RESEARCH_BUDGET_MS = 240_000;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const recovery = await recoverAutomaticResearchWork();
-  const research = await runAutomaticResearchCycle();
+  const research = await runAutomaticResearchCycle({ deadlineAt: Date.now() + RESEARCH_BUDGET_MS });
   const funnels = await synchronizeAcquisitionFunnels();
   const funnelExpirations = await runFunnelExpirationCycle();
   const counties = await synchronizeCountyCoverageTargets();

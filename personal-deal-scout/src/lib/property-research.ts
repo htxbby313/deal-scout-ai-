@@ -166,20 +166,34 @@ function pageMatchesProperty(html: string, property: { address: string; city: st
   const streetNumber = address.find((word) => /^\d+[a-z]?$/.test(word));
   const streetWords = address.filter((word) => word.length > 2 && !/^(street|st|road|rd|avenue|ave|drive|dr|lane|ln|court|ct|highway|hwy)$/.test(word));
   if (!streetNumber) return false;
-  const page = normalizedWords(htmlToText(html)).join(" ");
+  const structuredAddressText: string[] = [];
+  for (const script of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const visit = (value: unknown, key = ""): void => {
+        if (typeof value === "string" && ["address", "streetaddress", "addresslocality", "addressregion", "postalcode"].includes(key.toLowerCase())) structuredAddressText.push(value);
+        else if (Array.isArray(value)) for (const item of value) visit(item, key);
+        else if (value && typeof value === "object") for (const [childKey, child] of Object.entries(value)) visit(child, childKey);
+      };
+      visit(JSON.parse(script[1]));
+    } catch { /* Malformed structured data cannot support an address match. */ }
+  }
+  const page = normalizedWords(`${htmlToText(html)} ${structuredAddressText.join(" ")}`).join(" ");
   const locationMatches = [property.city, property.zipCode].some((value) => value && page.includes(normalizedWords(value).join(" ")));
   if (!locationMatches) return false;
   return Boolean(page.includes(streetNumber) && streetWords.some((word) => page.includes(word)));
 }
 
 export async function enqueuePropertyResearchBatch(propertyIds: string[]) {
-  const ids = stableUnique(propertyIds).slice(0, 1000);
+  const ids = stableUnique(propertyIds);
   if (!ids.length) return [];
   const db = getPrisma();
-  return db.$transaction(async (tx) => {
+  const allRuns: Array<{ id: string; propertyId: string }> = [];
+  for (let offset = 0; offset < ids.length; offset += 1000) {
+    const chunk = ids.slice(offset, offset + 1000);
+    const runs = await db.$transaction(async (tx) => {
     const [properties, active] = await Promise.all([
-      tx.property.findMany({ where: { id: { in: ids }, opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true } }),
-      tx.propertyResearchRun.findMany({ where: { propertyId: { in: ids }, status: { in: ["QUEUED", "RUNNING"] } }, select: { propertyId: true } }),
+      tx.property.findMany({ where: { id: { in: chunk }, opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true } }),
+      tx.propertyResearchRun.findMany({ where: { propertyId: { in: chunk }, status: { in: ["QUEUED", "RUNNING"] } }, select: { propertyId: true } }),
     ]);
     const activeIds = new Set(active.map((run) => run.propertyId));
     const queuedProperties = properties.filter((property) => !activeIds.has(property.id));
@@ -188,6 +202,9 @@ export async function enqueuePropertyResearchBatch(propertyIds: string[]) {
     if (runs.length) await tx.auditLog.createMany({ data: runs.map((run) => ({ type: "research.property_dossier", summary: `Queued automatic public-source research for ${addresses.get(run.propertyId) ?? "property"}.`, details: { propertyId: run.propertyId, runId: run.id, trigger: "automatic_batch" } })) });
     return runs;
   });
+    allRuns.push(...runs);
+  }
+  return allRuns;
 }
 
 const censusGeocodeSchema = z.object({ result: z.object({ addressMatches: z.array(z.object({ matchedAddress: z.string().optional(), coordinates: z.object({ x: z.number(), y: z.number() }), geographies: z.object({ Counties: z.array(z.object({ NAME: z.string().optional() })).optional() }).optional() })).optional() }).optional() });

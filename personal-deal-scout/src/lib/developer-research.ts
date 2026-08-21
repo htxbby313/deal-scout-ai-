@@ -72,13 +72,16 @@ export async function enqueueDeveloperResearch(developerId: string) {
 }
 
 export async function enqueueDeveloperResearchBatch(developerIds: string[]) {
-  const ids = stableUnique(developerIds).slice(0, 1000);
+  const ids = stableUnique(developerIds);
   if (!ids.length) return [];
   const db = getPrisma();
-  return db.$transaction(async (tx) => {
+  const allRuns: Array<{ id: string; developerId: string }> = [];
+  for (let offset = 0; offset < ids.length; offset += 1000) {
+    const chunk = ids.slice(offset, offset + 1000);
+    const runs = await db.$transaction(async (tx) => {
     const [developers, active] = await Promise.all([
-      tx.developer.findMany({ where: { id: { in: ids }, active: true }, select: { id: true, companyName: true } }),
-      tx.developerResearchRun.findMany({ where: { developerId: { in: ids }, status: { in: ["QUEUED", "RUNNING"] } }, select: { developerId: true } }),
+      tx.developer.findMany({ where: { id: { in: chunk }, active: true }, select: { id: true, companyName: true } }),
+      tx.developerResearchRun.findMany({ where: { developerId: { in: chunk }, status: { in: ["QUEUED", "RUNNING"] } }, select: { developerId: true } }),
     ]);
     const activeIds = new Set(active.map((run) => run.developerId));
     const queuedDevelopers = developers.filter((developer) => !activeIds.has(developer.id));
@@ -87,6 +90,9 @@ export async function enqueueDeveloperResearchBatch(developerIds: string[]) {
     if (runs.length) await tx.auditLog.createMany({ data: runs.map((run) => ({ type: "research.developer_dossier", summary: `Queued automatic public-source research for ${names.get(run.developerId) ?? "developer"}.`, details: { developerId: run.developerId, runId: run.id, trigger: "automatic_batch" } })) });
     return runs;
   });
+    allRuns.push(...runs);
+  }
+  return allRuns;
 }
 
 async function researchDeveloper(developerId: string, runId: string) {

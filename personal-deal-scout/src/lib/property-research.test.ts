@@ -24,6 +24,12 @@ describe("property research source parsing", () => {
     expect(__propertyResearchTestables.pageMatchesProperty("<title>1400 Oak Avenue, Biloxi MS 39530</title>", property)).toBe(false);
   });
 
+  it("preserves JSON-LD addresses when matching a listing", () => {
+    const property = { address: "1200 Main Street", city: "Jackson", state: "MS", zipCode: "39201" };
+    const html = `<script type="application/ld+json">{"@type":"Residence","address":{"streetAddress":"1200 Main Street","addressLocality":"Jackson","addressRegion":"MS","postalCode":"39201"}}</script>`;
+    expect(__propertyResearchTestables.pageMatchesProperty(html, property)).toBe(true);
+  });
+
   it("treats sufficient evidence as usable without requiring every research topic", () => {
     const verified = (topic: string) => ({ topic, status: "VERIFIED" as const });
     expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("PARCEL"), verified("TAX")])).toBe(true);

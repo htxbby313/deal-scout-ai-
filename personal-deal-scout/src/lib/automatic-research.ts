@@ -5,6 +5,7 @@ import { DEVELOPER_RESEARCH_VERSION, enqueueDeveloperResearchBatch, runAutomatic
 import { enqueuePropertyResearchBatch, PROPERTY_RESEARCH_VERSION, runAutomaticPropertyResearchBatch } from "@/lib/property-research";
 import { runCensusPermitResearch } from "@/lib/government-research";
 import { importHudReoCounty, HUD_REO_SOURCE } from "@/lib/hud-reo";
+import { runWithResearchDeadline } from "@/lib/research-runtime";
 
 const REFRESH_DAYS = 7;
 
@@ -23,11 +24,14 @@ export async function ensureAutomaticResearchBacklog(limit = 250) {
   return { propertiesQueued: propertyRuns.length, developersQueued: developerRuns.length };
 }
 
-export async function runAutomaticResearchCycle() {
-  const government = await runAutomaticGovernmentResearch();
-  const queued = await ensureAutomaticResearchBacklog();
-  const [properties, developers] = await Promise.all([runAutomaticPropertyResearchBatch(25), runAutomaticDeveloperResearchBatch(25)]);
-  return { queued, properties, developers, government };
+export async function runAutomaticResearchCycle(options: { deadlineAt?: number } = {}) {
+  const operation = async () => {
+    const government = await runAutomaticGovernmentResearch();
+    const queued = await ensureAutomaticResearchBacklog();
+    const [properties, developers] = await Promise.all([runAutomaticPropertyResearchBatch(25), runAutomaticDeveloperResearchBatch(25)]);
+    return { queued, properties, developers, government };
+  };
+  return options.deadlineAt ? runWithResearchDeadline(options.deadlineAt, operation) : operation();
 }
 
 async function runAutomaticGovernmentResearch() {
