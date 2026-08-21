@@ -150,6 +150,7 @@ model Property {
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
+  @@index([opportunityStatus, updatedAt])
   @@index([marketFips])
   @@index([countyRegistryId])
 }
@@ -169,6 +170,8 @@ model PropertyResearchRun {
 
   @@index([propertyId, startedAt])
   @@index([propertyId, researchVersion])
+  @@index([propertyId, status])
+  @@index([status, startedAt])
 }
 
 model PropertyResearchFinding {
@@ -226,6 +229,7 @@ model Lead {
   transactions           DealTransaction[]
 
   @@unique([propertyId])
+  @@index([status, priority, updatedAt])
 }
 
 model Task {
@@ -277,6 +281,7 @@ model Developer {
   buyerReliabilityScores BuyerReliabilityScoreHistory[]
 
   @@index([qualificationStatus])
+  @@index([active, updatedAt])
 }
 
 enum DealTransactionStatus {
@@ -341,6 +346,7 @@ model DeveloperResearchRun {
 
   @@index([developerId, startedAt])
   @@index([developerId, researchVersion])
+  @@index([developerId, status])
   @@index([status, startedAt])
 }
 
@@ -451,6 +457,7 @@ model GovernmentResearchRun {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
+  @@index([source, period, status, finishedAt])
 }
 
 model MarketSignal {

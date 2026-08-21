@@ -2,54 +2,29 @@ import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
+function boundedInteger(raw: string | undefined, fallback: number, minimum: number, maximum: number) {
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
+}
+
+export function pooledDatabaseUrl(raw: string | undefined, environment = process.env.NODE_ENV) {
+  if (!raw || !/^postgres(?:ql)?:\/\//i.test(raw)) return raw;
+  const url = new URL(raw);
+  if (!url.searchParams.has("connection_limit")) url.searchParams.set("connection_limit", String(boundedInteger(process.env.DATABASE_POOL_MAX, environment === "production" ? 5 : 3, 1, 20)));
+  if (!url.searchParams.has("pool_timeout")) url.searchParams.set("pool_timeout", String(boundedInteger(process.env.DATABASE_POOL_TIMEOUT_SECONDS, 10, 1, 60)));
+  if (!url.searchParams.has("connect_timeout")) url.searchParams.set("connect_timeout", String(boundedInteger(process.env.DATABASE_CONNECT_TIMEOUT_SECONDS, 10, 1, 60)));
+  return url.toString();
+}
+
 export function getPrisma() {
   if (!globalForPrisma.prisma) {
     globalForPrisma.prisma = new PrismaClient({
+      datasourceUrl: pooledDatabaseUrl(process.env.DATABASE_URL),
       log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-      // Connection pool configuration
-      errorFormat: "pretty",
+      errorFormat: process.env.NODE_ENV === "development" ? "pretty" : "minimal",
     });
-
-    // Connection pool settings via environment or defaults
-    // For production PostgreSQL connections:
-    // DATABASE_POOL_MIN (default: 2) - minimum connections to maintain
-    // DATABASE_POOL_MAX (default: 10) - maximum connections to create
-    // DATABASE_IDLE_TIMEOUT (default: 30000ms) - idle connection timeout
   }
   return globalForPrisma.prisma;
 }
 
-/**
- * Helper for batched upsert operations to avoid N+1 queries.
- * Use for bulk updates where each item has similar logic.
- */
-export async function batchUpsert<T extends { id?: string }>(
-  tx: any,
-  model: string,
-  items: T[],
-  whereKey: string,
-  options?: { chunkSize?: number; logProgress?: boolean }
-): Promise<T[]> {
-  const chunkSize = options?.chunkSize ?? 50;
-  const results: T[] = [];
-
-  for (let i = 0; i < items.length; i += chunkSize) {
-    const chunk = items.slice(i, i + chunkSize);
-    if (options?.logProgress) {
-      console.log(`[batchUpsert] Processing ${model}: ${i + 1}-${Math.min(i + chunkSize, items.length)} of ${items.length}`);
-    }
-
-    const chunkResults = await Promise.all(
-      chunk.map((item) =>
-        tx[model].upsert({
-          where: { [whereKey]: item[whereKey as keyof T] },
-          update: item,
-          create: item,
-        })
-      )
-    );
-    results.push(...chunkResults);
-  }
-
-  return results;
-}
+export const __prismaTestables = { boundedInteger };

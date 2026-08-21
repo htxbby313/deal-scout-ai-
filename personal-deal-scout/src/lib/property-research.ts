@@ -1,9 +1,11 @@
 import "server-only";
 
 import pLimit from "p-limit";
+import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { researchOfficialPropertySources } from "@/lib/official-property-sources";
 import { HUD_REO_SOURCE } from "@/lib/hud-reo";
+import { fetchValidatedJson, fetchWithRetry, htmlToText, stableUnique } from "@/lib/research-runtime";
 
 export const PROPERTY_RESEARCH_VERSION = 3;
 
@@ -73,7 +75,7 @@ function safePublicUrl(raw: string) {
 
 async function fetchHtml(raw: string) {
   const url = safePublicUrl(raw);
-  const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 source-backed-property-research", Accept: "text/html" } });
+  const response = await fetchWithRetry(url, { cache: "no-store", redirect: "follow", attempts: 3, timeoutMs: 15_000, headers: { "User-Agent": "DealScoutAI/1.0 source-backed-property-research", Accept: "text/html" } });
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok || !contentType.includes("text/html")) throw new Error(`Source returned ${response.status || "an unsupported response"}.`);
   const length = Number(response.headers.get("content-length") || 0);
@@ -94,9 +96,7 @@ function meta(html: string, key: string) {
 
 function imageUrls(html: string, baseUrl: string) {
   const candidates = [meta(html, "og:image"), meta(html, "og:image:url"), meta(html, "twitter:image")].filter(Boolean) as string[];
-  // FIX #7: Slice before creating Set to avoid processing unnecessary URLs
-  return candidates
-    .slice(0, 12)
+  return stableUnique(candidates
     .map((value) => {
       try {
         return new URL(value, baseUrl).toString();
@@ -104,7 +104,7 @@ function imageUrls(html: string, baseUrl: string) {
         return "";
       }
     })
-    .filter((value) => value.startsWith("https://"));
+    .filter((value) => value.startsWith("https://"))).slice(0, 12);
 }
 
 // FIX #4: Optimize image extraction with single pass, early termination
@@ -132,7 +132,7 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
       }
     }
   }
-  if (matches.length >= MAX_IMAGES) return [...new Set(matches)].slice(0, MAX_IMAGES);
+  if (matches.length >= MAX_IMAGES) return stableUnique(matches).slice(0, MAX_IMAGES);
 
   // Extract from JSON-LD if needed
   const jsonImages = [...html.matchAll(/["'](?:image|contentUrl)["']\s*:\s*["'](https:\/\/[^"']+)["']/gi)].map((match) => match[1]);
@@ -145,13 +145,13 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
     }
   }
 
-  return [...new Set(matches)].slice(0, MAX_IMAGES);
+  return stableUnique(matches).slice(0, MAX_IMAGES);
 }
 
 function phoneNumbers(html: string) {
-  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
+  const text = htmlToText(html);
   const matches = text.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g) || [];
-  return [...new Set(matches.map((phone) => phone.trim()))];
+  return stableUnique(matches.map((phone) => phone.trim()));
 }
 
 function normalizedWords(value: string) {
@@ -159,26 +159,41 @@ function normalizedWords(value: string) {
 }
 
 function pageMatchesProperty(html: string, property: { address: string; city: string; state: string; zipCode: string }) {
-  // FIX #8: Only normalize address and location, not entire 2MB HTML
   const address = normalizedWords(property.address);
   const streetNumber = address.find((word) => /^\d+[a-z]?$/.test(word));
   const streetWords = address.filter((word) => word.length > 2 && !/^(street|st|road|rd|avenue|ave|drive|dr|lane|ln|court|ct|highway|hwy)$/.test(word));
-  const locationMatches = [property.city, property.zipCode].some((value) => value && html.toLowerCase().includes(normalizedWords(value).join(" ")));
-  
-  // Quick check: if street number not found, property doesn't match
-  if (!streetNumber || !locationMatches) return false;
-  
-  // Only normalize relevant portion of HTML if initial checks pass
-  const page = normalizedWords(html).join(" ");
+  if (!streetNumber) return false;
+  const page = normalizedWords(htmlToText(html)).join(" ");
+  const locationMatches = [property.city, property.zipCode].some((value) => value && page.includes(normalizedWords(value).join(" ")));
+  if (!locationMatches) return false;
   return Boolean(page.includes(streetNumber) && streetWords.some((word) => page.includes(word)));
 }
+
+export async function enqueuePropertyResearchBatch(propertyIds: string[]) {
+  const ids = stableUnique(propertyIds).slice(0, 1000);
+  if (!ids.length) return [];
+  const db = getPrisma();
+  return db.$transaction(async (tx) => {
+    const [properties, active] = await Promise.all([
+      tx.property.findMany({ where: { id: { in: ids }, opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true } }),
+      tx.propertyResearchRun.findMany({ where: { propertyId: { in: ids }, status: { in: ["QUEUED", "RUNNING"] } }, select: { propertyId: true } }),
+    ]);
+    const activeIds = new Set(active.map((run) => run.propertyId));
+    const queuedProperties = properties.filter((property) => !activeIds.has(property.id));
+    const runs = await tx.propertyResearchRun.createManyAndReturn({ data: queuedProperties.map((property) => ({ propertyId: property.id, status: "QUEUED", researchVersion: PROPERTY_RESEARCH_VERSION })), select: { id: true, propertyId: true } });
+    const addresses = new Map(queuedProperties.map((property) => [property.id, property.address]));
+    if (runs.length) await tx.auditLog.createMany({ data: runs.map((run) => ({ type: "research.property_dossier", summary: `Queued automatic public-source research for ${addresses.get(run.propertyId) ?? "property"}.`, details: { propertyId: run.propertyId, runId: run.id, trigger: "automatic_batch" } })) });
+    return runs;
+  });
+}
+
+const censusGeocodeSchema = z.object({ result: z.object({ addressMatches: z.array(z.object({ matchedAddress: z.string().optional(), coordinates: z.object({ x: z.number(), y: z.number() }), geographies: z.object({ Counties: z.array(z.object({ NAME: z.string().optional() })).optional() }).optional() })).optional() }).optional() });
+const openStreetMapSchema = z.array(z.object({ lat: z.string(), lon: z.string(), display_name: z.string().optional(), address: z.object({ county: z.string().optional(), neighbourhood: z.string().optional(), suburb: z.string().optional() }).optional() })).max(1);
 
 async function censusGeocode(property: { address: string; city: string; state: string; zipCode: string }) {
   const endpoint = new URL("https://geocoding.geo.census.gov/geocoder/geographies/address");
   endpoint.search = new URLSearchParams({ street: property.address, city: property.city, state: property.state, zip: property.zipCode, benchmark: "Public_AR_Current", vintage: "Current_Current", format: "json" }).toString();
-  const response = await fetch(endpoint, { cache: "no-store", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 source-backed-property-research" } });
-  if (!response.ok) throw new Error(`Census Geocoder returned ${response.status}.`);
-  const payload = (await response.json()) as { result?: { addressMatches?: Array<{ matchedAddress?: string; coordinates?: { x?: number; y?: number }; geographies?: { Counties?: Array<{ NAME?: string }> } }> } };
+  const payload = await fetchValidatedJson(endpoint, censusGeocodeSchema, { cache: "no-store", attempts: 3, timeoutMs: 15_000, headers: { "User-Agent": "DealScoutAI/1.0 source-backed-property-research" } });
   const match = payload.result?.addressMatches?.[0];
   return match?.coordinates?.x !== undefined && match.coordinates.y !== undefined ? { address: match.matchedAddress || "Census address match", longitude: match.coordinates.x, latitude: match.coordinates.y, county: match.geographies?.Counties?.[0]?.NAME } : null;
 }
@@ -186,9 +201,7 @@ async function censusGeocode(property: { address: string; city: string; state: s
 async function openStreetMapGeocode(property: { address: string; city: string; state: string; zipCode: string }) {
   const endpoint = new URL("https://nominatim.openstreetmap.org/search");
   endpoint.search = new URLSearchParams({ q: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`, countrycodes: "us", addressdetails: "1", format: "jsonv2", limit: "1" }).toString();
-  const response = await fetch(endpoint, { cache: "no-store", signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "DealScoutAI/1.0 property-research" } });
-  if (!response.ok) throw new Error(`OpenStreetMap geocoder returned ${response.status}.`);
-  const [match] = (await response.json()) as Array<{ lat?: string; lon?: string; display_name?: string; address?: { county?: string; neighbourhood?: string; suburb?: string } }>;
+  const [match] = await fetchValidatedJson(endpoint, openStreetMapSchema, { cache: "no-store", attempts: 3, timeoutMs: 15_000, headers: { "User-Agent": "DealScoutAI/1.0 property-research" } });
   const latitude = Number(match?.lat);
   const longitude = Number(match?.lon);
   return Number.isFinite(latitude) && Number.isFinite(longitude) ? { address: match.display_name || "OpenStreetMap address match", latitude, longitude, county: match.address?.county, neighborhood: match.address?.neighbourhood || match.address?.suburb } : null;
@@ -212,7 +225,7 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
     findings.set("OWNERSHIP", { topic: "OWNERSHIP", label: "Recorded ownership", value: property.ownerName, status: "VERIFIED", sourceName: HUD_REO_SOURCE, sourceUrl: property.sourceUrl, confidence: 90 });
   }
 
-  const sourceUrls = [...new Set([property.sourceUrl, property.verificationSourceUrl].filter(Boolean) as string[])];
+  const sourceUrls = stableUnique([property.sourceUrl, property.verificationSourceUrl].filter(Boolean) as string[]);
   for (const sourceUrl of sourceUrls) {
     if (property.sourceName === HUD_REO_SOURCE && sourceUrl === property.sourceUrl) continue;
     sourcesChecked += 1;
@@ -265,7 +278,7 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
   if (property.estimatedValue && property.verificationSourceUrl) findings.set("PRICE", { topic: "PRICE", label: "Current asking price", value: `$${property.estimatedValue.toLocaleString("en-US")}`, status: "VERIFIED", sourceName: "Verified source", sourceUrl: property.verificationSourceUrl, confidence: 85 });
   const foundPhone = property.contactPhone ? null : discoveredPhones[0];
   const contactPhone = property.contactPhone || foundPhone?.phone;
-  if (contactPhone && (property.verificationSourceUrl || foundPhone)) findings.set("CONTACT", { topic: "CONTACT", label: "Seller or broker phone", value: [property.contactName, contactPhone, property.contactEmail].filter(Boolean).join(" · "), status: "VERIFIED", sourceName: foundPhone?.sourceName || "Verified source", sourceUrl: foundPhone?.sourceUrl || property.verificationSourceUrl, confidence: 80 });
+  if (contactPhone && (property.verificationSourceUrl || foundPhone)) findings.set("CONTACT", { topic: "CONTACT", label: "Seller or broker phone", value: [property.contactName, contactPhone, property.contactEmail].filter(Boolean).join(" · "), status: "VERIFIED", sourceName: foundPhone?.sourceName || "Verified source", sourceUrl: foundPhone?.sourceUrl || property.verificationSourceUrl || undefined, confidence: 80 });
 
   for (const [topic, label] of TOPICS) {
     if (!findings.has(topic)) {
@@ -348,8 +361,7 @@ export async function runAutomaticPropertyResearchBatch(limit = 2) {
   
   // FIX #1: Batch enqueue all stale properties instead of sequential loop
   if (stale.length > 0) {
-    const enqueuePromises = stale.map((property) => enqueuePropertyResearch(property.id));
-    await Promise.all(enqueuePromises);
+    await enqueuePropertyResearchBatch(stale.map((property) => property.id));
   }
   
   // Fetch queued runs
@@ -395,4 +407,4 @@ export async function addSourcedPropertyMedia(input: { propertyId: string; url: 
   return media;
 }
 
-export const __propertyResearchTestables = { safePublicUrl, meta, imageUrls, listingImageUrls, phoneNumbers, pageMatchesProperty, hasSufficientResearchEvidence };
+export const __propertyResearchTestables = { safePublicUrl, censusGeocodeSchema, openStreetMapSchema, meta, imageUrls, listingImageUrls, phoneNumbers, pageMatchesProperty, hasSufficientResearchEvidence };

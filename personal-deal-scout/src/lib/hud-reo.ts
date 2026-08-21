@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
+import { fetchWithRetry } from "@/lib/research-runtime";
 
 export const HUD_REO_SOURCE = "HUD FHA Single Family REO";
 export const HUD_REO_LAYER = "https://egis.hud.gov/arcgis/rest/services/cpdmaps/HudSfReo/MapServer/1";
@@ -17,7 +18,7 @@ const hudResponseSchema = z.object({ features: z.array(hudFeatureSchema).max(100
 export type HudReoRecord = z.infer<typeof hudFeatureSchema>["attributes"];
 
 async function officialJson(url: URL, init?: RequestInit) {
-  const response = await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(20_000), headers: { "User-Agent": "DealScoutAI/1.0 public-record-research", ...init?.headers } });
+  const response = await fetchWithRetry(url, { ...init, cache: "no-store", attempts: 3, timeoutMs: 20_000, headers: { "User-Agent": "DealScoutAI/1.0 public-record-research", ...init?.headers } });
   if (!response.ok) throw new Error(`Official data request failed with HTTP ${response.status}.`);
   if (Number(response.headers.get("content-length") ?? 0) > MAX_RESPONSE_BYTES) throw new Error("Official data response exceeded the safe size limit.");
   const text = await response.text();

@@ -1,8 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/prisma";
-import { DEVELOPER_RESEARCH_VERSION, enqueueDeveloperResearch, runAutomaticDeveloperResearchBatch } from "@/lib/developer-research";
-import { enqueuePropertyResearch, PROPERTY_RESEARCH_VERSION, runAutomaticPropertyResearchBatch } from "@/lib/property-research";
+import { DEVELOPER_RESEARCH_VERSION, enqueueDeveloperResearchBatch, runAutomaticDeveloperResearchBatch } from "@/lib/developer-research";
+import { enqueuePropertyResearchBatch, PROPERTY_RESEARCH_VERSION, runAutomaticPropertyResearchBatch } from "@/lib/property-research";
 import { runCensusPermitResearch } from "@/lib/government-research";
 import { importHudReoCounty, HUD_REO_SOURCE } from "@/lib/hud-reo";
 
@@ -17,8 +17,8 @@ export async function ensureAutomaticResearchBacklog(limit = 250) {
     db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: DEVELOPER_RESEARCH_VERSION } } } }, { lastResearchedAt: null }, { lastResearchedAt: { lt: cutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit }),
   ]);
   const [propertyRuns, developerRuns] = await Promise.all([
-    Promise.all(properties.map(({ id }) => enqueuePropertyResearch(id))),
-    Promise.all(developers.map(({ id }) => enqueueDeveloperResearch(id))),
+    enqueuePropertyResearchBatch(properties.map(({ id }) => id)),
+    enqueueDeveloperResearchBatch(developers.map(({ id }) => id)),
   ]);
   return { propertiesQueued: propertyRuns.length, developersQueued: developerRuns.length };
 }

@@ -1,8 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/prisma";
-import { enqueueDeveloperResearch } from "@/lib/developer-research";
-import { enqueuePropertyResearch } from "@/lib/property-research";
+import { enqueueDeveloperResearchBatch } from "@/lib/developer-research";
+import { enqueuePropertyResearchBatch } from "@/lib/property-research";
 
 export async function readResearchOperations() {
   const db = getPrisma();
@@ -29,8 +29,8 @@ export async function enqueueResearchBacklog() {
     db.developer.findMany({ where: { active: true }, select: { id: true } }),
   ]);
   const [propertyRuns, developerRuns] = await Promise.all([
-    Promise.all(properties.map(({ id }) => enqueuePropertyResearch(id))),
-    Promise.all(developers.map(({ id }) => enqueueDeveloperResearch(id))),
+    enqueuePropertyResearchBatch(properties.map(({ id }) => id)),
+    enqueueDeveloperResearchBatch(developers.map(({ id }) => id)),
   ]);
   return { properties: propertyRuns.length, developers: developerRuns.length };
 }
