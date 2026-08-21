@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { planAgentWorkflow, planAgentWorkflowBatch } from "@/lib/agent-workflow";
-import { canHandoff, evaluateAgentTask, evaluateAutonomyEligibility } from "@/lib/agent-workflow-policy";
+import { canHandoff, evaluateAgentTask, evaluateAutonomyEligibility, evaluateSupervisedTrackRecord } from "@/lib/agent-workflow-policy";
 
 const provenAutonomy = {
   jurisdictionConfigured: true,
@@ -11,6 +11,11 @@ const provenAutonomy = {
 };
 
 describe("agent workflow policy", () => {
+  it("requires a proven supervised track record before complete autonomy", () => {
+    expect(evaluateSupervisedTrackRecord(Array(29).fill("COMPLETED"))).toMatchObject({ eligible: false, blockers: ["1 more supervised tasks"] });
+    expect(evaluateSupervisedTrackRecord(["FAILED", ...Array(29).fill("COMPLETED")])).toMatchObject({ eligible: false });
+    expect(evaluateSupervisedTrackRecord(Array(30).fill("COMPLETED"))).toEqual({ eligible: true, blockers: [] });
+  });
   it("routes each task to its single accountable agent", () => {
     expect(planAgentWorkflow({ id: "1", role: "OPERATIONS_COORDINATOR", taskType: "RESEARCH_PROPERTY" })).toEqual({
       taskId: "1",

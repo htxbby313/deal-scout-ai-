@@ -2,7 +2,7 @@ import "server-only";
 
 import { Prisma, type AgentRole } from "@prisma/client";
 import { getPrisma } from "@/lib/prisma";
-import { AGENT_TASK_TYPES, evaluateAgentTask, type AgentTaskType } from "@/lib/agent-workflow-policy";
+import { AGENT_TASK_TYPES, evaluateAgentTask, evaluateSupervisedTrackRecord, type AgentTaskType } from "@/lib/agent-workflow-policy";
 import { researchProperty } from "@/lib/property-research";
 import { enqueueDeveloperResearch, runQueuedDeveloperResearch } from "@/lib/developer-research";
 import { scoreDeveloperMatches } from "@/lib/database";
@@ -136,18 +136,43 @@ export async function reviewAgentTask(taskId: string, approved: boolean, note: s
   return { status };
 }
 
+export async function updateAgentStatus(agentId: string, status: "ACTIVE" | "PAUSED" | "DISABLED") {
+  const db = getPrisma();
+  const agent = await db.agent.findUnique({ where: { id: agentId } });
+  if (!agent) throw new Error("Agent not found.");
+  await db.$transaction([
+    db.agent.update({ where: { id: agentId }, data: { status } }),
+    db.auditLog.create({ data: { type: "agent.status_changed", summary: `${agent.name} was set to ${status.toLowerCase()} by the owner.`, details: { agentId, previousStatus: agent.status, status, actor: "owner" } } }),
+  ]);
+  return { status };
+}
+
+export async function updateAgentAutonomy(agentId: string, autonomyMode: "LOCKED" | "SUPERVISED" | "APPROVED_AUTONOMOUS") {
+  const db = getPrisma();
+  const agent = await db.agent.findUnique({ where: { id: agentId }, include: { assignedTasks: { select: { status: true }, orderBy: { updatedAt: "desc" }, take: 30 } } });
+  if (!agent) throw new Error("Agent not found.");
+  const gates = [agent.legalStandardsProvenAt, agent.ethicalStandardsProvenAt, agent.complianceApprovedAt, agent.counselApprovedAt, agent.ownerAutonomyApprovedAt];
+  if (autonomyMode === "APPROVED_AUTONOMOUS" && gates.some((gate) => !gate)) throw new Error("Autonomy remains locked until every legal, ethical, compliance, counsel, and owner gate is recorded.");
+  if (autonomyMode === "APPROVED_AUTONOMOUS" && !evaluateSupervisedTrackRecord(agent.assignedTasks.map((task) => task.status)).eligible) throw new Error("Autonomy remains locked until the agent has 30 consecutive completed supervised tasks without a failed, blocked, cancelled, or unfinished task.");
+  await db.$transaction([
+    db.agent.update({ where: { id: agentId }, data: { autonomyMode, autonomousOutbound: false } }),
+    db.auditLog.create({ data: { type: "agent.autonomy_changed", summary: `${agent.name} was set to ${autonomyMode.toLowerCase().replaceAll("_", " ")} by the owner. Outbound remains disabled.`, details: { agentId, previousMode: agent.autonomyMode, autonomyMode, autonomousOutbound: false, actor: "owner" } } }),
+  ]);
+  return { autonomyMode };
+}
+
 export async function readAgentDashboard() {
   await seedAgentWork();
   const db = getPrisma();
   const [agents, approvalTasks, recentTasks, events] = await Promise.all([
-    db.agent.findMany({ include: { assignedTasks: { select: { status: true } }, runs: { orderBy: { startedAt: "desc" }, take: 1 } }, orderBy: { role: "asc" } }),
+    db.agent.findMany({ include: { assignedTasks: { select: { status: true }, orderBy: { updatedAt: "desc" } }, runs: { orderBy: { startedAt: "desc" }, take: 1 } }, orderBy: { role: "asc" } }),
     db.agentTask.findMany({ where: { status: "WAITING_FOR_APPROVAL" }, include: { assignedAgent: true, transaction: { include: { property: true } } }, orderBy: { updatedAt: "desc" }, take: 30 }),
     db.agentTask.findMany({ include: { assignedAgent: true, transaction: { include: { property: true } } }, orderBy: { updatedAt: "desc" }, take: 30 }),
     db.agentEvent.findMany({ include: { actorAgent: true, task: { include: { assignedAgent: true } } }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
   const taskSummary = (task: (typeof recentTasks)[number]) => ({ id: task.id, title: task.title, agentId: task.assignedAgentId, agentName: task.assignedAgent.name, status: task.status, transactionLabel: task.transaction?.property.address ?? null, evidenceCount: task.evidenceCount, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() });
   return {
-    agents: agents.map((agent) => { const statuses = agent.assignedTasks.map((task) => task.status); const blockers = [!agent.legalStandardsProvenAt && "legal proof", !agent.ethicalStandardsProvenAt && "ethical proof", !agent.complianceApprovedAt && "compliance approval", !agent.counselApprovedAt && "counsel approval", !agent.ownerAutonomyApprovedAt && "owner approval"].filter(Boolean) as string[]; return { id: agent.id, name: agent.name, role: agent.role.replaceAll("_", " "), status: agent.status, queuedTasks: statuses.filter((value) => value === "QUEUED").length, activeTasks: statuses.filter((value) => value === "IN_PROGRESS").length, approvalTasks: statuses.filter((value) => value === "WAITING_FOR_APPROVAL").length, completedTasks: statuses.filter((value) => value === "COMPLETED").length, lastActiveAt: agent.runs[0]?.startedAt.toISOString() ?? null, supervisionMode: "SUPERVISED" as const, autonomyEligible: blockers.length === 0, autonomyBlockers: blockers }; }),
+    agents: agents.map((agent) => { const statuses = agent.assignedTasks.map((task) => task.status); const trackRecord = evaluateSupervisedTrackRecord(statuses); const blockers = [!agent.legalStandardsProvenAt && "legal proof", !agent.ethicalStandardsProvenAt && "ethical proof", !agent.complianceApprovedAt && "compliance approval", !agent.counselApprovedAt && "counsel approval", !agent.ownerAutonomyApprovedAt && "owner approval", ...trackRecord.blockers].filter(Boolean) as string[]; return { id: agent.id, name: agent.name, role: agent.role.replaceAll("_", " "), status: agent.status, autonomyMode: agent.autonomyMode, autonomousOutbound: agent.autonomousOutbound, queuedTasks: statuses.filter((value) => value === "QUEUED").length, activeTasks: statuses.filter((value) => value === "IN_PROGRESS").length, approvalTasks: statuses.filter((value) => value === "WAITING_FOR_APPROVAL").length, completedTasks: statuses.filter((value) => value === "COMPLETED").length, lastActiveAt: agent.runs[0]?.startedAt.toISOString() ?? null, autonomyEligible: blockers.length === 0, autonomyBlockers: [...new Set(blockers)] }; }),
     approvalTasks: approvalTasks.map(taskSummary), recentTasks: recentTasks.map(taskSummary),
     events: events.map((event) => ({ id: event.id, agentName: event.actorAgent?.name || event.task.assignedAgent.name, summary: event.summary, createdAt: event.createdAt.toISOString() })),
   };

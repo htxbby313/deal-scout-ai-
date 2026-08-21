@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { reviewAgentTaskAction, runAgentQueueAction } from "@/app/agent-actions";
+import { reviewAgentTaskAction, runAgentQueueAction, updateAgentAutonomyAction, updateAgentStatusAction } from "@/app/agent-actions";
 
 export type AgentStatus = "ACTIVE" | "PAUSED" | "DISABLED";
 export type AgentTaskStatus = "QUEUED" | "IN_PROGRESS" | "WAITING_FOR_APPROVAL" | "BLOCKED" | "COMPLETED" | "CANCELLED" | "FAILED";
@@ -16,7 +16,8 @@ export interface AgentSummary {
   approvalTasks: number;
   completedTasks: number;
   lastActiveAt: string | null;
-  supervisionMode: "SUPERVISED";
+  autonomyMode: "LOCKED" | "SUPERVISED" | "APPROVED_AUTONOMOUS";
+  autonomousOutbound: boolean;
   autonomyEligible: boolean;
   autonomyBlockers: string[];
 }
@@ -114,13 +115,21 @@ function RunQueueButton({ agentId, disabled }: { agentId: string; disabled: bool
   );
 }
 
-function TaskReviewControls({ taskId }: { taskId: string }) {
+export function TaskReviewControls({ taskId }: { taskId: string }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <ReviewForm decision="APPROVE" taskId={taskId} />
       <ReviewForm decision="REJECT" taskId={taskId} />
     </div>
   );
+}
+
+function AgentControlButton({ agentId, actionType, value, label, disabled = false }: { agentId: string; actionType: "status" | "autonomy"; value: AgentStatus | AgentSummary["autonomyMode"]; label: string; disabled?: boolean }) {
+  const actionFactory = actionType === "status"
+    ? updateAgentStatusAction.bind(null, agentId, value as AgentStatus)
+    : updateAgentAutonomyAction.bind(null, agentId, value as AgentSummary["autonomyMode"]);
+  const [state, action, pending] = useActionState(actionFactory, initialState);
+  return <form action={action}><button className="rounded-lg border bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled || pending} type="submit">{pending ? "Saving…" : label}</button><Result state={state} /></form>;
 }
 
 function ReviewForm({ taskId, decision }: { taskId: string; decision: "APPROVE" | "REJECT" }) {
@@ -173,9 +182,9 @@ export function AgentDashboard({ agents, approvalTasks, recentTasks, events }: A
                 <AgentStatusBadge status={agent.status} />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">Supervised</span>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${agent.autonomyEligible ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-800"}`}>
-                  {agent.autonomyEligible ? "Autonomy eligible · locked" : "Autonomy locked"}
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{agent.autonomyMode === "APPROVED_AUTONOMOUS" ? "Approved autonomous" : agent.autonomyMode === "SUPERVISED" ? "Supervised" : "Locked"}</span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${agent.autonomyEligible ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}>
+                  {agent.autonomyEligible ? "Full autonomy available" : "Research runs automatically"}
                 </span>
               </div>
               {agent.autonomyBlockers.length ? <p className="mt-2 text-xs text-slate-500">Gates · {agent.autonomyBlockers.join(" · ")}</p> : null}
@@ -186,6 +195,12 @@ export function AgentDashboard({ agents, approvalTasks, recentTasks, events }: A
               </dl>
               <p className="mb-3 text-xs text-slate-500">Last active · {formatDate(agent.lastActiveAt)}</p>
               <RunQueueButton agentId={agent.id} disabled={agent.activeTasks > 0 || agent.status !== "ACTIVE"} />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {agent.status === "ACTIVE" ? <AgentControlButton actionType="status" agentId={agent.id} label="Pause" value="PAUSED" /> : <AgentControlButton actionType="status" agentId={agent.id} label="Resume" value="ACTIVE" />}
+                {agent.autonomyMode === "LOCKED" ? <AgentControlButton actionType="autonomy" agentId={agent.id} label="Allow supervised work" value="SUPERVISED" /> : <AgentControlButton actionType="autonomy" agentId={agent.id} label="Lock agent" value="LOCKED" />}
+                {agent.autonomyMode !== "APPROVED_AUTONOMOUS" ? <AgentControlButton actionType="autonomy" agentId={agent.id} label="Approve autonomy" value="APPROVED_AUTONOMOUS" disabled={!agent.autonomyEligible} /> : null}
+              </div>
+              <p className="mt-3 text-[11px] font-semibold text-slate-500">Research, verification, scoring, and matching run automatically. Complete autonomy requires 30 consecutive successful supervised tasks plus every legal and ethical approval. Outside messaging has separate gates.</p>
             </article>
           ))}
         </div>
@@ -195,7 +210,7 @@ export function AgentDashboard({ agents, approvalTasks, recentTasks, events }: A
         <div className="border-b p-5"><h2 className="text-xl font-bold">Owner review · {approvalTasks.length}</h2></div>
         <div className="divide-y">
           {approvalTasks.map((task) => (
-            <article className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start" key={task.id}>
+            <article className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start" id={`task-${task.id}`} key={task.id}>
               <div>
                 <div className="flex flex-wrap items-center gap-2"><h3 className="font-bold">{task.title}</h3><TaskStatusBadge status={task.status} /></div>
                 <p className="mt-1 text-sm text-slate-500">{task.agentName}{task.transactionLabel ? ` · ${task.transactionLabel}` : ""} · {task.evidenceCount} evidence items</p>
