@@ -7,7 +7,7 @@ import { recordCountySourceCheck } from "@/lib/county-source-service";
 export async function runCountyAccessibilityChecks(limit = 10, now = new Date()) {
   const db = getPrisma();
   const sources = await db.countyOfficialSource.findMany({
-    where: { supersededAt: null, registry: { OR: [{ nextReviewAt: null }, { nextReviewAt: { lte: now } }] } },
+    where: { supersededAt: null, checks: { none: { circuitOpenUntil: { gt: now } } }, registry: { OR: [{ nextReviewAt: null }, { nextReviewAt: { lte: now } }] } },
     include: { registry: true, checks: { orderBy: { checkedAt: "desc" }, take: 1 } },
     orderBy: { effectiveAt: "asc" },
     take: Math.max(1, Math.min(limit, 25)),

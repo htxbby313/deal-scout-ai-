@@ -255,7 +255,12 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
   const property = await db.property.findUniqueOrThrow({ where: { id: propertyId } });
   const existingFindings = new Map((await db.propertyResearchFinding.findMany({ where: { propertyId } })).map((finding) => [finding.topic, finding]));
   const queuedRun = queuedRunId ? await db.propertyResearchRun.findFirst({ where: { id: queuedRunId, propertyId, status: "QUEUED" } }) : await db.propertyResearchRun.findFirst({ where: { propertyId, status: "QUEUED" }, orderBy: { startedAt: "desc" } });
-  const run = queuedRun ? await db.propertyResearchRun.update({ where: { id: queuedRun.id }, data: { status: "RUNNING", startedAt: new Date(), error: null, researchVersion: PROPERTY_RESEARCH_VERSION } }) : await db.propertyResearchRun.create({ data: { propertyId, status: "RUNNING", researchVersion: PROPERTY_RESEARCH_VERSION } });
+  if (queuedRun && queuedRun.attemptCount >= queuedRun.maxAttempts) {
+    await db.propertyResearchRun.update({ where: { id: queuedRun.id }, data: { status: "FAILED", exhausted: true, error: "Property research retry limit reached.", finishedAt: new Date() } });
+    await db.auditLog.create({ data: { type: "research.property_dossier", summary: `Research retry limit reached for ${property.address}.`, details: { propertyId, runId: queuedRun.id, attemptCount: queuedRun.attemptCount, maxAttempts: queuedRun.maxAttempts } } });
+    throw new Error("Property research retry limit reached.");
+  }
+  const run = queuedRun ? await db.propertyResearchRun.update({ where: { id: queuedRun.id }, data: { status: "RUNNING", startedAt: new Date(), error: null, researchVersion: PROPERTY_RESEARCH_VERSION, attemptCount: { increment: 1 } } }) : await db.propertyResearchRun.create({ data: { propertyId, status: "RUNNING", researchVersion: PROPERTY_RESEARCH_VERSION, attemptCount: 1 } });
   const findings = new Map<string, Finding>();
   const media: DiscoveredMedia[] = [];
   const errors: string[] = [];
@@ -386,7 +391,12 @@ export async function runAutomaticPropertyResearchBatch(limit = 2) {
   const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
   
   // Recover abandoned runs
-  await db.propertyResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic research run." } });
+  const exhausted = await db.propertyResearchRun.findMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff }, attemptCount: { gte: 3 }, exhausted: false }, select: { id: true, propertyId: true, attemptCount: true, property: { select: { address: true } } }, take: 25 });
+  await Promise.all([
+    db.propertyResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff }, attemptCount: { lt: 3 } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic research run." } }),
+    db.propertyResearchRun.updateMany({ where: { id: { in: exhausted.map((run) => run.id) } }, data: { status: "FAILED", exhausted: true, error: "Automatic research retry limit reached after repeated interruptions.", finishedAt: new Date() } }),
+    exhausted.length ? db.auditLog.createMany({ data: exhausted.map((run) => ({ type: "research.property_dossier", summary: `Research retry limit reached for ${run.property.address}.`, details: { propertyId: run.propertyId, runId: run.id, attemptCount: run.attemptCount, maxAttempts: 3 } })) }) : Promise.resolve(),
+  ]);
   
   // Find stale properties that need research
   const stale = await db.property.findMany({

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
+import { logOperation } from "@/lib/operational-logging";
 
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const sourceFailures = new Map<string, { count: number; openUntil: number }>();
@@ -93,6 +94,7 @@ export async function fetchWithRetry(input: URL | string, options: FetchRetryOpt
       const response = await fetch(input, { ...init, signal: AbortSignal.timeout(Math.max(1, Math.min(timeoutMs, remainingBudget(deadlineAt)))) });
       if (response.ok) { sourceFailures.delete(host); return response; }
       if (!RETRYABLE_STATUS.has(response.status)) return response;
+      if (response.status === 429) logOperation("warn", "external_source_rate_limited", { host, attempt, attempts });
       if (attempt === attempts) { recordSourceFailure(host); return response; }
       await response.body?.cancel().catch(() => undefined);
       lastError = new Error(`External source returned HTTP ${response.status}.`);

@@ -12,7 +12,8 @@ export async function POST(request: Request) {
   return Response.json({
     ok: false,
     blocked: true,
-    reason: "Outbound providers are disabled until explicitly configured and approved.",
+    reason: "Outbound remains blocked until every required control is satisfied.",
+    blockers: approval.blockerCodes,
     approval,
   });
 }

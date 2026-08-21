@@ -6,6 +6,7 @@ import { synchronizeCountyCoverageTargets } from "@/lib/county-source-service";
 import { runFunnelExpirationCycle } from "@/lib/funnel-automation";
 import { runCountyAccessibilityChecks } from "@/lib/county-accessibility-service";
 import { synchronizeCampaignCountyCoverage } from "@/lib/campaign-service";
+import { timedOperation } from "@/lib/operational-logging";
 
 export const maxDuration = 300;
 const RESEARCH_BUDGET_MS = 240_000;
@@ -14,18 +15,18 @@ export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  const recovery = await recoverAutomaticResearchWork();
-  const research = await runAutomaticResearchCycle({ deadlineAt: Date.now() + RESEARCH_BUDGET_MS });
+  const recovery = await timedOperation("cron_research_recovery", () => recoverAutomaticResearchWork());
+  const research = await timedOperation("cron_automatic_research", () => runAutomaticResearchCycle({ deadlineAt: Date.now() + RESEARCH_BUDGET_MS }));
   const [funnels, counties] = await Promise.all([
-    synchronizeAcquisitionFunnels(),
-    synchronizeCountyCoverageTargets(),
+    timedOperation("cron_funnel_sync", () => synchronizeAcquisitionFunnels()),
+    timedOperation("cron_county_sync", () => synchronizeCountyCoverageTargets()),
   ]);
   const [funnelExpirations, countyAccessibility, campaignCountyCoverage] = await Promise.all([
-    runFunnelExpirationCycle(),
-    runCountyAccessibilityChecks(10),
-    synchronizeCampaignCountyCoverage(),
+    timedOperation("cron_funnel_expirations", () => runFunnelExpirationCycle()),
+    timedOperation("cron_county_accessibility", () => runCountyAccessibilityChecks(10)),
+    timedOperation("cron_campaign_county_coverage", () => synchronizeCampaignCountyCoverage()),
   ]);
-  const agents = await runAgentTeamBatch();
+  const agents = await timedOperation("cron_agent_team", () => runAgentTeamBatch());
   return Response.json({
     ok: true,
     recovery,

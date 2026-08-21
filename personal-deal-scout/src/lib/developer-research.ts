@@ -97,7 +97,13 @@ export async function enqueueDeveloperResearchBatch(developerIds: string[]) {
 async function researchDeveloper(developerId: string, runId: string) {
   const db = getPrisma();
   const developer = await db.developer.findUniqueOrThrow({ where: { id: developerId }, include: { projects: true } });
-  const run = await db.developerResearchRun.update({ where: { id: runId }, data: { status: "RUNNING", startedAt: new Date(), error: null, researchVersion: DEVELOPER_RESEARCH_VERSION } });
+  const queuedRun = await db.developerResearchRun.findUniqueOrThrow({ where: { id: runId } });
+  if (queuedRun.attemptCount >= queuedRun.maxAttempts) {
+    await db.developerResearchRun.update({ where: { id: queuedRun.id }, data: { status: "FAILED", exhausted: true, error: "Developer research retry limit reached.", finishedAt: new Date() } });
+    await db.auditLog.create({ data: { type: "research.developer_dossier", summary: `Research retry limit reached for ${developer.companyName}.`, details: { developerId, runId: queuedRun.id, attemptCount: queuedRun.attemptCount, maxAttempts: queuedRun.maxAttempts } } });
+    throw new Error("Developer research retry limit reached.");
+  }
+  const run = await db.developerResearchRun.update({ where: { id: runId }, data: { status: "RUNNING", startedAt: new Date(), error: null, researchVersion: DEVELOPER_RESEARCH_VERSION, attemptCount: { increment: 1 } } });
   const urls = stableUnique([developer.website, developer.contactUrl].filter(Boolean) as string[]);
   const errors: string[] = [];
   const pages: Awaited<ReturnType<typeof fetchPublicPage>>[] = [];
@@ -149,7 +155,12 @@ export async function runAutomaticDeveloperResearchBatch(limit = 5) {
   const safeLimit = Math.max(1, Math.min(limit, 25));
   const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000);
   const abandonedCutoff = new Date(Date.now() - 30 * 60_000);
-  await db.developerResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic developer research run." } });
+  const exhausted = await db.developerResearchRun.findMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff }, attemptCount: { gte: 3 }, exhausted: false }, select: { id: true, developerId: true, attemptCount: true, developer: { select: { companyName: true } } }, take: 25 });
+  await Promise.all([
+    db.developerResearchRun.updateMany({ where: { status: "RUNNING", startedAt: { lt: abandonedCutoff }, attemptCount: { lt: 3 } }, data: { status: "QUEUED", error: "Recovered an interrupted automatic developer research run." } }),
+    db.developerResearchRun.updateMany({ where: { id: { in: exhausted.map((run) => run.id) } }, data: { status: "FAILED", exhausted: true, error: "Automatic developer research retry limit reached after repeated interruptions.", finishedAt: new Date() } }),
+    exhausted.length ? db.auditLog.createMany({ data: exhausted.map((run) => ({ type: "research.developer_dossier", summary: `Research retry limit reached for ${run.developer.companyName}.`, details: { developerId: run.developerId, runId: run.id, attemptCount: run.attemptCount, maxAttempts: 3 } })) }) : Promise.resolve(),
+  ]);
   const stale = await db.developer.findMany({ where: { active: true, researchRuns: { none: { status: { in: ["QUEUED", "RUNNING"] } } }, OR: [{ researchRuns: { none: { researchVersion: { gte: DEVELOPER_RESEARCH_VERSION } } } }, { lastResearchedAt: null }, { lastResearchedAt: { lt: staleCutoff } }] }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: safeLimit * 2 });
   await enqueueDeveloperResearchBatch(stale.map((developer) => developer.id));
   const queued = await db.developerResearchRun.findMany({ where: { status: "QUEUED", developer: { active: true } }, orderBy: { startedAt: "asc" }, take: safeLimit });

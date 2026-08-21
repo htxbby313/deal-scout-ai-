@@ -164,6 +164,9 @@ model PropertyResearchRun {
   findingsFound  Int      @default(0)
   manualNeeded   Int      @default(0)
   error          String?
+  attemptCount   Int      @default(0)
+  maxAttempts    Int      @default(3)
+  exhausted      Boolean  @default(false)
   startedAt      DateTime @default(now())
   finishedAt     DateTime?
   property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -340,6 +343,9 @@ model DeveloperResearchRun {
   findingsFound  Int       @default(0)
   manualNeeded   Int       @default(0)
   error          String?
+  attemptCount   Int       @default(0)
+  maxAttempts    Int       @default(3)
+  exhausted      Boolean   @default(false)
   startedAt      DateTime  @default(now())
   finishedAt     DateTime?
   developer      Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
@@ -400,6 +406,7 @@ model MessageApproval {
   body           String
   status         String   @default("PENDING")
   provider       String   @default("disabled")
+  blockerCodes   String[] @default([])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   lead           Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)

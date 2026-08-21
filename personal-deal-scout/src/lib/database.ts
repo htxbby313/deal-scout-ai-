@@ -10,6 +10,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { canSendOutbound, propertyReadiness } from "@/lib/domain";
 import { evaluateLegacyOutboundBoundary } from "@/lib/legacy-outbound-boundary";
+import { logOperation } from "@/lib/operational-logging";
 
 export type AuditType =
   | "database.migrated"
@@ -163,6 +164,7 @@ export type MessageApproval = {
   body: string;
   status: ApprovalStatus;
   provider: string;
+  blockerCodes: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -370,7 +372,7 @@ export const crmCsvImportSchema = z.object({
 const iso = (value: Date) => value.toISOString();
 const optional = <T>(value: T | null) => value ?? undefined;
 function safeError(error: unknown, operation: string): never {
-  console.error(`Database operation failed: ${operation}`, error);
+  logOperation("error", "database_operation_failed", { operation, error });
   if (error instanceof z.ZodError) throw error;
   if (
     error instanceof PrismaClientKnownRequestError &&
@@ -1051,7 +1053,7 @@ export async function setApprovalStatus(
     return await getPrisma().$transaction(async (tx) => {
       const approval = await tx.messageApproval.update({
         where: { id: approvalId },
-        data: { status },
+        data: { status, blockerCodes: [] },
       });
       await audit(
         tx,
@@ -1088,7 +1090,7 @@ export async function attemptProviderSend(approvalId: string) {
       if (!legacyBoundary.allowed) {
         const blocked = await tx.messageApproval.update({
           where: { id: approvalId },
-          data: { status: "SENT_BLOCKED", provider: "disabled" },
+          data: { status: "SENT_BLOCKED", provider: "disabled", blockerCodes: legacyBoundary.blockers },
         });
         await audit(
           tx,
@@ -1124,15 +1126,16 @@ export async function attemptProviderSend(approvalId: string) {
           environmentConfigured: envConfigured,
         })
       ) {
+        const blockerCodes = [approval.status !== "APPROVED" && "owner_approval_missing", setting.mode !== "ACTIVE" && "system_not_active", !provider.enabled && "provider_disabled", !provider.configured && "provider_not_configured", !envConfigured && "provider_credentials_missing"].filter(Boolean) as string[];
         const blocked = await tx.messageApproval.update({
           where: { id: approvalId },
-          data: { status: "SENT_BLOCKED", provider: "disabled" },
+          data: { status: "SENT_BLOCKED", provider: "disabled", blockerCodes },
         });
         await audit(
           tx,
           "provider.blocked",
           `Blocked outbound ${approval.channel}; approval, ACTIVE mode, enabled provider, and verified configuration are required.`,
-          { approvalId, systemMode: setting.mode },
+          { approvalId, systemMode: setting.mode, blockers: blockerCodes },
         );
         return blocked;
       }
@@ -1145,7 +1148,7 @@ export async function attemptProviderSend(approvalId: string) {
       );
       return tx.messageApproval.update({
         where: { id: approvalId },
-        data: { status: "SENT_BLOCKED" },
+        data: { status: "SENT_BLOCKED", blockerCodes: ["provider_adapter_missing"] },
       });
     });
   } catch (error) {
