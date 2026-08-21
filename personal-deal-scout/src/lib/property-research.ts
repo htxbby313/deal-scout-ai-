@@ -1,11 +1,10 @@
 import "server-only";
 
-import pLimit from "p-limit";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { researchOfficialPropertySources } from "@/lib/official-property-sources";
 import { HUD_REO_SOURCE } from "@/lib/hud-reo";
-import { fetchValidatedJson, fetchWithRetry, htmlToText, stableUnique } from "@/lib/research-runtime";
+import { chunkedMap, fetchValidatedJson, fetchWithRetry, htmlToText, stableUnique } from "@/lib/research-runtime";
 
 export const PROPERTY_RESEARCH_VERSION = 3;
 
@@ -371,9 +370,7 @@ export async function runAutomaticPropertyResearchBatch(limit = 2) {
     take: safeLimit,
   });
   
-  // FIX #2: Use pLimit to control concurrency instead of manual chunking
-  const concurrencyLimit = pLimit(5); // Max 5 concurrent operations
-  const results = await Promise.all(queued.map((run) => concurrencyLimit(() => runQueuedPropertyResearch(run.id))));
+  const results = await chunkedMap(queued, 5, (run) => runQueuedPropertyResearch(run.id));
   
   return {
     processed: results.length,
