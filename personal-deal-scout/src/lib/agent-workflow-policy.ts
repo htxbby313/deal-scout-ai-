@@ -123,6 +123,14 @@ export function evaluateAutonomyEligibility(evidence?: AutonomyEvidence) {
   return { eligible: reasons.length === 0, reasons };
 }
 
+export function evaluateSupervisedTrackRecord(statuses: readonly string[], required = 30) {
+  const recent = statuses.slice(0, required);
+  const blockers: string[] = [];
+  if (recent.length < required) blockers.push(`${required - recent.length} more supervised tasks`);
+  if (recent.some((status) => status !== "COMPLETED")) blockers.push(`${required} consecutive successful supervised tasks`);
+  return { eligible: blockers.length === 0, blockers };
+}
+
 export function evaluateAgentTask(input: WorkflowPolicyInput): WorkflowPolicyDecision {
   const assignedRole = taskOwner[input.taskType];
 
