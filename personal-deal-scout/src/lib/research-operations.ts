@@ -24,21 +24,25 @@ export async function readResearchOperations() {
 
 export async function enqueueResearchBacklog() {
   const db = getPrisma();
+  const pageSize = 1000;
   let properties = 0; let developers = 0;
-  let propertyCursor: string | undefined; let developerCursor: string | undefined;
-  while (true) {
-    const page = await db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" } }, select: { id: true }, orderBy: { id: "asc" }, take: 1000, ...(propertyCursor ? { cursor: { id: propertyCursor }, skip: 1 } : {}) });
-    if (!page.length) break;
-    properties += (await enqueuePropertyResearchBatch(page.map(({ id }) => id))).length;
-    propertyCursor = page.at(-1)?.id;
-    if (page.length < 1000) break;
+  let propertyPage = await db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" } }, select: { id: true }, orderBy: { id: "asc" }, take: pageSize });
+  while (propertyPage.length) {
+    const cursor = propertyPage.at(-1)?.id;
+    const nextPage = propertyPage.length === pageSize && cursor
+      ? db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" } }, select: { id: true }, orderBy: { id: "asc" }, take: pageSize, cursor: { id: cursor }, skip: 1 })
+      : Promise.resolve([]);
+    properties += (await enqueuePropertyResearchBatch(propertyPage.map(({ id }) => id))).length;
+    propertyPage = await nextPage;
   }
-  while (true) {
-    const page = await db.developer.findMany({ where: { active: true }, select: { id: true }, orderBy: { id: "asc" }, take: 1000, ...(developerCursor ? { cursor: { id: developerCursor }, skip: 1 } : {}) });
-    if (!page.length) break;
-    developers += (await enqueueDeveloperResearchBatch(page.map(({ id }) => id))).length;
-    developerCursor = page.at(-1)?.id;
-    if (page.length < 1000) break;
+  let developerPage = await db.developer.findMany({ where: { active: true }, select: { id: true }, orderBy: { id: "asc" }, take: pageSize });
+  while (developerPage.length) {
+    const cursor = developerPage.at(-1)?.id;
+    const nextPage = developerPage.length === pageSize && cursor
+      ? db.developer.findMany({ where: { active: true }, select: { id: true }, orderBy: { id: "asc" }, take: pageSize, cursor: { id: cursor }, skip: 1 })
+      : Promise.resolve([]);
+    developers += (await enqueueDeveloperResearchBatch(developerPage.map(({ id }) => id))).length;
+    developerPage = await nextPage;
   }
   return { properties, developers };
 }

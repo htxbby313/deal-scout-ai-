@@ -72,12 +72,11 @@ export async function enqueueDeveloperResearch(developerId: string) {
 }
 
 export async function enqueueDeveloperResearchBatch(developerIds: string[]) {
-  const ids = stableUnique(developerIds);
-  if (!ids.length) return [];
+  if (!developerIds.length) return [];
   const db = getPrisma();
   const allRuns: Array<{ id: string; developerId: string }> = [];
-  for (let offset = 0; offset < ids.length; offset += 1000) {
-    const chunk = ids.slice(offset, offset + 1000);
+  for (let offset = 0; offset < developerIds.length; offset += 1000) {
+    const chunk = stableUnique(developerIds.slice(offset, offset + 1000));
     const runs = await db.$transaction(async (tx) => {
     const [developers, active] = await Promise.all([
       tx.developer.findMany({ where: { id: { in: chunk }, active: true }, select: { id: true, companyName: true } }),

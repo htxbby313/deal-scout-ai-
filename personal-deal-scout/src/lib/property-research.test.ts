@@ -30,6 +30,14 @@ describe("property research source parsing", () => {
     expect(__propertyResearchTestables.pageMatchesProperty(html, property)).toBe(true);
   });
 
+  it("bounds adversarial JSON-LD traversal depth", () => {
+    const property = { address: "1200 Main Street", city: "Jackson", state: "MS", zipCode: "39201" };
+    let nested: unknown = { streetAddress: "1200 Main Street", addressLocality: "Jackson", postalCode: "39201" };
+    for (let depth = 0; depth < 20; depth += 1) nested = { child: nested };
+    const html = `<script type="application/ld+json">${JSON.stringify(nested)}</script>`;
+    expect(__propertyResearchTestables.pageMatchesProperty(html, property)).toBe(false);
+  });
+
   it("treats sufficient evidence as usable without requiring every research topic", () => {
     const verified = (topic: string) => ({ topic, status: "VERIFIED" as const });
     expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("PARCEL"), verified("TAX")])).toBe(true);

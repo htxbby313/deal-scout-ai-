@@ -112,6 +112,7 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
   const seen = new Set<string>();
   const addressTerms = address.toLowerCase().split(/\s+/).filter((term) => term.length > 2);
   const MAX_IMAGES = 12;
+  let structuredNodes = 0; let structuredScripts = 0;
   const add = (raw?: string) => {
     if (!raw || matches.length >= MAX_IMAGES) return;
     try {
@@ -119,15 +120,16 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
       if (url.startsWith("https://") && !seen.has(url)) { seen.add(url); matches.push(url); }
     } catch { /* Invalid image URLs are ignored. */ }
   };
-  const addStructuredImages = (value: unknown): void => {
-    if (matches.length >= MAX_IMAGES || value === null || value === undefined) return;
+  const addStructuredImages = (value: unknown, depth = 0): void => {
+    if (matches.length >= MAX_IMAGES || value === null || value === undefined || depth > 8 || structuredNodes >= 1_000) return;
+    structuredNodes += 1;
     if (typeof value === "string") { add(value); return; }
-    if (Array.isArray(value)) { for (const item of value) addStructuredImages(item); return; }
+    if (Array.isArray(value)) { for (const item of value) addStructuredImages(item, depth + 1); return; }
     if (typeof value !== "object") return;
     const record = value as Record<string, unknown>;
     for (const [key, child] of Object.entries(record)) {
-      if (key === "image" || key === "contentUrl" || key === "@graph") addStructuredImages(child);
-      else if (child && typeof child === "object") addStructuredImages(child);
+      if (key === "image" || key === "contentUrl" || key === "@graph") addStructuredImages(child, depth + 1);
+      else if (child && typeof child === "object") addStructuredImages(child, depth + 1);
     }
     if (typeof record.url === "string" && (record["@type"] === "ImageObject" || "contentUrl" in record)) add(record.url);
   };
@@ -145,7 +147,9 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
       if (addressTerms.some((term) => alt.includes(term))) add(tag.match(/(?:src|data-src)\s*=\s*["']([^"']+)["']/i)?.[1]);
     } else {
       const body = tag.match(/>([\s\S]*?)<\/script>/i)?.[1];
-      if (body) try { addStructuredImages(JSON.parse(body)); } catch { /* Untrusted malformed metadata is ignored. */ }
+      structuredScripts += 1;
+      if (structuredScripts > 20) break;
+      if (body && body.length <= 256_000) try { addStructuredImages(JSON.parse(body)); } catch { /* Untrusted malformed metadata is ignored. */ }
     }
   }
   return matches;
@@ -161,35 +165,54 @@ function normalizedWords(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
 }
 
+const JSON_LD_SCRIPT_LIMIT = 20;
+const JSON_LD_BYTES_LIMIT = 256_000;
+const JSON_LD_DEPTH_LIMIT = 8;
+const JSON_LD_NODE_LIMIT = 1_000;
+
+function jsonLdAddressText(html: string) {
+  const addressValues = new Map<string, string>();
+  const wanted = new Set(["address", "streetaddress", "addresslocality", "addressregion", "postalcode"]);
+  let scripts = 0; let nodes = 0;
+  const pattern = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  for (const script of html.matchAll(pattern)) {
+    scripts += 1;
+    if (scripts > JSON_LD_SCRIPT_LIMIT) break;
+    const body = script[1];
+    if (body.length > JSON_LD_BYTES_LIMIT) continue;
+    try {
+      const visit = (value: unknown, key = "", depth = 0): void => {
+        if (depth > JSON_LD_DEPTH_LIMIT || nodes >= JSON_LD_NODE_LIMIT || addressValues.size >= 5) return;
+        nodes += 1;
+        const normalizedKey = key.toLowerCase();
+        if (typeof value === "string") { if (wanted.has(normalizedKey) && !addressValues.has(normalizedKey)) addressValues.set(normalizedKey, value); return; }
+        if (Array.isArray(value)) { for (const item of value) visit(item, key, depth + 1); return; }
+        if (value && typeof value === "object") for (const [childKey, child] of Object.entries(value)) visit(child, childKey, depth + 1);
+      };
+      visit(JSON.parse(body));
+      if (addressValues.has("streetaddress") && addressValues.has("postalcode") && addressValues.has("addresslocality")) break;
+    } catch { /* Malformed structured data cannot support an address match. */ }
+  }
+  return [...addressValues.values()].join(" ");
+}
+
 function pageMatchesProperty(html: string, property: { address: string; city: string; state: string; zipCode: string }) {
   const address = normalizedWords(property.address);
   const streetNumber = address.find((word) => /^\d+[a-z]?$/.test(word));
   const streetWords = address.filter((word) => word.length > 2 && !/^(street|st|road|rd|avenue|ave|drive|dr|lane|ln|court|ct|highway|hwy)$/.test(word));
   if (!streetNumber) return false;
-  const structuredAddressText: string[] = [];
-  for (const script of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
-    try {
-      const visit = (value: unknown, key = ""): void => {
-        if (typeof value === "string" && ["address", "streetaddress", "addresslocality", "addressregion", "postalcode"].includes(key.toLowerCase())) structuredAddressText.push(value);
-        else if (Array.isArray(value)) for (const item of value) visit(item, key);
-        else if (value && typeof value === "object") for (const [childKey, child] of Object.entries(value)) visit(child, childKey);
-      };
-      visit(JSON.parse(script[1]));
-    } catch { /* Malformed structured data cannot support an address match. */ }
-  }
-  const page = normalizedWords(`${htmlToText(html)} ${structuredAddressText.join(" ")}`).join(" ");
+  const page = normalizedWords(`${htmlToText(html)} ${jsonLdAddressText(html)}`).join(" ");
   const locationMatches = [property.city, property.zipCode].some((value) => value && page.includes(normalizedWords(value).join(" ")));
   if (!locationMatches) return false;
   return Boolean(page.includes(streetNumber) && streetWords.some((word) => page.includes(word)));
 }
 
 export async function enqueuePropertyResearchBatch(propertyIds: string[]) {
-  const ids = stableUnique(propertyIds);
-  if (!ids.length) return [];
+  if (!propertyIds.length) return [];
   const db = getPrisma();
   const allRuns: Array<{ id: string; propertyId: string }> = [];
-  for (let offset = 0; offset < ids.length; offset += 1000) {
-    const chunk = ids.slice(offset, offset + 1000);
+  for (let offset = 0; offset < propertyIds.length; offset += 1000) {
+    const chunk = stableUnique(propertyIds.slice(offset, offset + 1000));
     const runs = await db.$transaction(async (tx) => {
     const [properties, active] = await Promise.all([
       tx.property.findMany({ where: { id: { in: chunk }, opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true } }),
