@@ -629,6 +629,7 @@ model AgentTask {
   events                AgentEvent[]
 
   @@index([assignedAgentId, status, priority])
+  @@index([status, createdAt])
   @@index([transactionId, status])
   @@index([propertyId])
   @@index([developerId])

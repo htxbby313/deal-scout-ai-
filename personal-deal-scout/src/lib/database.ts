@@ -476,8 +476,8 @@ export async function readDatabase(): Promise<Database> {
       db.messageApproval.findMany({ orderBy: { createdAt: "desc" } }),
       db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
     ]);
-    const enabled = (name: string) =>
-      providers.find((p) => p.provider === name)?.enabled === true;
+    const enabledProviders = new Map(providers.map((provider) => [provider.provider, provider.enabled]));
+    const enabled = (name: string) => enabledProviders.get(name) === true;
     return {
       meta: {
         migrationVersion: setting.migrationVersion,
@@ -1356,26 +1356,29 @@ function normalizeDeveloperRow(row: Record<string, string>) {
   const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const isPhone = (value: string) =>
     /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/.test(value);
-  const urls = tail.filter(isUrl);
-  const firstUrl = tail.findIndex(isUrl);
-  const narrative = (firstUrl >= 0 ? tail.slice(0, firstUrl) : tail).filter(
-    (value) => !isEmail(value) && !isPhone(value),
+  const classified = tail.map((value) => ({ value, url: isUrl(value), email: isEmail(value), phone: isPhone(value) }));
+  const urls = classified.filter((item) => item.url).map((item) => item.value);
+  const firstUrl = classified.findIndex((item) => item.url);
+  const narrative = (firstUrl >= 0 ? classified.slice(0, firstUrl) : classified).filter(
+    (item) => !item.email && !item.phone,
+  ).map(
+    (item) => item.value,
   );
   const website = urls.find((value) => !/linkedin\.com/i.test(value)) ?? "";
   const source =
     [...urls].reverse().find((value) => value !== website) ?? website;
   const contact =
-    tail.find(
-      (value) =>
+    classified.find(
+      (item) =>
         /\b(founder|principal|acquisitions|director|president|owner|ceo)\b/i.test(
-          value,
-        ) && !isUrl(value),
-    ) ?? "";
+          item.value,
+        ) && !item.url,
+    )?.value ?? "";
   return {
     companyName: row.Company?.trim() ?? "",
     contactName: malformed ? contact : csvValue(row, "Contact_Person"),
-    phone: malformed ? (tail.find(isPhone) ?? "") : csvValue(row, "Phone"),
-    email: malformed ? (tail.find(isEmail) ?? "") : csvValue(row, "Email"),
+    phone: malformed ? (classified.find((item) => item.phone)?.value ?? "") : csvValue(row, "Phone"),
+    email: malformed ? (classified.find((item) => item.email)?.value ?? "") : csvValue(row, "Email"),
     website: malformed ? website : csvValue(row, "Website"),
     targetMarkets: [row.HQ_City, row.HQ_State].filter(Boolean).join(", "),
     propertyTypes: row.Asset_Class_Focus?.trim() ?? "",

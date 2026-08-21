@@ -6,12 +6,13 @@ import { evaluateStageTransition } from "@/lib/acquisition-funnel";
 import { evaluateStageCriteria, type StageCriterion } from "@/lib/stage-criteria";
 import { evaluateStoredProfitPriority } from "@/lib/profit-priority";
 import { hasSufficientResearchEvidence } from "@/lib/property-research";
+import { chunkedMap } from "@/lib/research-runtime";
 
 export async function synchronizeAcquisitionFunnels(now = new Date()) {
   const db = getPrisma();
   const properties = await db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" } }, include: { researchFindings: true, acquisitionFunnels: { orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: { createdAt: "asc" } });
-  let created = 0; let advanced = 0;
-  for (const property of properties) {
+  const results = await chunkedMap(properties, 5, async (property) => {
+    let created = 0; let advanced = 0;
     let funnel = property.acquisitionFunnels[0];
     if (!funnel) {
       funnel = await db.$transaction(async (tx) => {
@@ -21,9 +22,9 @@ export async function synchronizeAcquisitionFunnels(now = new Date()) {
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       created += 1;
     }
-    if (funnel.stage !== "DISCOVERED") continue;
+    if (funnel.stage !== "DISCOVERED") return { created, advanced };
     const currentFindings = property.researchFindings.filter((finding) => finding.sourceUrl && now.getTime() - finding.observedAt.getTime() <= 7 * 86_400_000);
-    if (!hasSufficientResearchEvidence(currentFindings, property.opportunityStatus)) continue;
+    if (!hasSufficientResearchEvidence(currentFindings, property.opportunityStatus)) return { created, advanced };
     await db.$transaction(async (tx) => {
       const current = await tx.acquisitionFunnel.findUniqueOrThrow({ where: { id: funnel.id } });
       if (current.stage !== "DISCOVERED") return;
@@ -33,8 +34,9 @@ export async function synchronizeAcquisitionFunnels(now = new Date()) {
       await tx.acquisitionStageHistory.create({ data: { funnelId: funnel.id, sequence: (latest?.sequence ?? 0) + 1, fromStage: "DISCOVERED", toStage: "RESEARCHABLE", actor: "system", reason: "Current public evidence is sufficient to evaluate this opportunity; unavailable noncritical facts remain follow-up items.", evidence: { verifiedTopics: currentFindings.filter((finding) => finding.status === "VERIFIED").map((finding) => finding.topic) } } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     advanced += 1;
-  }
-  return { scanned: properties.length, created, advanced };
+    return { created, advanced };
+  });
+  return { scanned: properties.length, created: results.reduce((sum, result) => sum + result.created, 0), advanced: results.reduce((sum, result) => sum + result.advanced, 0) };
 }
 
 export async function readOperatingLayer(filters: { stage?: string; status?: string; rank?: string } = {}) {

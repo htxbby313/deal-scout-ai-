@@ -16,11 +16,15 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const recovery = await recoverAutomaticResearchWork();
   const research = await runAutomaticResearchCycle({ deadlineAt: Date.now() + RESEARCH_BUDGET_MS });
-  const funnels = await synchronizeAcquisitionFunnels();
-  const funnelExpirations = await runFunnelExpirationCycle();
-  const counties = await synchronizeCountyCoverageTargets();
-  const countyAccessibility = await runCountyAccessibilityChecks(10);
-  const campaignCountyCoverage = await synchronizeCampaignCountyCoverage();
+  const [funnels, counties] = await Promise.all([
+    synchronizeAcquisitionFunnels(),
+    synchronizeCountyCoverageTargets(),
+  ]);
+  const [funnelExpirations, countyAccessibility, campaignCountyCoverage] = await Promise.all([
+    runFunnelExpirationCycle(),
+    runCountyAccessibilityChecks(10),
+    synchronizeCampaignCountyCoverage(),
+  ]);
   const agents = await runAgentTeamBatch();
   return Response.json({
     ok: true,
