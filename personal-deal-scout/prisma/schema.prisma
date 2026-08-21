@@ -1530,6 +1530,8 @@ model AcquisitionFunnel {
   campaignOpportunities CampaignOpportunity[]
 
   @@index([stage, expiresAt])
+  @@index([stage, updatedAt])
+  @@index([stage, nextReviewAt])
   @@index([propertyId, createdAt])
 }
 

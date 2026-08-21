@@ -38,17 +38,16 @@ export async function synchronizeAcquisitionFunnels(now = new Date()) {
 }
 
 export async function readOperatingLayer(filters: { stage?: string; status?: string; rank?: string } = {}) {
-  await synchronizeAcquisitionFunnels();
   const db = getPrisma();
   const [funnels, campaigns, buyerDemand, engagements, diligence, providers, outcomes, developers, stagePolicies] = await Promise.all([
-    db.acquisitionFunnel.findMany({ where: filters.stage ? { stage: filters.stage as never } : undefined, include: { property: true, transaction: true, gates: { orderBy: { createdAt: "desc" } }, buyerCoverage: true, stageHistory: { orderBy: { sequence: "desc" }, take: 1 }, priorityScores: { orderBy: { version: "desc" }, take: 1 } }, orderBy: { updatedAt: "desc" } }),
-    db.acquisitionCampaign.findMany({ where: filters.status ? { status: filters.status as never } : undefined, include: { boundaries: { orderBy: { version: "desc" }, take: 1 } }, orderBy: { updatedAt: "desc" } }),
+    db.acquisitionFunnel.findMany({ where: filters.stage ? { stage: filters.stage as never } : undefined, include: { property: true, transaction: true, gates: { orderBy: { createdAt: "desc" } }, buyerCoverage: true, stageHistory: { orderBy: { sequence: "desc" }, take: 1 }, priorityScores: { orderBy: { version: "desc" }, take: 1 } }, orderBy: { updatedAt: "desc" }, take: 100 }),
+    db.acquisitionCampaign.findMany({ where: filters.status ? { status: filters.status as never } : undefined, include: { boundaries: { orderBy: { version: "desc" }, take: 1 } }, orderBy: { updatedAt: "desc" }, take: 100 }),
     db.buyerDemandVersion.findMany({ include: { developer: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     db.sellerEngagement.findMany({ include: { transaction: { include: { property: true } }, consents: { orderBy: { capturedAt: "desc" }, take: 1 } }, orderBy: { updatedAt: "desc" }, take: 100 }),
     db.diligenceReview.findMany({ include: { transaction: { include: { property: true } } }, orderBy: { updatedAt: "desc" }, take: 100 }),
-    db.providerIntegrationReadiness.findMany({ orderBy: [{ channel: "asc" }, { provider: "asc" }] }),
+    db.providerIntegrationReadiness.findMany({ orderBy: [{ channel: "asc" }, { provider: "asc" }], take: 100 }),
     db.transactionOutcome.findMany({ include: { transaction: { include: { property: true } } }, orderBy: { createdAt: "desc" }, take: 100 }),
-    db.developer.findMany({ where: { active: true }, orderBy: { companyName: "asc" }, select: { id: true, companyName: true } }),
+    db.developer.findMany({ where: { active: true }, orderBy: { companyName: "asc" }, select: { id: true, companyName: true }, take: 250 }),
     db.acquisitionStagePolicy.findMany({ orderBy: [{ stage: "asc" }, { version: "desc" }], take: 200 }),
   ]);
   return {

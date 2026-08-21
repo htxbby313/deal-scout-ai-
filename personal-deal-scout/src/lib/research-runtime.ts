@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const sourceFailures = new Map<string, { count: number; openUntil: number }>();
+const hostSchedules = new Map<string, Promise<void>>();
+const hostLastStartedAt = new Map<string, number>();
 const SCRIPT_STYLE_TAGS = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi;
 const HTML_TAGS = /<[^>]+>/g;
 const WHITESPACE = /\s+/g;
@@ -40,10 +42,24 @@ export async function chunkedMap<T, R>(values: readonly T[], chunkSize: number, 
   return output;
 }
 
-type FetchRetryOptions = RequestInit & { attempts?: number; timeoutMs?: number; baseDelayMs?: number; sleep?: (delayMs: number) => Promise<void> };
+type FetchRetryOptions = RequestInit & { attempts?: number; timeoutMs?: number; baseDelayMs?: number; minimumHostIntervalMs?: number; sleep?: (delayMs: number) => Promise<void>; random?: () => number };
+
+async function scheduleHostRequest(host: string, minimumIntervalMs: number, sleep: (delayMs: number) => Promise<void>) {
+  const previous = hostSchedules.get(host) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const scheduled = previous.then(() => current);
+  hostSchedules.set(host, scheduled);
+  await previous;
+  const wait = Math.max(0, (hostLastStartedAt.get(host) ?? 0) + minimumIntervalMs - Date.now());
+  if (wait) await sleep(wait);
+  hostLastStartedAt.set(host, Date.now());
+  release();
+  if (hostSchedules.get(host) === scheduled) hostSchedules.delete(host);
+}
 
 export async function fetchWithRetry(input: URL | string, options: FetchRetryOptions = {}) {
-  const { attempts = 3, timeoutMs = 15_000, baseDelayMs = 250, sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay)), ...init } = options;
+  const { attempts = 3, timeoutMs = 15_000, baseDelayMs = 250, minimumHostIntervalMs = 100, sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay)), random = Math.random, ...init } = options;
   if (!Number.isInteger(attempts) || attempts < 1 || attempts > 4) throw new Error("External request attempts must be between 1 and 4.");
   const host = new URL(input).hostname.toLowerCase();
   const circuit = sourceFailures.get(host);
@@ -51,6 +67,7 @@ export async function fetchWithRetry(input: URL | string, options: FetchRetryOpt
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      await scheduleHostRequest(host, minimumHostIntervalMs, sleep);
       const response = await fetch(input, { ...init, signal: AbortSignal.timeout(timeoutMs) });
       if (response.ok) { sourceFailures.delete(host); return response; }
       if (!RETRYABLE_STATUS.has(response.status)) return response;
@@ -60,7 +77,7 @@ export async function fetchWithRetry(input: URL | string, options: FetchRetryOpt
       lastError = error;
       if (attempt === attempts) { recordSourceFailure(host); throw error; }
     }
-    await sleep(baseDelayMs * 2 ** (attempt - 1));
+    await sleep(Math.round(baseDelayMs * 2 ** (attempt - 1) * (0.75 + random() * 0.5)));
   }
   throw lastError instanceof Error ? lastError : new Error("External request failed.");
 }
@@ -85,4 +102,4 @@ export async function fetchValidatedJson<T>(input: URL | string, schema: z.ZodTy
   return validated.data;
 }
 
-export const __researchRuntimeTestables = { RETRYABLE_STATUS, resetCircuits: () => sourceFailures.clear() };
+export const __researchRuntimeTestables = { RETRYABLE_STATUS, resetCircuits: () => { sourceFailures.clear(); hostSchedules.clear(); hostLastStartedAt.clear(); } };

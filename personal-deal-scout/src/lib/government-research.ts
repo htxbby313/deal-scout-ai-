@@ -1,5 +1,6 @@
 import "server-only";
 import { getPrisma } from "@/lib/prisma";
+import { fetchWithRetry } from "@/lib/research-runtime";
 
 const CENSUS_SOURCE = "U.S. Census Building Permits Survey";
 const COUNTY_BASE_URL = "https://www2.census.gov/econ/bps/County";
@@ -30,21 +31,36 @@ function csvLine(line: string) {
 
 function integer(value: string | undefined) { const parsed = Number(value ?? 0); return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0; }
 
+function* textLines(text: string) {
+  let start = 0;
+  for (let index = 0; index <= text.length; index += 1) {
+    if (index < text.length && text[index] !== "\n") continue;
+    const end = index > start && text[index - 1] === "\r" ? index - 1 : index;
+    yield text.slice(start, end);
+    start = index + 1;
+  }
+}
+
 function parseCountyPermits(text: string, expectedPeriod?: string): CountyPermit[] {
   if (new TextEncoder().encode(text).length > MAX_FILE_BYTES) throw new Error("Census county permit file exceeded the safe size limit.");
-  const lines = text.split(/\r?\n/);
-  const heading = csvLine(lines[0] ?? "").map((value) => value.toLowerCase());
-  const labels = csvLine(lines[1] ?? "").map((value) => value.toLowerCase());
+  const lines = textLines(text);
+  const heading = csvLine(lines.next().value ?? "").map((value) => value.toLowerCase());
+  const labels = csvLine(lines.next().value ?? "").map((value) => value.toLowerCase());
   if (heading[0] !== "survey" || labels[0] !== "date" || labels[1] !== "state" || labels[2] !== "county" || labels[5] !== "name") throw new Error("Census county permit file header was not recognized.");
-  const records = lines.slice(3).filter((line) => line.trim()).map(csvLine).map((row) => {
+  lines.next();
+  const records: CountyPermit[] = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const row = csvLine(line);
     if (row.length < 18 || !/^\d{6}$/.test(row[0] ?? "")) throw new Error("Census county permit file contained an invalid county row.");
     const period = row[0];
     if (expectedPeriod && period !== expectedPeriod) throw new Error(`Census county permit file reported ${period}, not ${expectedPeriod}.`);
     const stateFips = row[1]?.padStart(2, "0") ?? ""; const countyFips = row[2]?.padStart(3, "0") ?? "";
     const units = integer(row[7]) + integer(row[10]) + integer(row[13]) + integer(row[16]);
     const value = BigInt(integer(row[8]) + integer(row[11]) + integer(row[14]) + integer(row[17]));
-    return { period, fips: `${stateFips}${countyFips}`, stateFips, countyFips, countyName: row[5]?.trim() || "Unknown County", stateName: states[stateFips] || `State FIPS ${stateFips}`, units, value };
-  }).filter((row) => /^\d{5}$/.test(row.fips) && row.stateFips !== "72");
+    const record = { period, fips: `${stateFips}${countyFips}`, stateFips, countyFips, countyName: row[5]?.trim() || "Unknown County", stateName: states[stateFips] || `State FIPS ${stateFips}`, units, value };
+    if (/^\d{5}$/.test(record.fips) && record.stateFips !== "72") records.push(record);
+  }
   if (!records.length) throw new Error("Census county permit file contained no county records.");
   return records;
 }
@@ -62,7 +78,7 @@ function rankCountyPermits(current: CountyPermit[], prior: CountyPermit[]) {
 function fileUrl(period: string) { return `${COUNTY_BASE_URL}/co${period.slice(2)}y.txt`; }
 async function fetchPeriod(period: string) {
   const url = fileUrl(period);
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000), headers: { "User-Agent": "DealScoutAI/1.0 public-record-research" } });
+  const response = await fetchWithRetry(url, { cache: "no-store", attempts: 3, timeoutMs: 20_000, headers: { "User-Agent": "DealScoutAI/1.0 public-record-research" } });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Census county permit request failed with HTTP ${response.status}.`);
   if (Number(response.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) throw new Error("Census county permit file exceeded the safe size limit.");
@@ -102,17 +118,21 @@ export async function runCensusPermitResearch() {
   }
 }
 
-export async function readGovernmentResearch() {
+export async function readGovernmentResearch(options: { listingPage?: number; listingPageSize?: number } = {}) {
   const db = getPrisma();
-  const [latestRun, latestCompletedRun, listings, countyCoverage] = await Promise.all([
+  const listingPageSize = Math.max(1, Math.min(options.listingPageSize ?? 250, 500));
+  const listingPage = Math.max(1, options.listingPage ?? 1);
+  const listingWhere = { latitude: { not: null }, longitude: { not: null }, opportunityStatus: { not: "REJECTED" as const } };
+  const [latestRun, latestCompletedRun, listings, listingCount, countyCoverage] = await Promise.all([
     db.governmentResearchRun.findFirst({ where: { source: CENSUS_SOURCE }, orderBy: { createdAt: "desc" } }),
     db.governmentResearchRun.findFirst({ where: { source: CENSUS_SOURCE, status: "COMPLETED", period: { not: null } }, orderBy: { createdAt: "desc" } }),
-    db.property.findMany({ where: { latitude: { not: null }, longitude: { not: null }, opportunityStatus: { not: "REJECTED" } }, select: { id: true, address: true, city: true, state: true, zipCode: true, county: true, neighborhood: true, latitude: true, longitude: true, estimatedValue: true, marketFips: true } }),
+    db.property.findMany({ where: listingWhere, select: { id: true, address: true, city: true, state: true, zipCode: true, county: true, neighborhood: true, latitude: true, longitude: true, estimatedValue: true, marketFips: true }, orderBy: { id: "asc" }, skip: (listingPage - 1) * listingPageSize, take: listingPageSize }),
+    db.property.count({ where: listingWhere }),
     db.countySourceRegistry.findMany({ select: { fipsCode: true, coverageStatus: true, coverageReason: true, lastAccessibilityCheckAt: true, nextReviewAt: true } }),
   ]);
   const signals = latestCompletedRun?.period ? await db.marketSignal.findMany({ where: { source: CENSUS_SOURCE, period: latestCompletedRun.period }, orderBy: { rank: "asc" }, take: 150 }) : [];
   const coverageByFips = new Map(countyCoverage.map((item) => [item.fipsCode, item]));
-  return { dataPeriod: latestCompletedRun?.period ?? null, latestRun: latestRun ? { ...latestRun, startedAt: latestRun.startedAt.toISOString(), finishedAt: latestRun.finishedAt?.toISOString(), createdAt: latestRun.createdAt.toISOString() } : null, signals: signals.map((signal) => { const coverage = coverageByFips.get(signal.fips); return { ...signal, currentValue: signal.currentValue.toString(), capturedAt: signal.capturedAt.toISOString(), countyCoverageStatus: coverage?.coverageStatus ?? "NEEDS_REVIEW", countyCoverageReason: coverage?.coverageReason ?? "Official county source coverage has not been registered.", countyCoverageCheckedAt: coverage?.lastAccessibilityCheckAt?.toISOString() ?? null, countyCoverageNextReviewAt: coverage?.nextReviewAt?.toISOString() ?? null }; }), listings: listings.flatMap((listing) => listing.latitude === null || listing.longitude === null ? [] : [{ ...listing, county: listing.county ?? undefined, neighborhood: listing.neighborhood ?? undefined, marketFips: listing.marketFips ?? undefined, estimatedValue: listing.estimatedValue ?? undefined, latitude: listing.latitude, longitude: listing.longitude }]) };
+  return { dataPeriod: latestCompletedRun?.period ?? null, latestRun: latestRun ? { ...latestRun, startedAt: latestRun.startedAt.toISOString(), finishedAt: latestRun.finishedAt?.toISOString(), createdAt: latestRun.createdAt.toISOString() } : null, signals: signals.map((signal) => { const coverage = coverageByFips.get(signal.fips); return { ...signal, currentValue: signal.currentValue.toString(), capturedAt: signal.capturedAt.toISOString(), countyCoverageStatus: coverage?.coverageStatus ?? "NEEDS_REVIEW", countyCoverageReason: coverage?.coverageReason ?? "Official county source coverage has not been registered.", countyCoverageCheckedAt: coverage?.lastAccessibilityCheckAt?.toISOString() ?? null, countyCoverageNextReviewAt: coverage?.nextReviewAt?.toISOString() ?? null }; }), listingPagination: { page: listingPage, pageSize: listingPageSize, total: listingCount, pages: Math.max(1, Math.ceil(listingCount / listingPageSize)) }, listings: listings.flatMap((listing) => listing.latitude === null || listing.longitude === null ? [] : [{ ...listing, county: listing.county ?? undefined, neighborhood: listing.neighborhood ?? undefined, marketFips: listing.marketFips ?? undefined, estimatedValue: listing.estimatedValue ?? undefined, latitude: listing.latitude, longitude: listing.longitude }]) };
 }
 
 export const __governmentTestables = { parseCountyPermits, rankCountyPermits, candidatePeriods };

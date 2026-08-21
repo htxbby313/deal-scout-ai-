@@ -109,42 +109,46 @@ function imageUrls(html: string, baseUrl: string) {
 // FIX #4: Optimize image extraction with single pass, early termination
 function listingImageUrls(html: string, baseUrl: string, address: string) {
   const matches: string[] = [];
+  const seen = new Set<string>();
   const addressTerms = address.toLowerCase().split(/\s+/).filter((term) => term.length > 2);
   const MAX_IMAGES = 12;
-
-  // Extract from meta tags first (faster)
-  const metaImages = imageUrls(html, baseUrl);
-  matches.push(...metaImages);
-  if (matches.length >= MAX_IMAGES) return matches.slice(0, MAX_IMAGES);
-
-  // Extract from img tags if needed
-  for (const tag of html.match(/<img\s[^>]*>/gi) || []) {
-    if (matches.length >= MAX_IMAGES) break;
-    const alt = tag.match(/alt\s*=\s*["']([^"']*)["']/i)?.[1]?.toLowerCase() || "";
-    if (!addressTerms.some((term) => alt.includes(term))) continue;
-    const src = tag.match(/(?:src|data-src)\s*=\s*["']([^"']+)["']/i)?.[1];
-    if (src) {
-      try {
-        matches.push(new URL(src.replaceAll("\\/", "/").replaceAll("&amp;", "&"), baseUrl).toString());
-      } catch {
-        // Skip invalid URLs
-      }
-    }
-  }
-  if (matches.length >= MAX_IMAGES) return stableUnique(matches).slice(0, MAX_IMAGES);
-
-  // Extract from JSON-LD if needed
-  const jsonImages = [...html.matchAll(/["'](?:image|contentUrl)["']\s*:\s*["'](https:\/\/[^"']+)["']/gi)].map((match) => match[1]);
-  for (const url of jsonImages) {
-    if (matches.length >= MAX_IMAGES) break;
+  const add = (raw?: string) => {
+    if (!raw || matches.length >= MAX_IMAGES) return;
     try {
-      matches.push(new URL(url.replaceAll("\\/", "/").replaceAll("&amp;", "&"), baseUrl).toString());
-    } catch {
-      // Skip invalid URLs
+      const url = new URL(raw.replaceAll("\\/", "/").replaceAll("&amp;", "&"), baseUrl).toString();
+      if (url.startsWith("https://") && !seen.has(url)) { seen.add(url); matches.push(url); }
+    } catch { /* Invalid image URLs are ignored. */ }
+  };
+  const addStructuredImages = (value: unknown): void => {
+    if (matches.length >= MAX_IMAGES || value === null || value === undefined) return;
+    if (typeof value === "string") { add(value); return; }
+    if (Array.isArray(value)) { for (const item of value) addStructuredImages(item); return; }
+    if (typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    for (const [key, child] of Object.entries(record)) {
+      if (key === "image" || key === "contentUrl" || key === "@graph") addStructuredImages(child);
+      else if (child && typeof child === "object") addStructuredImages(child);
+    }
+    if (typeof record.url === "string" && (record["@type"] === "ImageObject" || "contentUrl" in record)) add(record.url);
+  };
+
+  // Scan relevant tags once. JSON-LD is parsed as JSON instead of regex-scanning the full document.
+  const tags = /<meta\b[^>]*>|<img\b[^>]*>|<script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi;
+  for (const match of html.matchAll(tags)) {
+    if (matches.length >= MAX_IMAGES) break;
+    const tag = match[0];
+    if (/^<meta/i.test(tag)) {
+      const key = tag.match(/(?:property|name)\s*=\s*["']([^"']+)["']/i)?.[1]?.toLowerCase();
+      if (["og:image", "og:image:url", "twitter:image"].includes(key ?? "")) add(tag.match(/content\s*=\s*["']([^"']+)["']/i)?.[1]);
+    } else if (/^<img/i.test(tag)) {
+      const alt = tag.match(/alt\s*=\s*["']([^"']*)["']/i)?.[1]?.toLowerCase() ?? "";
+      if (addressTerms.some((term) => alt.includes(term))) add(tag.match(/(?:src|data-src)\s*=\s*["']([^"']+)["']/i)?.[1]);
+    } else {
+      const body = tag.match(/>([\s\S]*?)<\/script>/i)?.[1];
+      if (body) try { addStructuredImages(JSON.parse(body)); } catch { /* Untrusted malformed metadata is ignored. */ }
     }
   }
-
-  return stableUnique(matches).slice(0, MAX_IMAGES);
+  return matches;
 }
 
 function phoneNumbers(html: string) {

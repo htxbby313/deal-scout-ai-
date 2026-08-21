@@ -16,7 +16,7 @@ describe("research runtime", () => {
     const request = vi.fn().mockResolvedValueOnce(new Response("busy", { status: 503 })).mockResolvedValue(new Response("ok", { status: 200 }));
     const delays: number[] = [];
     vi.stubGlobal("fetch", request);
-    expect((await fetchWithRetry("https://example.gov", { sleep: async (delay) => { delays.push(delay); } })).status).toBe(200);
+    expect((await fetchWithRetry("https://example.gov", { minimumHostIntervalMs: 0, random: () => 0.5, sleep: async (delay) => { delays.push(delay); } })).status).toBe(200);
     expect(request).toHaveBeenCalledTimes(2);
     expect(delays).toEqual([250]);
   });
