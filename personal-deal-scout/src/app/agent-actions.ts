@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/auth";
 import { reviewAgentTask, runAgentQueue, updateAgentAutonomy, updateAgentStatus } from "@/lib/agent-orchestration";
+import { enqueueAgentOperations, enqueueApprovedAgentTask } from "@/lib/agent-queue";
 
 export type AgentActionState = { status: "idle" | "success" | "error"; message: string };
 
@@ -41,7 +42,14 @@ export async function reviewAgentTaskAction(taskId: string, decision: "APPROVE" 
   await requireOwner();
   try {
     await reviewAgentTask(taskId, decision === "APPROVE", String(data.get("note") ?? ""));
+    const queued = decision === "APPROVE" ? await enqueueApprovedAgentTask(taskId) : null;
     revalidatePath("/agents");
-    return { status: "success", message: decision === "APPROVE" ? "Task approved and returned to queue." : "Task rejected." };
+    return { status: "success", message: decision === "APPROVE" ? `Task approved and queued now${queued ? ` · ${queued.messageId}` : ""}.` : "Task rejected." };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Task review failed." }; }
+}
+
+export async function runFullAgentCycleAction(_state: AgentActionState): Promise<AgentActionState> {
+  void _state; await requireOwner();
+  try { const queued = await enqueueAgentOperations("OWNER"); revalidatePath("/agents"); return { status: "success", message: `Full research and agent cycle queued · ${queued.messageId}.` }; }
+  catch (error) { return { status: "error", message: error instanceof Error ? error.message : "The operating cycle could not start." }; }
 }

@@ -7,6 +7,7 @@ import { enqueuePropertyResearch, runQueuedPropertyResearch } from "@/lib/proper
 import { enqueueDeveloperResearch, runQueuedDeveloperResearch } from "@/lib/developer-research";
 import { after } from "next/server";
 import { registerProfessionalDiligenceArtifact, runDiligenceReview } from "@/lib/diligence-service";
+import { enqueueAgentOperations } from "@/lib/agent-queue";
 
 export type TransactionActionState = { status: "idle" | "success" | "error"; message: string };
 const value = (data: FormData, key: string) => String(data.get(key) ?? "").trim();
@@ -22,6 +23,7 @@ export async function createTransactionAction(_state: TransactionActionState, da
     const developerRun = developerId ? await enqueueDeveloperResearch(developerId) : null;
     after(async () => {
       await Promise.all([runQueuedPropertyResearch(propertyRun.id), developerRun ? runQueuedDeveloperResearch(developerRun.id) : Promise.resolve()]);
+      await enqueueAgentOperations("EVENT");
     });
     revalidatePath("/transactions");
     return { status: "success", message: "Transaction created on owner hold." };

@@ -19,6 +19,7 @@ import {
   setPropertyMediaApproval,
 } from "@/lib/property-research";
 import { enqueueResearchBacklog } from "@/lib/research-operations";
+import { enqueueAgentOperations } from "@/lib/agent-queue";
 
 import {
   attemptProviderSend,
@@ -110,6 +111,7 @@ export async function createPropertyAction(formData: FormData) {
   const queued = await enqueuePropertyResearch(property.id);
   after(async () => {
     await runQueuedPropertyResearch(queued.id);
+    await enqueueAgentOperations("EVENT");
   });
   revalidatePath("/properties");
   const marketFips = value(formData, "marketFips");
@@ -362,6 +364,7 @@ export async function createDeveloperAction(formData: FormData) {
   const queued = await enqueueDeveloperResearch(developer.id);
   after(async () => {
     await runQueuedDeveloperResearch(queued.id);
+    await enqueueAgentOperations("EVENT");
   });
   revalidatePath("/developers");
 }
