@@ -9,6 +9,7 @@ import { scoreDeveloperMatches } from "@/lib/database";
 import { agentTaskDedupeKey } from "@/lib/agent-task-dedup";
 import { underwriteAgentOpportunity } from "@/lib/agent-profit-underwriting";
 import { readAgentSchedulerHealth } from "@/lib/agent-scheduler";
+import { analyzeEvidenceWithNvidia } from "@/lib/nvidia-reasoning";
 
 const TEAM: Array<{ role: AgentRole; name: string; description: string }> = [
   { role: "OPERATIONS_COORDINATOR", name: "Operations Coordinator", description: "Coordinates evidence-backed work and owner handoffs." },
@@ -111,7 +112,8 @@ async function performTask(task: Awaited<ReturnType<typeof loadTask>>) {
   }
   if (taskType === "PREPARE_ACTION_PACKAGE" && task.propertyId) {
     const underwriting = await getPrisma().agentTask.findFirst({ where: { propertyId: task.propertyId, taskType: "UNDERWRITE_PROFIT", status: "COMPLETED" }, orderBy: { completedAt: "desc" } });
-    return { summary: "An exact owner action package was prepared; no external contact occurred.", output: { proposedAction: "Review the evidence-backed opportunity and authorize one specific next action.", affectedPropertyId: task.propertyId, expectedBenefit: task.expectedBenefit, expectedValueCents: task.expectedValueCents?.toString() ?? null, supportingUnderwriting: underwriting?.output ?? null, reversible: true, contactAttempted: false, requiresExactOwnerApproval: true } };
+    const nvidiaEvidenceAnalysis = await analyzeEvidenceWithNvidia({ propertyId: task.propertyId, expectedBenefit: task.expectedBenefit, expectedValueCents: task.expectedValueCents?.toString() ?? null, evidenceCount: task.evidenceCount, materialRisks: task.materialRisks, underwriting: underwriting?.output ?? null });
+    return { summary: "An exact owner action package was prepared; no external contact occurred.", output: { proposedAction: "Review the evidence-backed opportunity and authorize one specific next action.", affectedPropertyId: task.propertyId, expectedBenefit: task.expectedBenefit, expectedValueCents: task.expectedValueCents?.toString() ?? null, supportingUnderwriting: underwriting?.output ?? null, nvidiaEvidenceAnalysis, reversible: true, contactAttempted: false, requiresExactOwnerApproval: true } };
   }
   if ((taskType === "REVIEW_COMPLIANCE_EVIDENCE" || taskType === "PREPARE_DOCUMENT_CHECKLIST") && task.transaction) {
     const missing = [!task.transaction.counselApprovedAt && "counsel approval", !task.transaction.complianceVerifiedAt && "compliance verification", task.transaction.documents.length === 0 && "transaction documents", task.transaction.approvals.length === 0 && "owner approvals"].filter(Boolean);
