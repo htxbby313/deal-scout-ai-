@@ -26,6 +26,7 @@ export default async function OwnerQueuePage() {
       TRANSACTION_APPROVAL: "Deal approval",
       FUNNEL_BLOCKER: "Deal needs attention",
       SELLER_ENGAGEMENT: "Seller draft",
+      DEVELOPER_DRAFT: "Developer draft",
       CONTRACT_TEMPLATE: "Contract review",
     })[kind] ?? kind.replaceAll("_", " ");
   return (

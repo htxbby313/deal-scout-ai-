@@ -36,34 +36,89 @@ test(
 
       await page.goto(`${baseUrl}/`);
       await page.waitForURL(/\/owner-queue$/);
-      await assert.doesNotReject(() => page.getByRole("heading", { name: "Dashboard", exact: true }).waitFor());
-      assert.equal(await page.getByRole("link", { name: "Skip to main content" }).count(), 1);
+      await assert.doesNotReject(() =>
+        page.getByRole("heading", { name: "Dashboard", exact: true }).waitFor(),
+      );
+      assert.equal(
+        await page.getByRole("link", { name: "Skip to main content" }).count(),
+        1,
+      );
 
       await page.goto(`${baseUrl}/properties`);
-      await assert.doesNotReject(() => page.getByLabel("Interactive map of sourced properties").waitFor());
-      assert.equal(await page.getByText("n.Map is not a constructor", { exact: true }).count(), 0);
-      await page.getByText("Add one property for automatic research", { exact: true }).click();
-      for (const name of ["address", "city", "state", "zipCode"]) assert.equal(await page.locator(`input[name="${name}"]`).isVisible(), true, `${name} must be visible in the compact property form.`);
-      await assert.doesNotReject(() => page.getByRole("button", { name: "Start property research", exact: true }).waitFor());
-      assert.equal(await page.getByText("Add known details (optional)", { exact: true }).locator("..").getAttribute("open"), null);
-      const propertyCard = page.getByRole("button").filter({ hasText: "Open dossier" }).first();
+      await assert.doesNotReject(() =>
+        page.getByLabel("Interactive map of sourced properties").waitFor(),
+      );
+      assert.equal(
+        await page
+          .getByText("n.Map is not a constructor", { exact: true })
+          .count(),
+        0,
+      );
+      await page
+        .getByText("Add one property for automatic research", { exact: true })
+        .click();
+      for (const name of ["address", "city", "state", "zipCode"])
+        assert.equal(
+          await page.locator(`input[name="${name}"]`).isVisible(),
+          true,
+          `${name} must be visible in the compact property form.`,
+        );
+      await assert.doesNotReject(() =>
+        page
+          .getByRole("button", { name: "Start property research", exact: true })
+          .waitFor(),
+      );
+      assert.equal(
+        await page
+          .getByText("Add known details (optional)", { exact: true })
+          .locator("..")
+          .getAttribute("open"),
+        null,
+      );
+      const propertyCard = page
+        .getByRole("button")
+        .filter({ hasText: "Open dossier" })
+        .first();
       if (await propertyCard.count()) {
-        await assert.doesNotReject(() => propertyCard.getByText("Deal stage", { exact: true }).waitFor());
+        await assert.doesNotReject(() =>
+          propertyCard.getByText("Deal stage", { exact: true }).waitFor(),
+        );
         await propertyCard.click();
         await assert.doesNotReject(() => page.getByRole("dialog").waitFor());
         await page.keyboard.press("Escape");
-        await assert.doesNotReject(() => page.getByRole("dialog").waitFor({ state: "detached" }));
+        await assert.doesNotReject(() =>
+          page.getByRole("dialog").waitFor({ state: "detached" }),
+        );
       }
 
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(`${baseUrl}/properties`);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, "390x844: Properties must not create page-level horizontal overflow.");
-      await assert.doesNotReject(() => page.getByRole("link", { name: "Dashboard" }).waitFor());
+      assert.equal(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth <=
+            document.documentElement.clientWidth,
+        ),
+        true,
+        "390x844: Properties must not create page-level horizontal overflow.",
+      );
+      await assert.doesNotReject(() =>
+        page.getByRole("link", { name: "Dashboard" }).waitFor(),
+      );
       await page.setViewportSize(viewports[0]);
 
       await page.goto(`${baseUrl}/developers`);
-      assert.equal((await page.locator("aside a").count()) <= 24, true, "Developer list must be paginated to 24 records.");
-      await assert.doesNotReject(() => page.getByText(/Relationship:/).first().waitFor());
+      assert.equal(
+        (await page.locator("aside a").count()) <= 24,
+        true,
+        "Developer list must be paginated to 24 records.",
+      );
+      await assert.doesNotReject(() =>
+        page
+          .getByText(/Relationship:/)
+          .first()
+          .waitFor(),
+      );
 
       await page.goto(`${baseUrl}/seller-crm`);
       await assert.doesNotReject(() =>
@@ -76,7 +131,33 @@ test(
           .getByRole("navigation", { name: "Conversation filters" })
           .waitFor(),
       );
-      await assert.doesNotReject(() => page.getByRole("navigation", { name: "Conversation pipeline" }).waitFor());
+      await assert.doesNotReject(() =>
+        page
+          .getByRole("navigation", { name: "Conversation pipeline" })
+          .waitFor(),
+      );
+      await assert.doesNotReject(() =>
+        page.getByText(/Developer conversation drafts ·/).waitFor(),
+      );
+      if (await page.locator("#developer-drafts article").count()) {
+        const developerDrafts = page.locator("#developer-drafts");
+        if (
+          !(await developerDrafts.evaluate((element) =>
+            element.hasAttribute("open"),
+          ))
+        )
+          await developerDrafts.locator("summary").click();
+        await assert.doesNotReject(() =>
+          developerDrafts
+            .locator("article")
+            .first()
+            .locator("p")
+            .last()
+            .waitFor(),
+        );
+        const firstDraft = developerDrafts.locator("article").first();
+        assert.equal((await firstDraft.innerText()).trim().length > 0, true);
+      }
       assert.equal((await page.locator("main").count()) > 0, true);
       const channelSelect = page.locator('select[name="channel"]').first();
       assert.equal(
@@ -96,6 +177,22 @@ test(
           t.diagnostic(
             "Seller-facts intake is reachable from the selected conversation",
           );
+        if (
+          await page
+            .getByText("Seller draft awaiting review", { exact: true })
+            .count()
+        ) {
+          await assert.doesNotReject(() =>
+            page
+              .getByRole("button", { name: "Approve draft", exact: true })
+              .waitFor(),
+          );
+          await assert.doesNotReject(() =>
+            page
+              .getByRole("button", { name: "Reject draft", exact: true })
+              .waitFor(),
+          );
+        }
       }
       await page.goto(
         `${baseUrl}/seller-crm?view=open&q=__no_matching_seller__`,
@@ -108,8 +205,12 @@ test(
       await page.waitForURL(/view=open/);
 
       await page.goto(`${baseUrl}/settings`);
-      await assert.doesNotReject(() => page.getByRole("heading", { name: "Settings", exact: true }).waitFor());
-      await assert.doesNotReject(() => page.getByRole("heading", { name: "App color", exact: true }).waitFor());
+      await assert.doesNotReject(() =>
+        page.getByRole("heading", { name: "Settings", exact: true }).waitFor(),
+      );
+      await assert.doesNotReject(() =>
+        page.getByRole("heading", { name: "App color", exact: true }).waitFor(),
+      );
 
       await page.goto(`${baseUrl}/executive`);
       assert.equal(await page.locator("[data-metric-key]").count(), 48);
@@ -124,9 +225,7 @@ test(
           .getAttribute("open"),
         null,
       );
-      await page
-        .getByText(/All operational metrics ·/)
-        .click();
+      await page.getByText(/All operational metrics ·/).click();
 
       const cost = page.locator('[data-metric-key="cost_per_offer"]');
       await cost.getByText("How this is calculated").click();

@@ -8,7 +8,10 @@ import type {
 } from "@prisma/client";
 import { requireOwner } from "@/lib/auth";
 import { parseMoneyToCents } from "@/lib/financial-truth";
-import { createSellerEngagementDraft } from "@/lib/seller-engagement";
+import {
+  createSellerEngagementDraft,
+  reviewSellerEngagementDraft,
+} from "@/lib/seller-engagement";
 import {
   recordSellerConversation,
   recordSellerDisposition,
@@ -53,6 +56,16 @@ export async function createSellerEngagementAction(data: FormData) {
     purpose: text(data, "purpose"),
     actor: "owner",
   });
+  revalidatePath("/seller-crm");
+}
+export async function reviewSellerEngagementAction(data: FormData) {
+  await requireOwner();
+  await reviewSellerEngagementDraft({
+    engagementId: text(data, "engagementId"),
+    approved: text(data, "decision") === "approve",
+    actor: "owner",
+  });
+  revalidatePath("/owner-queue");
   revalidatePath("/seller-crm");
 }
 export async function recordSellerConversationAction(data: FormData) {

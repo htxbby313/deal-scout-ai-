@@ -1,4 +1,5 @@
 import "server-only";
+import { planDeveloperConversationRoute } from "@/lib/conversation-drafting";
 
 import { Prisma, type PrismaClient } from "@prisma/client";
 import {
@@ -436,11 +437,13 @@ export async function readDatabase(): Promise<Database> {
       });
       const providerSettings = [];
       for (const provider of ["SMS", "EMAIL", "VOICE"]) {
-        providerSettings.push(await tx.providerSetting.upsert({
+        providerSettings.push(
+          await tx.providerSetting.upsert({
             where: { provider },
             update: {},
             create: { provider, enabled: false, configured: false },
-        }));
+          }),
+        );
       }
       return [systemSetting, providerSettings] as const;
     });
@@ -468,7 +471,9 @@ export async function readDatabase(): Promise<Database> {
       db.messageApproval.findMany({ orderBy: { createdAt: "desc" } }),
       db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
     ]);
-    const enabledProviders = new Map(providers.map((provider) => [provider.provider, provider.enabled]));
+    const enabledProviders = new Map(
+      providers.map((provider) => [provider.provider, provider.enabled]),
+    );
     const enabled = (name: string) => enabledProviders.get(name) === true;
     return {
       meta: {
@@ -847,15 +852,31 @@ export function calculateMatches(
   developers: DeveloperRecord[],
   projects: DeveloperProjectRecord[],
 ) {
-  if (!propertyReadiness(property).actionable) return [];
+  if (
+    property.opportunityStatus === "REJECTED" ||
+    !property.address ||
+    !property.zipCode
+  )
+    return [];
   return developers
     .filter(
       (d) =>
-        d.active && ["PRIORITY", "QUALIFIED"].includes(d.qualificationStatus),
+        d.active &&
+        d.qualificationStatus !== "REJECTED" &&
+        Boolean(d.email || d.phone || d.contactUrl || d.website),
     )
     .map((developer) => {
-      let score = 20;
-      const reasons: string[] = [];
+      let score = 10;
+      const reasons: string[] = [
+        "Public business contact route is available for relationship outreach.",
+      ];
+      if (["PRIORITY", "QUALIFIED"].includes(developer.qualificationStatus)) {
+        score += 10;
+        reasons.push("Existing research supports relationship readiness.");
+      } else
+        reasons.push(
+          "Buy-box and capacity details should be confirmed in conversation.",
+        );
       const history = projects.filter(
         (p) => p.developerId === developer.id && p.verifiedAt && p.sourceUrl,
       );
@@ -996,22 +1017,31 @@ export async function generateDeveloperPricingRequest(
     ]);
     if (!property || !developer)
       throw new Error("Property or developer not found.");
+    const subject = `Pricing request: ${property.address}`;
+    const existing = await db.messageApproval.findFirst({
+      where: {
+        recipientLabel: developer.companyName,
+        subject,
+        status: { in: ["PENDING", "APPROVED", "SENT_BLOCKED"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existing) return existing;
     const matches = await scoreDeveloperMatches(propertyId, false);
     const match = matches.find((m) => m.developerId === developerId);
-    const channel = developer.email ? "EMAIL" : "INTERNAL";
-    const route =
-      developer.email ||
-      developer.contactUrl ||
-      developer.phone ||
-      "No verified route";
-    const body = `I have a possible property in ${property.zipCode}.\n\nAddress: ${property.address}\nLot size: ${property.lotSize || "unknown"}\nYear built: ${property.yearBuilt || "unknown"}\nNearby / fit notes: ${(match?.reasons ?? []).join(" ") || "Potential redevelopment candidate."}\n\nWhere would you need to be on price?\n\nManual contact route: ${route}`;
+    const plan = planDeveloperConversationRoute(developer);
+    if (!plan.ready)
+      throw new Error(
+        `Developer contact research incomplete: ${plan.missing.join(", ")}.`,
+      );
+    const body = `I have a possible property in ${property.zipCode}.\n\nAddress: ${property.address}\nLot size: ${property.lotSize || "unknown"}\nYear built: ${property.yearBuilt || "unknown"}\nNearby / fit notes: ${(match?.reasons ?? []).join(" ") || "Potential redevelopment candidate."}\n\nWhere would you need to be on price?${plan.missing.length ? ` Please also confirm your best ${plan.missing.join(" and ")} for future opportunities.` : ""}\n\nManual contact route: ${plan.route}`;
     return await db.$transaction(async (tx) => {
       const approval = await tx.messageApproval.create({
         data: {
           leadId: lead?.id,
-          channel,
+          channel: plan.channel,
           recipientLabel: developer.companyName,
-          subject: `Pricing request: ${property.address}`,
+          subject,
           body,
           provider: "disabled",
         },
@@ -1025,8 +1055,8 @@ export async function generateDeveloperPricingRequest(
           propertyId,
           approvalId: approval.id,
           matchScore: match?.score,
-          channel,
-          contactRoute: route,
+          channel: plan.channel,
+          contactRoute: plan.route,
         },
       );
       return approval;
@@ -1080,7 +1110,11 @@ export async function attemptProviderSend(approvalId: string) {
       if (!legacyBoundary.allowed) {
         const blocked = await tx.messageApproval.update({
           where: { id: approvalId },
-          data: { status: "SENT_BLOCKED", provider: "disabled", blockerCodes: legacyBoundary.blockers },
+          data: {
+            status: "SENT_BLOCKED",
+            provider: "disabled",
+            blockerCodes: legacyBoundary.blockers,
+          },
         });
         await audit(
           tx,
@@ -1116,7 +1150,13 @@ export async function attemptProviderSend(approvalId: string) {
           environmentConfigured: envConfigured,
         })
       ) {
-        const blockerCodes = [approval.status !== "APPROVED" && "owner_approval_missing", setting.mode !== "ACTIVE" && "system_not_active", !provider.enabled && "provider_disabled", !provider.configured && "provider_not_configured", !envConfigured && "provider_credentials_missing"].filter(Boolean) as string[];
+        const blockerCodes = [
+          approval.status !== "APPROVED" && "owner_approval_missing",
+          setting.mode !== "ACTIVE" && "system_not_active",
+          !provider.enabled && "provider_disabled",
+          !provider.configured && "provider_not_configured",
+          !envConfigured && "provider_credentials_missing",
+        ].filter(Boolean) as string[];
         const blocked = await tx.messageApproval.update({
           where: { id: approvalId },
           data: { status: "SENT_BLOCKED", provider: "disabled", blockerCodes },
@@ -1138,7 +1178,10 @@ export async function attemptProviderSend(approvalId: string) {
       );
       return tx.messageApproval.update({
         where: { id: approvalId },
-        data: { status: "SENT_BLOCKED", blockerCodes: ["provider_adapter_missing"] },
+        data: {
+          status: "SENT_BLOCKED",
+          blockerCodes: ["provider_adapter_missing"],
+        },
       });
     });
   } catch (error) {
@@ -1349,14 +1392,17 @@ function normalizeDeveloperRow(row: Record<string, string>) {
   const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const isPhone = (value: string) =>
     /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/.test(value);
-  const classified = tail.map((value) => ({ value, url: isUrl(value), email: isEmail(value), phone: isPhone(value) }));
+  const classified = tail.map((value) => ({
+    value,
+    url: isUrl(value),
+    email: isEmail(value),
+    phone: isPhone(value),
+  }));
   const urls = classified.filter((item) => item.url).map((item) => item.value);
   const firstUrl = classified.findIndex((item) => item.url);
-  const narrative = (firstUrl >= 0 ? classified.slice(0, firstUrl) : classified).filter(
-    (item) => !item.email && !item.phone,
-  ).map(
-    (item) => item.value,
-  );
+  const narrative = (firstUrl >= 0 ? classified.slice(0, firstUrl) : classified)
+    .filter((item) => !item.email && !item.phone)
+    .map((item) => item.value);
   const website = urls.find((value) => !/linkedin\.com/i.test(value)) ?? "";
   const source =
     [...urls].reverse().find((value) => value !== website) ?? website;
@@ -1370,8 +1416,12 @@ function normalizeDeveloperRow(row: Record<string, string>) {
   return {
     companyName: row.Company?.trim() ?? "",
     contactName: malformed ? contact : csvValue(row, "Contact_Person"),
-    phone: malformed ? (classified.find((item) => item.phone)?.value ?? "") : csvValue(row, "Phone"),
-    email: malformed ? (classified.find((item) => item.email)?.value ?? "") : csvValue(row, "Email"),
+    phone: malformed
+      ? (classified.find((item) => item.phone)?.value ?? "")
+      : csvValue(row, "Phone"),
+    email: malformed
+      ? (classified.find((item) => item.email)?.value ?? "")
+      : csvValue(row, "Email"),
     website: malformed ? website : csvValue(row, "Website"),
     targetMarkets: [row.HQ_City, row.HQ_State].filter(Boolean).join(", "),
     propertyTypes: row.Asset_Class_Focus?.trim() ?? "",

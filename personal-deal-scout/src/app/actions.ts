@@ -139,6 +139,9 @@ export async function updatePropertyEvidenceAction(
       confidence: Number(value(formData, "confidence")),
       notes: value(formData, "notes"),
     });
+    after(async () => {
+      await enqueueAgentOperations("EVENT");
+    });
     revalidatePath("/properties");
     revalidatePath("/disposition");
     return {
@@ -197,6 +200,9 @@ export async function researchPropertyAction(
   await requireOwner();
   try {
     const result = await researchProperty(propertyId);
+    after(async () => {
+      await enqueueAgentOperations("EVENT");
+    });
     revalidatePath("/properties");
     revalidatePath("/disposition");
     revalidatePath("/operations");
@@ -222,6 +228,9 @@ export async function researchDeveloperAction(
   try {
     const queued = await enqueueDeveloperResearch(developerId);
     const result = await runQueuedDeveloperResearch(queued.id);
+    after(async () => {
+      await enqueueAgentOperations("EVENT");
+    });
     revalidatePath("/developers");
     revalidatePath("/operations");
     if (result.status === "failed")
@@ -422,12 +431,16 @@ export async function approveMessageAction(formData: FormData) {
   await requireOwner();
   await setApprovalStatus(value(formData, "approvalId"), "APPROVED");
   revalidatePath("/");
+  revalidatePath("/owner-queue");
+  revalidatePath("/seller-crm");
 }
 
 export async function rejectMessageAction(formData: FormData) {
   await requireOwner();
   await setApprovalStatus(value(formData, "approvalId"), "REJECTED");
   revalidatePath("/");
+  revalidatePath("/owner-queue");
+  revalidatePath("/seller-crm");
 }
 
 export async function blockedSendAttemptAction(formData: FormData) {

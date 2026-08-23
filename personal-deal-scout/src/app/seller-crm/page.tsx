@@ -4,7 +4,9 @@ import {
   recordSellerConversationAction,
   recordSellerDispositionAction,
   scheduleSellerFollowUpAction,
+  reviewSellerEngagementAction,
 } from "@/app/seller-crm-actions";
+import { approveMessageAction, rejectMessageAction } from "@/app/actions";
 import { SellerFactsForm } from "@/app/seller-crm/seller-facts-form";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
@@ -47,11 +49,19 @@ export default async function SellerCrmPage({
 }) {
   await requireOwner();
   const params = await searchParams;
-  const [engagements, transactions] = await Promise.all([
+  const [engagements, transactions, developerDrafts] = await Promise.all([
     readSellerCrm(),
     getPrisma().dealTransaction.findMany({
       include: { property: true },
       orderBy: { updatedAt: "desc" },
+    }),
+    getPrisma().messageApproval.findMany({
+      where: {
+        subject: { startsWith: "Pricing request:" },
+        status: { in: ["PENDING", "APPROVED", "SENT_BLOCKED"] },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 24,
     }),
   ]);
   const term = params.q?.trim().toLowerCase();
@@ -221,6 +231,67 @@ export default async function SellerCrmPage({
             </div>
           ))}
         </nav>
+        <details
+          className="border-b bg-white px-4 py-4 sm:px-6"
+          id="developer-drafts"
+          open={developerDrafts.some((draft) => draft.status === "PENDING")}
+        >
+          <summary className="cursor-pointer font-bold">
+            Developer conversation drafts ·{" "}
+            {
+              developerDrafts.filter((draft) => draft.status === "PENDING")
+                .length
+            }{" "}
+            awaiting review
+          </summary>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {developerDrafts.map((draft) => (
+              <article className="rounded-xl border p-4" key={draft.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="font-bold">{draft.subject}</h2>
+                    <p className="text-xs text-slate-500">
+                      {draft.recipientLabel} · {words(draft.status)}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">
+                    {draft.channel}
+                  </span>
+                </div>
+                <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                  {draft.body}
+                </p>
+                {draft.status === "PENDING" ? (
+                  <div className="mt-4 flex gap-2">
+                    <form action={approveMessageAction}>
+                      <input name="approvalId" type="hidden" value={draft.id} />
+                      <button className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white">
+                        Approve draft
+                      </button>
+                    </form>
+                    <form action={rejectMessageAction}>
+                      <input name="approvalId" type="hidden" value={draft.id} />
+                      <button className="rounded-lg border px-3 py-2 text-xs font-bold">
+                        Reject
+                      </button>
+                    </form>
+                  </div>
+                ) : null}
+                {draft.blockerCodes.length ? (
+                  <p className="mt-3 text-xs text-amber-800">
+                    Send blockers: {draft.blockerCodes.map(words).join(" · ")}
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+          {!developerDrafts.length ? (
+            <p className="mt-3 text-sm text-slate-500">
+              No developer conversation drafts yet. Agents create them after
+              property-to-developer matching.
+            </p>
+          ) : null}
+        </details>
         <div className="grid min-h-[calc(100dvh-7rem)] xl:grid-cols-[17rem_minmax(30rem,1fr)_20rem]">
           <aside className="border-r bg-white p-4">
             <form>
@@ -319,6 +390,44 @@ export default async function SellerCrmPage({
                     </span>
                   </div>
                 </header>
+                {selected.status === "READY_FOR_OWNER_REVIEW" ? (
+                  <section className="m-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                      Seller draft awaiting review
+                    </p>
+                    <p className="mt-3 whitespace-pre-wrap text-sm text-slate-800">
+                      {selected.purpose}
+                    </p>
+                    <div className="mt-4 flex gap-2">
+                      <form action={reviewSellerEngagementAction}>
+                        <input
+                          name="engagementId"
+                          type="hidden"
+                          value={selected.id}
+                        />
+                        <input name="decision" type="hidden" value="approve" />
+                        <button className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white">
+                          Approve draft
+                        </button>
+                      </form>
+                      <form action={reviewSellerEngagementAction}>
+                        <input
+                          name="engagementId"
+                          type="hidden"
+                          value={selected.id}
+                        />
+                        <input name="decision" type="hidden" value="reject" />
+                        <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold">
+                          Reject
+                        </button>
+                      </form>
+                    </div>
+                    <p className="mt-3 text-xs text-slate-600">
+                      Approval reviews the wording only. It does not send the
+                      message.
+                    </p>
+                  </section>
+                ) : null}
                 <section
                   className={`m-5 rounded-2xl border p-4 ${action[2] === "red" ? "border-red-200 bg-red-50" : action[2] === "amber" ? "border-amber-200 bg-amber-50" : "border-blue-200 bg-blue-50"}`}
                 >

@@ -1,6 +1,14 @@
 import type { AgentCycleTrigger } from "@prisma/client";
-import { beginAgentSchedulerCycle, finishAgentSchedulerCycle } from "@/lib/agent-scheduler";
-import { runAgentTask, runAgentTeamBatch, seedAgentWork } from "@/lib/agent-orchestration";
+import {
+  beginAgentSchedulerCycle,
+  finishAgentSchedulerCycle,
+} from "@/lib/agent-scheduler";
+import {
+  runAgentTask,
+  runAgentTeamBatch,
+  runConversationDraftBacklog,
+  seedAgentWork,
+} from "@/lib/agent-orchestration";
 import { runAutomaticResearchCycle } from "@/lib/automatic-research";
 import { recoverAutomaticResearchWork } from "@/lib/research-automation";
 import { synchronizeAcquisitionFunnels } from "@/lib/operating-layer";
@@ -18,13 +26,15 @@ export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
       synchronizeAcquisitionFunnels(),
       synchronizeCountyCoverageTargets(),
     ]);
-    const [funnelExpirations, countyAccessibility, campaignCountyCoverage] = await Promise.all([
-      runFunnelExpirationCycle(),
-      runCountyAccessibilityChecks(10),
-      synchronizeCampaignCountyCoverage(),
-    ]);
+    const [funnelExpirations, countyAccessibility, campaignCountyCoverage] =
+      await Promise.all([
+        runFunnelExpirationCycle(),
+        runCountyAccessibilityChecks(10),
+        synchronizeCampaignCountyCoverage(),
+      ]);
     const seeded = await seedAgentWork();
     const agents = await runAgentTeamBatch();
+    const conversationDrafts = await runConversationDraftBacklog();
     await finishAgentSchedulerCycle({
       cycleId: cycle.id,
       status: "COMPLETED",
@@ -40,9 +50,10 @@ export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
       },
       seed: seeded,
     });
-    return { cycleId: cycle.id, agents };
+    return { cycleId: cycle.id, agents, conversationDrafts };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Agent operations cycle failed.";
+    const message =
+      error instanceof Error ? error.message : "Agent operations cycle failed.";
     await finishAgentSchedulerCycle({
       cycleId: cycle.id,
       status: "FAILED",
