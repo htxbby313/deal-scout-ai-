@@ -9,7 +9,7 @@ import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
 import {
   readDatabase,
-  scoreDeveloperMatches,
+  calculateMatches,
   type QualificationStatus,
 } from "@/lib/database";
 import { getPrisma } from "@/lib/prisma";
@@ -139,16 +139,12 @@ export default async function DevelopersPage({
         )
     : [];
   const matches = selected
-    ? (
-        await Promise.all(
-          db.properties.map(async (property) => ({
+    ? db.properties.map((property) => ({
             property,
-            match: (await scoreDeveloperMatches(property.id, false)).find(
+            match: calculateMatches(property, db.developers, db.developerProjects).find(
               (item) => item.developerId === selected.id,
             ),
-          })),
-        )
-      )
+          }))
         .filter((item) => item.match)
         .sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0))
     : [];
@@ -266,10 +262,10 @@ export default async function DevelopersPage({
           </aside>
           {selected ? (
             <div className="space-y-6">
-              <section className="rounded-2xl border bg-white p-5">
-                <h3 className="font-bold">
-                  County entity evidence and conflicts
-                </h3>
+              <details className="rounded-2xl border bg-white p-5">
+                <summary className="cursor-pointer font-bold">
+                  County entity evidence and conflicts · {countyMatches.length}
+                </summary>
                 <p className="text-xs text-slate-500">
                   Persisted matches only. Manual-review or conflicted records do
                   not qualify this developer.
@@ -299,7 +295,7 @@ export default async function DevelopersPage({
                     ) : null}
                   </article>
                 ))}
-              </section>
+              </details>
               <section className="rounded-2xl border bg-white p-6 shadow-sm">
                 <div className="flex flex-col justify-between gap-5 lg:flex-row">
                   <div>

@@ -428,32 +428,23 @@ async function refreshDeveloperQualification(
 export async function readDatabase(): Promise<Database> {
   try {
     const db = getPrisma();
-    const [
-      setting,
-      providers,
-      properties,
-      leads,
-      tasks,
-      developers,
-      developerProjects,
-      templates,
-      approvals,
-      logs,
-    ] = await Promise.all([
-      db.systemSetting.upsert({
+    const [setting, providers] = await db.$transaction(async (tx) => {
+      const systemSetting = await tx.systemSetting.upsert({
         where: { id: "singleton" },
         update: {},
         create: { id: "singleton", mode: "RESEARCH" },
-      }),
-      Promise.all(
-        ["SMS", "EMAIL", "VOICE"].map((provider) =>
-          db.providerSetting.upsert({
+      });
+      const providerSettings = [];
+      for (const provider of ["SMS", "EMAIL", "VOICE"]) {
+        providerSettings.push(await tx.providerSetting.upsert({
             where: { provider },
             update: {},
             create: { provider, enabled: false, configured: false },
-          }),
-        ),
-      ),
+        }));
+      }
+      return [systemSetting, providerSettings] as const;
+    });
+    const [properties, leads, tasks] = await Promise.all([
       db.property.findMany({
         orderBy: { createdAt: "desc" },
         include: {
@@ -464,12 +455,16 @@ export async function readDatabase(): Promise<Database> {
       }),
       db.lead.findMany({ orderBy: { createdAt: "desc" } }),
       db.task.findMany({ orderBy: { createdAt: "desc" } }),
+    ]);
+    const [developers, developerProjects, templates] = await Promise.all([
       db.developer.findMany({
         orderBy: { createdAt: "desc" },
         include: { researchRuns: { orderBy: { startedAt: "desc" }, take: 1 } },
       }),
       db.developerProject.findMany({ orderBy: { createdAt: "desc" } }),
       db.messageTemplate.findMany({ orderBy: { createdAt: "desc" } }),
+    ]);
+    const [approvals, logs] = await Promise.all([
       db.messageApproval.findMany({ orderBy: { createdAt: "desc" } }),
       db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
     ]);
@@ -847,7 +842,7 @@ export async function createDeveloperProject(
   }
 }
 
-function calculateMatches(
+export function calculateMatches(
   property: PropertyRecord,
   developers: DeveloperRecord[],
   projects: DeveloperProjectRecord[],

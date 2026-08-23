@@ -5,8 +5,9 @@ import {
   type PropertyView,
 } from "@/app/properties/property-browser";
 import { WorkspaceShell } from "@/app/workspace-shell";
+import { SubmitButton } from "@/app/submit-button";
 import { requireOwner } from "@/lib/auth";
-import { readDatabase, scoreDeveloperMatches } from "@/lib/database";
+import { calculateMatches, readDatabase } from "@/lib/database";
 import { getPrisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -22,13 +23,16 @@ function Field({
   required?: boolean;
 }) {
   return (
-    <input
-      className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-      name={name}
-      placeholder={placeholder}
-      type={type}
-      required={required}
-    />
+    <label className="grid gap-1 text-sm font-semibold text-slate-700">
+      <span>{placeholder}{required ? <span aria-hidden="true" className="text-red-700"> *</span> : null}</span>
+      <input
+        className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-normal"
+        name={name}
+        placeholder={placeholder}
+        type={type}
+        required={required}
+      />
+    </label>
   );
 }
 
@@ -47,10 +51,9 @@ export default async function PropertiesPage() {
   const developerById = new Map(
     db.developers.map((developer) => [developer.id, developer]),
   );
-  const properties: PropertyView[] = await Promise.all(
-    db.properties.map(async (property) => ({
+  const properties: PropertyView[] = db.properties.map((property) => ({
       ...property,
-      matches: (await scoreDeveloperMatches(property.id, false))
+      matches: calculateMatches(property, db.developers, db.developerProjects)
         .slice(0, 5)
         .map((match) => ({
           ...match,
@@ -58,8 +61,7 @@ export default async function PropertiesPage() {
             developerById.get(match.developerId)?.companyName ??
             "Unknown developer",
         })),
-    })),
-  );
+    }));
   return (
     <WorkspaceShell>
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
@@ -93,8 +95,8 @@ export default async function PropertiesPage() {
         <div className="mt-6">
           <PropertyBrowser properties={properties} />
         </div>
-        <section className="mt-6 rounded-2xl border bg-white p-5">
-          <h2 className="font-bold">County evidence and conflicts</h2>
+        <details className="mt-6 rounded-2xl border bg-white p-5">
+          <summary className="cursor-pointer font-bold">County evidence and conflicts · {countyEvidence.length}</summary>
           <p className="text-xs text-slate-500">
             Persisted observations only. Conflicted and manual-review records
             are not verified facts.
@@ -123,7 +125,7 @@ export default async function PropertiesPage() {
               ) : null}
             </article>
           ))}
-        </section>
+        </details>
         <section className="mt-8 grid gap-6 xl:grid-cols-2">
           <details
             className="rounded-2xl border bg-white p-5 shadow-sm"
@@ -146,17 +148,21 @@ export default async function PropertiesPage() {
             id="add-property"
           >
             <summary className="cursor-pointer font-bold">
-              Add one property
+              Add one property for automatic research
             </summary>
+            <p className="mt-3 text-sm text-slate-600">Only the address is required to start. Deal Scout will look for ownership, parcel, tax, zoning, utility, listing, contact, and development evidence.</p>
             <form
               action={createPropertyAction}
               className="mt-4 grid gap-3 sm:grid-cols-2"
             >
+              <input name="ownerName" type="hidden" value="Research pending" />
               <Field name="address" placeholder="Street address" required />
-              <Field name="ownerName" placeholder="Owner or agency" required />
               <Field name="city" placeholder="City" required />
               <Field name="state" placeholder="State" required />
               <Field name="zipCode" placeholder="ZIP" required />
+              <details className="rounded-xl border border-slate-200 p-4 sm:col-span-2">
+                <summary className="cursor-pointer text-sm font-bold text-slate-700">Add known details (optional)</summary>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Field name="county" placeholder="County" />
               <Field
                 name="neighborhood"
@@ -180,17 +186,14 @@ export default async function PropertiesPage() {
               />
               <Field name="lotSize" placeholder="Lot size or acreage" />
               <Field name="yearBuilt" placeholder="Year built" />
-              <select
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                name="opportunityStatus"
-                required
-                defaultValue="NEEDS_VERIFICATION"
-              >
+              <label className="grid gap-1 text-sm font-semibold text-slate-700"><span>Starting status</span><select
+                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-normal"
+                name="opportunityStatus" required defaultValue="NEEDS_VERIFICATION">
                 <option value="NEEDS_VERIFICATION">Needs verification</option>
                 <option value="DEVELOPMENT_SIGNAL">Development signal</option>
                 <option value="CONFIRMED_AVAILABLE">Confirmed available</option>
                 <option value="GOVERNMENT_SALE">Government sale</option>
-              </select>
+              </select></label>
               <Field
                 name="confidence"
                 placeholder="Confidence 0–100"
@@ -227,14 +230,12 @@ export default async function PropertiesPage() {
                 name="sourceRecordDate"
                 placeholder="Record/listing date"
               />
-              <textarea
-                className="min-h-24 rounded-xl border p-3 text-sm sm:col-span-2"
-                name="notes"
-                placeholder="Zoning, utilities, document number, and research notes"
-              />
-              <button className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2">
-                Add property
-              </button>
+              <label className="grid gap-1 text-sm font-semibold text-slate-700 sm:col-span-2"><span>Known notes</span><textarea
+                className="min-h-24 rounded-xl border p-3 text-sm font-normal"
+                name="notes" placeholder="Zoning, utilities, document number, and research notes" /></label>
+                </div>
+              </details>
+              <SubmitButton className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2" idleLabel="Start property research" pendingLabel="Adding property and starting research…" />
             </form>
           </details>
         </section>

@@ -41,7 +41,8 @@ type WorkspaceSection =
 export function WorkspaceShell({ active = "properties", children }: { active?: WorkspaceSection; children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950 lg:grid lg:grid-cols-[240px_1fr]">
-      <aside className="border-b border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden lg:border-b-0 lg:border-r">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <aside className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden lg:border-b-0 lg:border-r">
         <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-5 lg:block lg:px-6">
           <Link className="flex items-center gap-3" href="/owner-queue">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-700 text-sm font-bold text-white">DS</span>
@@ -55,7 +56,7 @@ export function WorkspaceShell({ active = "properties", children }: { active?: W
             const selected = (item.active as readonly string[]).includes(active);
             return (
               <Link aria-current={selected ? "page" : undefined} className={`flex min-w-max items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold ${selected ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-50"}`} href={item.href} key={item.href}>
-                <span className={`grid h-7 w-7 place-items-center rounded-lg text-xs font-bold ${selected ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-500"}`}>{item.icon}</span>
+                <span aria-hidden="true" className={`grid h-7 w-7 place-items-center rounded-lg text-xs font-bold ${selected ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-500"}`}>{item.icon}</span>
                 {item.label}
               </Link>
             );
@@ -72,7 +73,7 @@ export function WorkspaceShell({ active = "properties", children }: { active?: W
           </div>
         </details>
       </aside>
-      <main className="min-w-0">{children}</main>
+      <main className="min-w-0" id="main-content" tabIndex={-1}>{children}</main>
     </div>
   );
 }

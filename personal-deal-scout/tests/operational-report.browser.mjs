@@ -34,6 +34,30 @@ test(
       const page = await context.newPage();
       await signIn(page);
 
+      await page.goto(`${baseUrl}/`);
+      await page.waitForURL(/\/owner-queue$/);
+      await assert.doesNotReject(() => page.getByRole("heading", { name: "Dashboard", exact: true }).waitFor());
+      assert.equal(await page.getByRole("link", { name: "Skip to main content" }).count(), 1);
+
+      await page.goto(`${baseUrl}/properties`);
+      await page.getByText("Add one property for automatic research", { exact: true }).click();
+      for (const name of ["address", "city", "state", "zipCode"]) assert.equal(await page.locator(`input[name="${name}"]`).isVisible(), true, `${name} must be visible in the compact property form.`);
+      await assert.doesNotReject(() => page.getByRole("button", { name: "Start property research", exact: true }).waitFor());
+      assert.equal(await page.getByText("Add known details (optional)", { exact: true }).locator("..").getAttribute("open"), null);
+      const propertyCard = page.getByRole("button").filter({ hasText: "Open dossier" }).first();
+      if (await propertyCard.count()) {
+        await propertyCard.click();
+        await assert.doesNotReject(() => page.getByRole("dialog").waitFor());
+        await page.keyboard.press("Escape");
+        await assert.doesNotReject(() => page.getByRole("dialog").waitFor({ state: "detached" }));
+      }
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`${baseUrl}/properties`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, "390x844: Properties must not create page-level horizontal overflow.");
+      await assert.doesNotReject(() => page.getByRole("link", { name: "Dashboard" }).waitFor());
+      await page.setViewportSize(viewports[0]);
+
       await page.goto(`${baseUrl}/seller-crm`);
       await assert.doesNotReject(() =>
         page

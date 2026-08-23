@@ -5,6 +5,8 @@ import { getPrisma } from "@/lib/prisma";
 import { researchOfficialPropertySources } from "@/lib/official-property-sources";
 import { HUD_REO_SOURCE } from "@/lib/hud-reo";
 import { chunkedMap, fetchValidatedJson, fetchWithRetry, htmlToText, stableUnique } from "@/lib/research-runtime";
+import { ENFORMION_SOURCE_URL, enformionConfigured, researchPropertyWithEnformion } from "@/lib/enformion-property";
+import { reserveEnformionLookup } from "@/lib/enformion-budget";
 
 export const PROPERTY_RESEARCH_VERSION = 3;
 
@@ -322,6 +324,32 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
     for (const finding of official.findings) findings.set(finding.topic, finding);
   }
 
+  const needsPropertyRecords = ["OWNERSHIP", "PARCEL", "TAX", "ZONING", "DIMENSIONS", "UTILITIES"].some((topic) => !findings.has(topic));
+  let enformionOwner: string | undefined;
+  if (needsPropertyRecords && enformionConfigured()) {
+    try {
+      const budget = await reserveEnformionLookup(propertyId);
+      if (!budget.reserved) {
+        errors.push(`EnformionGO: configured monthly lookup limit (${budget.limit}) reached for ${budget.month}.`);
+      } else {
+        sourcesChecked += 1;
+        const result = await researchPropertyWithEnformion(property);
+        if (result?.matched) {
+          enformionOwner = result.ownerNames[0];
+          const evidence = { status: "VERIFIED" as const, sourceName: "EnformionGO PropertyV2", sourceUrl: ENFORMION_SOURCE_URL, confidence: 88, notes: "Licensed property-record evidence matched to the complete situs address. Confirm closing-critical facts with the county or title professional." };
+          if (result.ownerNames.length) findings.set("OWNERSHIP", { topic: "OWNERSHIP", label: "Recorded ownership", value: result.ownerNames.join(" · "), ...evidence });
+          if (result.apn || result.legalDescription) findings.set("PARCEL", { topic: "PARCEL", label: "Parcel identity and legal description", value: [result.apn && `APN ${result.apn}`, result.legalDescription].filter(Boolean).join(" · "), ...evidence });
+          if (result.assessedValue !== undefined || result.taxAmount !== undefined) findings.set("TAX", { topic: "TAX", label: "Tax and assessed value", value: [result.assessedValue !== undefined && `Assessed $${result.assessedValue.toLocaleString("en-US")}${result.assessedYear ? ` (${result.assessedYear})` : ""}`, result.taxAmount !== undefined && `Tax $${result.taxAmount.toLocaleString("en-US")}${result.taxYear ? ` (${result.taxYear})` : ""}`].filter(Boolean).join(" · "), ...evidence });
+          if (result.zoning) findings.set("ZONING", { topic: "ZONING", label: "Zoning and permitted use", value: result.zoning, ...evidence });
+          if (result.dimensions) findings.set("DIMENSIONS", { topic: "DIMENSIONS", label: "Lot dimensions and frontage", value: result.dimensions, ...evidence });
+          if (result.utilities) findings.set("UTILITIES", { topic: "UTILITIES", label: "Utility availability", value: result.utilities, ...evidence });
+        } else errors.push("EnformionGO: no exact address match was returned; no provider facts were saved.");
+      }
+    } catch (error) {
+      errors.push(`EnformionGO: ${error instanceof Error ? error.message : "lookup failed"}`);
+    }
+  }
+
   if (media.length) findings.set("PHOTOS", { topic: "PHOTOS", label: "Property photos", value: `${media.length} verified-source image${media.length === 1 ? "" : "s"} found`, status: "VERIFIED", sourceName: "Multiple public sources", confidence: 80 });
   if (property.estimatedValue && property.verificationSourceUrl) findings.set("PRICE", { topic: "PRICE", label: "Current asking price", value: `$${property.estimatedValue.toLocaleString("en-US")}`, status: "VERIFIED", sourceName: "Verified source", sourceUrl: property.verificationSourceUrl, confidence: 85 });
   const foundPhone = property.contactPhone ? null : discoveredPhones[0];
@@ -338,7 +366,7 @@ export async function researchProperty(propertyId: string, queuedRunId?: string)
 
   // FIX #5: Batch database operations instead of sequential upserts
   await db.$transaction(async (tx) => {
-    if (foundPhone || geocode) await tx.property.update({ where: { id: propertyId }, data: { contactPhone: contactPhone || undefined, contactUrl: foundPhone?.sourceUrl || undefined, latitude: geocode?.latitude || undefined, longitude: geocode?.longitude || undefined, neighborhood: geocodedNeighborhood || undefined, lastVerifiedAt: new Date() } });
+    if (foundPhone || geocode || enformionOwner) await tx.property.update({ where: { id: propertyId }, data: { ownerName: enformionOwner || undefined, contactPhone: contactPhone || undefined, contactUrl: foundPhone?.sourceUrl || undefined, latitude: geocode?.latitude || undefined, longitude: geocode?.longitude || undefined, neighborhood: geocodedNeighborhood || undefined, lastVerifiedAt: new Date() } });
     
     // Batch upsert all findings at once
     const findingUpserts = [...findings.values()].map((finding) =>
