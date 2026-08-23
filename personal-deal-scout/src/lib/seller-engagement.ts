@@ -202,6 +202,8 @@ export async function createAutomaticSellerDraft(
     ownerName: property.ownerName,
     phone: property.contactPhone,
     email: property.contactEmail,
+    contactUrl: property.contactUrl,
+    sourceUrl: property.verificationSourceUrl || property.sourceUrl,
   });
   if (!plan.ready) return { created: false as const, missing: plan.missing };
   const transaction =
@@ -209,7 +211,7 @@ export async function createAutomaticSellerDraft(
     (await createControlledTransaction({ propertyId, actor }));
   const engagement = await createSellerEngagementDraft({
     transactionId: transaction.id,
-    channel: "SMS",
+    channel: plan.channel,
     recipient: plan.recipient,
     recipientLabel: plan.recipientLabel,
     purpose: plan.body,

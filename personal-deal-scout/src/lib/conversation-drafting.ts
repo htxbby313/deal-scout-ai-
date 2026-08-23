@@ -4,15 +4,23 @@ export function planSellerConversationDraft(input: {
   ownerName?: string | null;
   phone?: string | null;
   email?: string | null;
+  contactUrl?: string | null;
+  sourceUrl?: string | null;
 }) {
-  if (!input.phone?.trim())
-    return { ready: false as const, missing: ["seller phone"] };
+  const route =
+    input.phone?.trim() || input.contactUrl?.trim() || input.sourceUrl?.trim();
+  if (!route)
+    return {
+      ready: false as const,
+      missing: ["public seller or broker contact route", "seller phone"],
+    };
 
   const contactName = input.contactName?.trim();
   const ownerName = input.ownerName?.trim();
   const genericName = !contactName || contactName === "Research pending";
   const missing = [
     genericName && "contact name",
+    !input.phone?.trim() && "seller phone",
     !input.email?.trim() && "email",
   ].filter(Boolean) as string[];
   const recipientLabel = genericName
@@ -26,7 +34,8 @@ export function planSellerConversationDraft(input: {
 
   return {
     ready: true as const,
-    recipient: input.phone.trim(),
+    recipient: route,
+    channel: input.phone?.trim() ? ("SMS" as const) : ("INTERNAL" as const),
     recipientLabel,
     missing,
     body: `Hi ${recipientLabel}, this is Cole with Coleman & Co. Holdings LLC. I am reaching out about ${input.address}. Would you be open to a brief conversation about the property and your plans for it? There is no obligation.${request}`,

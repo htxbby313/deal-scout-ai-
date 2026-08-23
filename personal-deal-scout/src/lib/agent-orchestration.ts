@@ -292,7 +292,12 @@ export async function seedAgentWork() {
         evidenceCount,
         ownerApprovalRequired: false,
       });
-      if (property.contactPhone)
+      if (
+        property.contactPhone ||
+        property.contactUrl ||
+        property.verificationSourceUrl ||
+        property.sourceUrl
+      )
         await createTaskIfMissing({
           role: "SELLER_ACQUISITION",
           taskType: "DRAFT_SELLER_OUTREACH",

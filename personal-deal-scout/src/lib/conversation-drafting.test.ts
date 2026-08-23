@@ -5,10 +5,13 @@ import {
 } from "@/lib/conversation-drafting";
 
 describe("conversation drafting", () => {
-  it("requires a seller phone but treats email as a follow-up request", () => {
+  it("requires a public route and treats missing direct details as follow-up requests", () => {
     expect(
       planSellerConversationDraft({ address: "1 Main St", contactName: "Pat" }),
-    ).toEqual({ ready: false, missing: ["seller phone"] });
+    ).toEqual({
+      ready: false,
+      missing: ["public seller or broker contact route", "seller phone"],
+    });
     const plan = planSellerConversationDraft({
       address: "1 Main St",
       contactName: "Pat",
@@ -17,7 +20,21 @@ describe("conversation drafting", () => {
     expect(plan.ready).toBe(true);
     if (plan.ready) {
       expect(plan.missing).toEqual(["email"]);
+      expect(plan.channel).toBe("SMS");
       expect(plan.body).toContain("confirm the best email");
+    }
+  });
+
+  it("uses a public listing route to request a missing seller phone", () => {
+    const plan = planSellerConversationDraft({
+      address: "1 Main St",
+      sourceUrl: "https://listing.example/property",
+    });
+    expect(plan.ready).toBe(true);
+    if (plan.ready) {
+      expect(plan.channel).toBe("INTERNAL");
+      expect(plan.missing).toContain("seller phone");
+      expect(plan.body).toContain("seller phone");
     }
   });
 
