@@ -22,7 +22,10 @@ import {
   scoreDeveloperMatches,
 } from "@/lib/database";
 import { createAutomaticSellerDraft } from "@/lib/seller-engagement";
-import { agentTaskDedupeKey } from "@/lib/agent-task-dedup";
+import {
+  agentTaskDedupeKey,
+  shouldRequeueDedupeWinner,
+} from "@/lib/agent-task-dedup";
 import { underwriteAgentOpportunity } from "@/lib/agent-profit-underwriting";
 import { readAgentSchedulerHealth } from "@/lib/agent-scheduler";
 import { analyzeEvidenceWithNvidia } from "@/lib/nvidia-reasoning";
@@ -164,6 +167,7 @@ export async function createTaskIfMissing(input: {
   if (existing) return existing;
   let task;
   let created = false;
+  let requeued = false;
   const action = taskActionPolicy[input.taskType];
   try {
     task = await db.agentTask.create({
@@ -196,6 +200,18 @@ export async function createTaskIfMissing(input: {
     )
       throw error;
     task = await db.agentTask.findUniqueOrThrow({ where: { dedupeKey } });
+    if (shouldRequeueDedupeWinner(task.status)) {
+      task = await db.agentTask.update({
+        where: { id: task.id },
+        data: {
+          status: "QUEUED",
+          output: Prisma.JsonNull,
+          startedAt: null,
+          completedAt: null,
+        },
+      });
+      requeued = true;
+    }
   }
   if (created)
     await db.agentEvent.create({
@@ -204,6 +220,15 @@ export async function createTaskIfMissing(input: {
         actorAgentId: agent.id,
         type: "TASK_CREATED",
         summary: `${agent.name} queued ${task.title}.`,
+      },
+    });
+  if (requeued)
+    await db.agentEvent.create({
+      data: {
+        taskId: task.id,
+        actorAgentId: agent.id,
+        type: "TASK_UPDATED",
+        summary: `${agent.name} requeued ${task.title} after the prior attempt failed or was cancelled.`,
       },
     });
   return task;
