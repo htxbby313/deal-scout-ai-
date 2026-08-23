@@ -6,7 +6,7 @@
     }
   ],
   "functions": {
-    "app/api/queues/deal-scout-agent-operations/route.ts": {
+    "src/app/api/queues/deal-scout-agent-operations/route.ts": {
       "experimentalTriggers": [
         {
           "type": "queue/v2beta",
