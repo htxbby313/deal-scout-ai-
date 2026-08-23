@@ -11,6 +11,7 @@ import { getPrisma } from "@/lib/prisma";
 import { canSendOutbound, propertyReadiness } from "@/lib/domain";
 import { evaluateLegacyOutboundBoundary } from "@/lib/legacy-outbound-boundary";
 import { logOperation } from "@/lib/operational-logging";
+import { developerRelationshipQualification } from "@/lib/developer-qualification";
 
 export type AuditType =
   | "database.migrated"
@@ -397,20 +398,13 @@ function qualificationFor(
   developer: {
     phone: string | null;
     email: string | null;
+    website?: string | null;
     contactName: string | null;
     contactUrl?: string | null;
   },
-  verifiedProjects: number,
+  _verifiedProjects: number,
 ): QualificationStatus {
-  if (!verifiedProjects) return "RESEARCH_NEEDED";
-  const channels = [
-    developer.phone,
-    developer.email,
-    developer.contactUrl,
-  ].filter((value) => Boolean(value?.trim())).length;
-  if (channels >= 2 && developer.contactName?.trim()) return "PRIORITY";
-  if (channels >= 1) return "QUALIFIED";
-  return "RESEARCH_NEEDED";
+  return developerRelationshipQualification(developer);
 }
 
 async function refreshDeveloperQualification(

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getPrisma } from "@/lib/prisma";
 import { chunkedMap, fetchWithRetry, htmlToText, stableUnique, stableUniqueBy } from "@/lib/research-runtime";
+import { developerRelationshipQualification } from "@/lib/developer-qualification";
 
 const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -122,8 +123,7 @@ async function researchDeveloper(developerId: string, runId: string) {
   const verifiedWebPresence = pages.some((page) => page.title?.toLowerCase().includes(developer.companyName.toLowerCase().split(/\s+/)[0]));
   const verifiedContact = Boolean(publicPhone || publicEmail);
   const findingsFound = Number(verifiedWebPresence) + Number(verifiedContact) + Number(verifiedProjects > 0);
-  const channels = [developer.phone || publicPhone, developer.email || publicEmail, developer.contactUrl].filter(Boolean).length;
-  const qualificationStatus = verifiedProjects > 0 && channels >= 2 && developer.contactName ? "PRIORITY" : verifiedProjects > 0 && channels >= 1 ? "QUALIFIED" : verifiedContact ? "LIMITED_CONTACT" : "RESEARCH_NEEDED";
+  const qualificationStatus = developerRelationshipQualification({ ...developer, phone: developer.phone || publicPhone, email: developer.email || publicEmail, contactUrl: developer.contactUrl || pages[0]?.finalUrl });
   await db.$transaction(async (tx) => {
     await chunkedMap(discoveredProjects, 20, (project) => tx.developerProject.upsert({
       where: { developerId_address_zipCode: { developerId, address: project.streetAddress, zipCode: project.zipCode } },

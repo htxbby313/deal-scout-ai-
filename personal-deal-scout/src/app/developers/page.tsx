@@ -17,7 +17,7 @@ import { getPrisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 const labels: Record<QualificationStatus, string> = {
   PRIORITY: "Priority",
-  QUALIFIED: "Qualified",
+  QUALIFIED: "Relationship ready",
   LIMITED_CONTACT: "Limited contact",
   RESEARCH_NEEDED: "Research needed",
   REJECTED: "Rejected",
@@ -167,10 +167,11 @@ export default async function DevelopersPage({
             <p className="text-sm font-semibold text-blue-700">
               Developer intelligence
             </p>
-            <h1 className="mt-1 text-3xl font-bold">Verified Buyer Rolodex</h1>
+            <h1 className="mt-1 text-3xl font-bold">Developer Relationship List</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Only buyers with government-record ownership or development
-              activity and a usable contact route enter the working list.
+              Developers enter the working list when a usable public website,
+              business email, or business phone is available. Buy boxes and
+              capacity evidence determine deal readiness later.
             </p>
           </div>
           <div className="flex gap-2">
@@ -193,7 +194,7 @@ export default async function DevelopersPage({
             className={`rounded-full px-4 py-2 text-sm font-bold ${view === "qualified" ? "bg-slate-950 text-white" : "bg-white ring-1 ring-slate-200"}`}
             href="/developers?view=qualified"
           >
-            Qualified · {qualifiedCount}
+            Relationship ready · {qualifiedCount}
           </Link>
           <Link
             className={`rounded-full px-4 py-2 text-sm font-bold ${view === "research" ? "bg-amber-600 text-white" : "bg-white ring-1 ring-slate-200"}`}

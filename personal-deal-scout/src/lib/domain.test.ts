@@ -43,10 +43,10 @@ describe("production foundation business rules", () => {
     expect(matches[0]?.developerId).toBe("same");
   });
 
-  it("requires verified purchase history before qualification", () => {
+  it("uses contactability for relationship qualification while purchase history remains matching evidence", () => {
     const developer = { phone: "713-555-0100", email: "buyer@example.com", contactName: "Buyer" };
-    expect(__testables.qualificationFor(developer, 0)).toBe("RESEARCH_NEEDED");
-    expect(__testables.qualificationFor(developer, 1)).toBe("PRIORITY");
+    expect(__testables.qualificationFor(developer, 0)).toBe("PRIORITY");
+    expect(__testables.qualificationFor({ phone: null, email: null, website: "https://builder.example", contactName: null }, 0)).toBe("QUALIFIED");
   });
 
   it("keeps a sourced property locked until price, contact, and dated verification evidence exist", () => {
@@ -65,7 +65,7 @@ describe("production foundation business rules", () => {
 
   it("accepts an official land-submission route without inventing an acquisitions email", () => {
     const developer = { phone: "210-555-0100", email: null, contactName: "Land acquisition team", contactUrl: "https://builder.example/land-submission" };
-    expect(__testables.qualificationFor(developer, 1)).toBe("PRIORITY");
+    expect(__testables.qualificationFor(developer, 0)).toBe("PRIORITY");
   });
 
   it("requires dated source evidence before retiring a stale property", () => {
