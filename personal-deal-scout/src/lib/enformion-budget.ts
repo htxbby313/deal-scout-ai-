@@ -24,7 +24,7 @@ export async function reserveEnformionLookup(propertyId: string, now = new Date(
   const limit = enformionMonthlyLimit();
   const month = currentUtcMonth(now);
   return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(1746366529)`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(1746366529)`;
     const used = await tx.auditLog.count({ where: { type: RESERVATION_TYPE, createdAt: { gte: month.start, lt: month.end } } });
     if (used >= limit) return { reserved: false as const, used, limit, month: month.key };
     await tx.auditLog.create({ data: { type: RESERVATION_TYPE, summary: "Reserved one Enformion property lookup within the configured monthly budget.", details: { propertyId, month: month.key, reservationNumber: used + 1, monthlyLimit: limit } } });
