@@ -11,9 +11,9 @@ import { chunkedMap } from "@/lib/research-runtime";
 export async function synchronizeAcquisitionFunnels(now = new Date()) {
   const db = getPrisma();
   const properties = await db.property.findMany({ where: { opportunityStatus: { not: "REJECTED" } }, include: { researchFindings: true, acquisitionFunnels: { orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: { createdAt: "asc" } });
-  const results = await chunkedMap(properties, 5, async (property) => {
+  const results = await chunkedMap(properties, 5, (property) => withStageRetry(async () => {
     let created = 0; let advanced = 0;
-    let funnel = property.acquisitionFunnels[0];
+    let funnel = await db.acquisitionFunnel.findFirst({ where: { propertyId: property.id }, orderBy: { createdAt: "desc" } });
     if (!funnel) {
       funnel = await db.$transaction(async (tx) => {
         const record = await tx.acquisitionFunnel.create({ data: { propertyId: property.id, stage: "DISCOVERED", responsibleActor: "research_agent", nextReviewAt: new Date(now.getTime() + 7 * 86_400_000), expiresAt: new Date(now.getTime() + 7 * 86_400_000) } });
@@ -35,7 +35,7 @@ export async function synchronizeAcquisitionFunnels(now = new Date()) {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     advanced += 1;
     return { created, advanced };
-  });
+  }));
   return { scanned: properties.length, created: results.reduce((sum, result) => sum + result.created, 0), advanced: results.reduce((sum, result) => sum + result.advanced, 0) };
 }
 
