@@ -55,6 +55,40 @@ export default async function SellerCrmPage({
     }),
   ]);
   const term = params.q?.trim().toLowerCase();
+  const conversationStages = [
+    [
+      "Open",
+      engagements.filter((item) =>
+        isEngagementVisibleInView(item.status, "open"),
+      ).length,
+    ],
+    [
+      "Follow-up",
+      engagements.filter((item) =>
+        item.followUps.some((row) => ["SCHEDULED", "DUE"].includes(row.status)),
+      ).length,
+    ],
+    [
+      "Offer",
+      engagements.filter((item) => item.offerHistory.length > 0).length,
+    ],
+    [
+      "Contract",
+      engagements.filter((item) =>
+        [
+          "UNDER_CONTRACT",
+          "BUYER_MATCHING",
+          "ASSIGNMENT_PENDING",
+          "CLOSING_PENDING",
+        ].includes(item.transaction.status),
+      ).length,
+    ],
+    [
+      "Complete",
+      engagements.filter((item) => item.transaction.status === "COMPLETED")
+        .length,
+    ],
+  ] as const;
   const currentView = params.view || "open";
   const visible = engagements.filter((item) => {
     if (
@@ -166,6 +200,27 @@ export default async function SellerCrmPage({
             </details>
           </div>
         </header>
+        <nav
+          aria-label="Conversation pipeline"
+          className="grid grid-cols-2 gap-2 border-b bg-white px-4 pb-4 sm:grid-cols-5 sm:px-6"
+        >
+          {conversationStages.map(([label, count], index) => (
+            <div className="relative rounded-xl border p-3" key={label}>
+              <span className="text-xs text-slate-500">
+                {index + 1}. {label}
+              </span>
+              <b className="mt-1 block text-xl">{count}</b>
+              {index < conversationStages.length - 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-slate-300 sm:block"
+                >
+                  →
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </nav>
         <div className="grid min-h-[calc(100dvh-7rem)] xl:grid-cols-[17rem_minmax(30rem,1fr)_20rem]">
           <aside className="border-r bg-white p-4">
             <form>

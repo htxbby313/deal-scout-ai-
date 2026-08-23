@@ -48,6 +48,7 @@ export type PropertyView = {
   verificationDate?: string;
   lastVerifiedAt?: string;
   confidence: number;
+  pipelineStage?: string;
   researchFindings: Array<{
     id: string;
     topic: string;
@@ -756,10 +757,10 @@ export function PropertyBrowser({
                 <Image
                   alt={property.media[0].altText}
                   className="object-cover"
-                    fill
-                    loader={sourceImageLoader}
-                    loading={index < 3 ? "eager" : "lazy"}
-                    referrerPolicy="no-referrer"
+                  fill
+                  loader={sourceImageLoader}
+                  loading={index < 3 ? "eager" : "lazy"}
+                  referrerPolicy="no-referrer"
                   sizes="(min-width: 1536px) 33vw, (min-width: 768px) 50vw, 100vw"
                   src={property.media[0].url}
                   unoptimized
@@ -806,6 +807,20 @@ export function PropertyBrowser({
                     }
                     /12 verified
                   </b>
+                </span>
+              </div>
+              <div className="mt-3 rounded-xl border border-slate-200 p-3 text-xs">
+                <span className="text-slate-500">Deal stage</span>
+                <b className="mt-1 block">
+                  {(property.pipelineStage || "DISCOVERED").replaceAll(
+                    "_",
+                    " ",
+                  )}
+                </b>
+                <span className="mt-2 block text-slate-500">
+                  Contact: {property.contactName ? "Name ✓" : "Name needed"} ·{" "}
+                  {property.contactPhone ? "Phone ✓" : "Phone needed"}
+                  {property.contactEmail ? " · Email ✓" : ""}
                 </span>
               </div>
               <p className="mt-4 text-sm font-semibold text-blue-700">

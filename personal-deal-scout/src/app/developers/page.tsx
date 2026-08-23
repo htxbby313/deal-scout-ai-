@@ -73,6 +73,7 @@ export default async function DevelopersPage({
     q?: string;
     view?: string;
     sort?: string;
+    page?: string;
   }>;
 }) {
   await requireOwner();
@@ -112,9 +113,13 @@ export default async function DevelopersPage({
           ? a.qualificationStatus.localeCompare(b.qualificationStatus)
           : a.companyName.localeCompare(b.companyName),
     );
+  const pageSize = 24;
+  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const page = Math.min(Math.max(Number(params.page) || 1, 1), pages);
+  const pagedVisible = visible.slice((page - 1) * pageSize, page * pageSize);
   const selected =
-    visible.find((developer) => developer.id === params.developer) ??
-    visible[0];
+    pagedVisible.find((developer) => developer.id === params.developer) ??
+    pagedVisible[0];
   const countyMatches = selected
     ? await getPrisma().countyEntityMatch.findMany({
         where: { developerId: selected.id },
@@ -139,12 +144,15 @@ export default async function DevelopersPage({
         )
     : [];
   const matches = selected
-    ? db.properties.map((property) => ({
+    ? db.properties
+        .map((property) => ({
+          property,
+          match: calculateMatches(
             property,
-            match: calculateMatches(property, db.developers, db.developerProjects).find(
-              (item) => item.developerId === selected.id,
-            ),
-          }))
+            db.developers,
+            db.developerProjects,
+          ).find((item) => item.developerId === selected.id),
+        }))
         .filter((item) => item.match)
         .sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0))
     : [];
@@ -163,11 +171,13 @@ export default async function DevelopersPage({
             <p className="text-sm font-semibold text-blue-700">
               Developer intelligence
             </p>
-            <h1 className="mt-1 text-3xl font-bold">Developer Relationship List</h1>
+            <h1 className="mt-1 text-3xl font-bold">
+              Developer Relationship List
+            </h1>
             <p className="mt-2 text-sm text-slate-600">
-              Developers enter the working list when a usable public website,
-              business email, or business phone is available. Buy boxes and
-              capacity evidence determine deal readiness later.
+              Build acquisition relationships from a contact name, business
+              email, and phone. Missing details become research or conversation
+              follow-ups instead of silently removing the company.
             </p>
           </div>
           <div className="flex gap-2">
@@ -229,27 +239,31 @@ export default async function DevelopersPage({
               </p>
             </div>
             <div className="max-h-[720px] divide-y overflow-y-auto">
-              {visible.map((developer, index) => (
+              {pagedVisible.map((developer, index) => (
                 <Link
                   className={`flex gap-3 p-4 ${developer.id === selected?.id ? "bg-blue-50" : "hover:bg-slate-50"}`}
                   href={`/developers?view=${view}&developer=${developer.id}&sort=${params.sort || "company"}`}
                   key={developer.id}
                 >
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-slate-950 text-sm font-bold text-white">
-                    #{index + 1}
+                    #{(page - 1) * pageSize + index + 1}
                   </span>
                   <span className="min-w-0">
                     <b className="block truncate">{developer.companyName}</b>
                     <span className="block truncate text-xs text-slate-500">
-                      {developer.contactName || "Decision-maker needed"}
+                      {developer.contactName || "Contact name needed"}
+                    </span>
+                    <span className="mt-1 block text-[11px] text-slate-500">
+                      {developer.email ? "Email ✓" : "Email needed"} ·{" "}
+                      {developer.phone ? "Phone ✓" : "Phone needed"}
                     </span>
                     <span className="mt-2 inline-block rounded-full bg-white px-2 py-1 text-[11px] font-semibold ring-1 ring-slate-200">
-                      {labels[developer.qualificationStatus]}
+                      Relationship: {labels[developer.qualificationStatus]}
                     </span>
                   </span>
                 </Link>
               ))}
-              {!visible.length ? (
+              {!pagedVisible.length ? (
                 <div className="p-5">
                   <Empty>
                     {view === "qualified"
@@ -259,6 +273,34 @@ export default async function DevelopersPage({
                 </div>
               ) : null}
             </div>
+            {pages > 1 ? (
+              <nav
+                aria-label="Developer pages"
+                className="flex items-center justify-between gap-2 border-t p-3 text-xs"
+              >
+                <span>
+                  Page {page} of {pages}
+                </span>
+                <div className="flex gap-2">
+                  {page > 1 ? (
+                    <Link
+                      className="rounded-lg border px-3 py-2 font-bold"
+                      href={`/developers?view=${view}&sort=${params.sort || "company"}&q=${encodeURIComponent(params.q || "")}&page=${page - 1}`}
+                    >
+                      Previous
+                    </Link>
+                  ) : null}
+                  {page < pages ? (
+                    <Link
+                      className="rounded-lg bg-slate-950 px-3 py-2 font-bold text-white"
+                      href={`/developers?view=${view}&sort=${params.sort || "company"}&q=${encodeURIComponent(params.q || "")}&page=${page + 1}`}
+                    >
+                      Next
+                    </Link>
+                  ) : null}
+                </div>
+              </nav>
+            ) : null}
           </aside>
           {selected ? (
             <div className="space-y-6">

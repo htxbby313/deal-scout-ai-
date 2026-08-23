@@ -33,22 +33,12 @@ export default async function PipelinePage({
     <WorkspaceShell active="pipeline">
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         <header className="border-b pb-6">
-          <p className="text-sm font-semibold text-blue-700">
-            Measured acquisition operations
-          </p>
-          <h1 className="mt-1 text-3xl font-bold">Acquisition pipeline</h1>
+          <p className="text-sm font-semibold text-blue-700">Deal workflow</p>
+          <h1 className="mt-1 text-3xl font-bold">Deals</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Stage changes require evidence and gates. Scores rank research
-            attention only; they are not buyer interest, seller acceptance,
-            legal approval, contracted fees, or guaranteed profit.
+            See where every opportunity stands, what is blocking it, and what
+            should happen next.
           </p>
-          <Link
-            className="mt-2 inline-block text-sm font-bold text-blue-700 underline"
-            href="/profit-priority"
-          >
-            Manage versioned priority weights
-          </Link>
-          <Link className="ml-4 mt-2 inline-block text-sm font-bold text-blue-700 underline" href="/buyer-evidence">Manage buyer evidence and reliability</Link>
         </header>
         <form className="mt-6 grid gap-3 rounded-2xl border bg-white p-4 sm:grid-cols-4">
           <select
@@ -232,19 +222,28 @@ export default async function PipelinePage({
             </p>
           </article>
         </section>
-        <PipelineForms
-          funnels={data.funnels.map(({ id, property }) => ({ id, property }))}
-          developers={data.developers}
-          buyerDemand={data.buyerDemand.map(
-            ({ id, developerId, developer, version }) => ({
-              id,
-              developerId,
-              developer,
-              version,
-            }),
-          )}
-          stagePolicies={data.stagePolicies}
-        />
+        <details className="mt-6 rounded-2xl border bg-white p-5">
+          <summary className="cursor-pointer text-lg font-bold">
+            Advanced deal setup
+          </summary>
+          <p className="mt-1 text-sm text-slate-500">
+            Stage policies, buyer evidence, campaigns, pricing, and other
+            administrative controls.
+          </p>
+          <PipelineForms
+            funnels={data.funnels.map(({ id, property }) => ({ id, property }))}
+            developers={data.developers}
+            buyerDemand={data.buyerDemand.map(
+              ({ id, developerId, developer, version }) => ({
+                id,
+                developerId,
+                developer,
+                version,
+              }),
+            )}
+            stagePolicies={data.stagePolicies}
+          />
+        </details>
       </div>
     </WorkspaceShell>
   );

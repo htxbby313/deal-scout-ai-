@@ -24,7 +24,15 @@ function Field({
 }) {
   return (
     <label className="grid gap-1 text-sm font-semibold text-slate-700">
-      <span>{placeholder}{required ? <span aria-hidden="true" className="text-red-700"> *</span> : null}</span>
+      <span>
+        {placeholder}
+        {required ? (
+          <span aria-hidden="true" className="text-red-700">
+            {" "}
+            *
+          </span>
+        ) : null}
+      </span>
       <input
         className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-normal"
         name={name}
@@ -39,29 +47,38 @@ function Field({
 export default async function PropertiesPage() {
   await requireOwner();
   const db = await readDatabase();
-  const countyEvidence = await getPrisma().countyFactObservation.findMany({
-    where: { propertyId: { not: null } },
-    include: {
-      property: { select: { address: true } },
-      source: { select: { agencyName: true, officialDomain: true } },
-    },
-    orderBy: { observedAt: "desc" },
-    take: 50,
-  });
+  const [countyEvidence, funnels] = await Promise.all([
+    getPrisma().countyFactObservation.findMany({
+      where: { propertyId: { not: null } },
+      include: {
+        property: { select: { address: true } },
+        source: { select: { agencyName: true, officialDomain: true } },
+      },
+      orderBy: { observedAt: "desc" },
+      take: 50,
+    }),
+    getPrisma().acquisitionFunnel.findMany({
+      select: { propertyId: true, stage: true },
+    }),
+  ]);
+  const stageByProperty = new Map(
+    funnels.map((funnel) => [funnel.propertyId, funnel.stage]),
+  );
   const developerById = new Map(
     db.developers.map((developer) => [developer.id, developer]),
   );
   const properties: PropertyView[] = db.properties.map((property) => ({
-      ...property,
-      matches: calculateMatches(property, db.developers, db.developerProjects)
-        .slice(0, 5)
-        .map((match) => ({
-          ...match,
-          companyName:
-            developerById.get(match.developerId)?.companyName ??
-            "Unknown developer",
-        })),
-    }));
+    ...property,
+    pipelineStage: stageByProperty.get(property.id) ?? "DISCOVERED",
+    matches: calculateMatches(property, db.developers, db.developerProjects)
+      .slice(0, 5)
+      .map((match) => ({
+        ...match,
+        companyName:
+          developerById.get(match.developerId)?.companyName ??
+          "Unknown developer",
+      })),
+  }));
   return (
     <WorkspaceShell>
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
@@ -72,9 +89,8 @@ export default async function PropertiesPage() {
             </p>
             <h1 className="mt-1 text-3xl font-bold">Properties</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Actionable opportunities require confirmed availability, original
-              evidence, a current asking price, a usable contact, and dated
-              verification evidence.
+              Deal Scout researches every address automatically. A contact name
+              and phone are the minimum outreach route; email is optional.
             </p>
           </div>
           <div className="flex gap-2">
@@ -96,7 +112,9 @@ export default async function PropertiesPage() {
           <PropertyBrowser properties={properties} />
         </div>
         <details className="mt-6 rounded-2xl border bg-white p-5">
-          <summary className="cursor-pointer font-bold">County evidence and conflicts · {countyEvidence.length}</summary>
+          <summary className="cursor-pointer font-bold">
+            County evidence and conflicts · {countyEvidence.length}
+          </summary>
           <p className="text-xs text-slate-500">
             Persisted observations only. Conflicted and manual-review records
             are not verified facts.
@@ -150,7 +168,11 @@ export default async function PropertiesPage() {
             <summary className="cursor-pointer font-bold">
               Add one property for automatic research
             </summary>
-            <p className="mt-3 text-sm text-slate-600">Only the address is required to start. Deal Scout will look for ownership, parcel, tax, zoning, utility, listing, contact, and development evidence.</p>
+            <p className="mt-3 text-sm text-slate-600">
+              Only the address is required to start. Deal Scout will look for
+              ownership, parcel, tax, zoning, utility, listing, contact, and
+              development evidence.
+            </p>
             <form
               action={createPropertyAction}
               className="mt-4 grid gap-3 sm:grid-cols-2"
@@ -161,81 +183,107 @@ export default async function PropertiesPage() {
               <Field name="state" placeholder="State" required />
               <Field name="zipCode" placeholder="ZIP" required />
               <details className="rounded-xl border border-slate-200 p-4 sm:col-span-2">
-                <summary className="cursor-pointer text-sm font-bold text-slate-700">Add known details (optional)</summary>
+                <summary className="cursor-pointer text-sm font-bold text-slate-700">
+                  Add known details (optional)
+                </summary>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Field name="county" placeholder="County" />
-              <Field
-                name="neighborhood"
-                placeholder="Neighborhood or subdivision"
-              />
-              <Field name="propertyType" placeholder="Verified property type" />
-              <Field
-                name="latitude"
-                placeholder="Latitude (research can fill this)"
-                type="number"
-              />
-              <Field
-                name="longitude"
-                placeholder="Longitude (research can fill this)"
-                type="number"
-              />
-              <Field
-                name="estimatedValue"
-                placeholder="Asking or estimated value"
-                type="number"
-              />
-              <Field name="lotSize" placeholder="Lot size or acreage" />
-              <Field name="yearBuilt" placeholder="Year built" />
-              <label className="grid gap-1 text-sm font-semibold text-slate-700"><span>Starting status</span><select
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-normal"
-                name="opportunityStatus" required defaultValue="NEEDS_VERIFICATION">
-                <option value="NEEDS_VERIFICATION">Needs verification</option>
-                <option value="DEVELOPMENT_SIGNAL">Development signal</option>
-                <option value="CONFIRMED_AVAILABLE">Confirmed available</option>
-                <option value="GOVERNMENT_SALE">Government sale</option>
-              </select></label>
-              <Field
-                name="confidence"
-                placeholder="Confidence 0–100"
-                type="number"
-              />
-              <Field
-                name="contactName"
-                placeholder="Seller or agency contact"
-              />
-              <Field
-                name="contactPhone"
-                placeholder="Required phone (research can find it)"
-              />
-              <Field
-                name="contactEmail"
-                placeholder="Contact email"
-                type="email"
-              />
-              <Field
-                name="contactUrl"
-                placeholder="Official contact/listing page"
-                type="url"
-              />
-              <Field
-                name="sourceName"
-                placeholder="Government or listing source"
-              />
-              <Field
-                name="sourceUrl"
-                placeholder="Official source URL"
-                type="url"
-              />
-              <Field
-                name="sourceRecordDate"
-                placeholder="Record/listing date"
-              />
-              <label className="grid gap-1 text-sm font-semibold text-slate-700 sm:col-span-2"><span>Known notes</span><textarea
-                className="min-h-24 rounded-xl border p-3 text-sm font-normal"
-                name="notes" placeholder="Zoning, utilities, document number, and research notes" /></label>
+                  <Field name="county" placeholder="County" />
+                  <Field
+                    name="neighborhood"
+                    placeholder="Neighborhood or subdivision"
+                  />
+                  <Field
+                    name="propertyType"
+                    placeholder="Verified property type"
+                  />
+                  <Field
+                    name="latitude"
+                    placeholder="Latitude (research can fill this)"
+                    type="number"
+                  />
+                  <Field
+                    name="longitude"
+                    placeholder="Longitude (research can fill this)"
+                    type="number"
+                  />
+                  <Field
+                    name="estimatedValue"
+                    placeholder="Asking or estimated value"
+                    type="number"
+                  />
+                  <Field name="lotSize" placeholder="Lot size or acreage" />
+                  <Field name="yearBuilt" placeholder="Year built" />
+                  <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                    <span>Starting status</span>
+                    <select
+                      className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-normal"
+                      name="opportunityStatus"
+                      required
+                      defaultValue="NEEDS_VERIFICATION"
+                    >
+                      <option value="NEEDS_VERIFICATION">
+                        Needs verification
+                      </option>
+                      <option value="DEVELOPMENT_SIGNAL">
+                        Development signal
+                      </option>
+                      <option value="CONFIRMED_AVAILABLE">
+                        Confirmed available
+                      </option>
+                      <option value="GOVERNMENT_SALE">Government sale</option>
+                    </select>
+                  </label>
+                  <Field
+                    name="confidence"
+                    placeholder="Confidence 0–100"
+                    type="number"
+                  />
+                  <Field
+                    name="contactName"
+                    placeholder="Seller or agency contact"
+                  />
+                  <Field
+                    name="contactPhone"
+                    placeholder="Required phone (research can find it)"
+                  />
+                  <Field
+                    name="contactEmail"
+                    placeholder="Contact email"
+                    type="email"
+                  />
+                  <Field
+                    name="contactUrl"
+                    placeholder="Official contact/listing page"
+                    type="url"
+                  />
+                  <Field
+                    name="sourceName"
+                    placeholder="Government or listing source"
+                  />
+                  <Field
+                    name="sourceUrl"
+                    placeholder="Official source URL"
+                    type="url"
+                  />
+                  <Field
+                    name="sourceRecordDate"
+                    placeholder="Record/listing date"
+                  />
+                  <label className="grid gap-1 text-sm font-semibold text-slate-700 sm:col-span-2">
+                    <span>Known notes</span>
+                    <textarea
+                      className="min-h-24 rounded-xl border p-3 text-sm font-normal"
+                      name="notes"
+                      placeholder="Zoning, utilities, document number, and research notes"
+                    />
+                  </label>
                 </div>
               </details>
-              <SubmitButton className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2" idleLabel="Start property research" pendingLabel="Adding property and starting research…" />
+              <SubmitButton
+                className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2"
+                idleLabel="Start property research"
+                pendingLabel="Adding property and starting research…"
+              />
             </form>
           </details>
         </section>

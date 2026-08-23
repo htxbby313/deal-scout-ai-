@@ -40,12 +40,15 @@ test(
       assert.equal(await page.getByRole("link", { name: "Skip to main content" }).count(), 1);
 
       await page.goto(`${baseUrl}/properties`);
+      await assert.doesNotReject(() => page.getByLabel("Interactive map of sourced properties").waitFor());
+      assert.equal(await page.getByText("n.Map is not a constructor", { exact: true }).count(), 0);
       await page.getByText("Add one property for automatic research", { exact: true }).click();
       for (const name of ["address", "city", "state", "zipCode"]) assert.equal(await page.locator(`input[name="${name}"]`).isVisible(), true, `${name} must be visible in the compact property form.`);
       await assert.doesNotReject(() => page.getByRole("button", { name: "Start property research", exact: true }).waitFor());
       assert.equal(await page.getByText("Add known details (optional)", { exact: true }).locator("..").getAttribute("open"), null);
       const propertyCard = page.getByRole("button").filter({ hasText: "Open dossier" }).first();
       if (await propertyCard.count()) {
+        await assert.doesNotReject(() => propertyCard.getByText("Deal stage", { exact: true }).waitFor());
         await propertyCard.click();
         await assert.doesNotReject(() => page.getByRole("dialog").waitFor());
         await page.keyboard.press("Escape");
@@ -58,6 +61,10 @@ test(
       await assert.doesNotReject(() => page.getByRole("link", { name: "Dashboard" }).waitFor());
       await page.setViewportSize(viewports[0]);
 
+      await page.goto(`${baseUrl}/developers`);
+      assert.equal((await page.locator("aside a").count()) <= 24, true, "Developer list must be paginated to 24 records.");
+      await assert.doesNotReject(() => page.getByText(/Relationship:/).first().waitFor());
+
       await page.goto(`${baseUrl}/seller-crm`);
       await assert.doesNotReject(() =>
         page
@@ -69,6 +76,7 @@ test(
           .getByRole("navigation", { name: "Conversation filters" })
           .waitFor(),
       );
+      await assert.doesNotReject(() => page.getByRole("navigation", { name: "Conversation pipeline" }).waitFor());
       assert.equal((await page.locator("main").count()) > 0, true);
       const channelSelect = page.locator('select[name="channel"]').first();
       assert.equal(
@@ -99,6 +107,10 @@ test(
       await page.getByRole("link", { name: "Clear filters" }).click();
       await page.waitForURL(/view=open/);
 
+      await page.goto(`${baseUrl}/settings`);
+      await assert.doesNotReject(() => page.getByRole("heading", { name: "Settings", exact: true }).waitFor());
+      await assert.doesNotReject(() => page.getByRole("heading", { name: "App color", exact: true }).waitFor());
+
       await page.goto(`${baseUrl}/executive`);
       assert.equal(await page.locator("[data-metric-key]").count(), 48);
       assert.equal(
@@ -112,6 +124,9 @@ test(
           .getAttribute("open"),
         null,
       );
+      await page
+        .getByText(/All operational metrics ·/)
+        .click();
 
       const cost = page.locator('[data-metric-key="cost_per_offer"]');
       await cost.getByText("How this is calculated").click();
@@ -193,6 +208,16 @@ test(
           .locator("aside details > summary")
           .filter({ hasText: "Owner" });
         await ownerSummary.click();
+        assert.equal(
+          await page.locator("aside nav[aria-label='Primary'] a").count(),
+          6,
+          "Primary navigation must remain limited to six workflows.",
+        );
+        assert.equal(
+          await page.locator("aside details a").count(),
+          2,
+          "Owner menu must remain limited to team and settings.",
+        );
         const profitLink = page.getByRole("link", { name: "Profit & Reports" });
         await profitLink.scrollIntoViewIfNeeded();
         assert.equal(
