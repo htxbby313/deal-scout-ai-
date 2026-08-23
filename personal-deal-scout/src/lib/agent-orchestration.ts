@@ -16,7 +16,9 @@ import {
   runQueuedDeveloperResearch,
 } from "@/lib/developer-research";
 import {
+  calculateMatches,
   generateDeveloperPricingRequest,
+  readDatabase,
   scoreDeveloperMatches,
 } from "@/lib/database";
 import { createAutomaticSellerDraft } from "@/lib/seller-engagement";
@@ -210,6 +212,20 @@ export async function createTaskIfMissing(input: {
 export async function seedAgentWork() {
   const db = getPrisma();
   await ensureAgentTeam();
+  const matchingSnapshot = await readDatabase();
+  const developerSnapshotById = new Map(
+    matchingSnapshot.developers.map((developer) => [developer.id, developer]),
+  );
+  const calculatedTopProspect = new Map(
+    matchingSnapshot.properties.map((property) => [
+      property.id,
+      calculateMatches(
+        property,
+        matchingSnapshot.developers,
+        matchingSnapshot.developerProjects,
+      )[0]?.developerId,
+    ]),
+  );
   let propertiesConsidered = 0;
   let developersConsidered = 0;
   let transactionsConsidered = 0;
@@ -262,9 +278,21 @@ export async function seedAgentWork() {
           evidenceCount,
           ownerApprovalRequired: false,
         });
+      const persistedProspects = property.matches.map(
+        ({ developer }) => developer,
+      );
+      const calculatedProspectId = calculatedTopProspect.get(property.id);
+      const calculatedProspect = calculatedProspectId
+        ? developerSnapshotById.get(calculatedProspectId)
+        : undefined;
+      const prospects = persistedProspects.length
+        ? persistedProspects
+        : calculatedProspect
+          ? [calculatedProspect]
+          : [];
       await Promise.all(
-        property.matches
-          .filter(({ developer }) =>
+        prospects
+          .filter((developer) =>
             Boolean(
               developer.email ||
               developer.phone ||
@@ -272,7 +300,7 @@ export async function seedAgentWork() {
               developer.website,
             ),
           )
-          .map(({ developer }) =>
+          .map((developer) =>
             createTaskIfMissing({
               role: "BUYER_DEVELOPER",
               taskType: "DRAFT_BUYER_OUTREACH",
@@ -386,7 +414,7 @@ async function performTask(task: Awaited<ReturnType<typeof loadTask>>) {
     };
   }
   if (taskType === "MATCH_BUYER" && task.propertyId) {
-    const matches = await scoreDeveloperMatches(task.propertyId, false);
+    const matches = await scoreDeveloperMatches(task.propertyId, true);
     return {
       summary: `${matches.length} developer relationship prospects ranked for owner review.`,
       output: { matches: matches.slice(0, 10) },
