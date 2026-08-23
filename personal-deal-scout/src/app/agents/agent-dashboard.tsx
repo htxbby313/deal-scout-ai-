@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { reviewAgentTaskAction, runAgentQueueAction, updateAgentAutonomyAction, updateAgentStatusAction } from "@/app/agent-actions";
+import { reviewAgentTaskAction, runAgentQueueAction, runFullAgentCycleAction, updateAgentAutonomyAction, updateAgentStatusAction } from "@/app/agent-actions";
 
 export type AgentStatus = "ACTIVE" | "PAUSED" | "DISABLED";
 export type AgentTaskStatus = "QUEUED" | "IN_PROGRESS" | "WAITING_FOR_APPROVAL" | "BLOCKED" | "COMPLETED" | "CANCELLED" | "FAILED";
@@ -30,6 +30,12 @@ export interface AgentTaskSummary {
   status: AgentTaskStatus;
   transactionLabel: string | null;
   evidenceCount: number;
+  actionZone: "GREEN" | "YELLOW" | "RED";
+  capability: string;
+  estimatedCostCents: string;
+  expectedValueCents: string | null;
+  expectedBenefit: string | null;
+  materialRisks: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -42,10 +48,16 @@ export interface AgentEventSummary {
 }
 
 export interface AgentDashboardProps {
+  scheduler: { healthy: boolean; latest: { id: string; trigger: string; status: string; startedAt: string; finishedAt: string | null; tasksCreated: number; tasksProcessed: number; tasksCompleted: number; tasksFailed: number; tasksWaitingApproval: number } | null; nextScheduledAt: string };
   agents: AgentSummary[];
   approvalTasks: AgentTaskSummary[];
   recentTasks: AgentTaskSummary[];
   events: AgentEventSummary[];
+}
+
+function FullCycleButton() {
+  const [state, action, pending] = useActionState(runFullAgentCycleAction, initialState);
+  return <form action={action}><button className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" disabled={pending} type="submit">{pending ? "Starting…" : "Run the full operation now"}</button><Result state={state} /></form>;
 }
 
 type ActionState = { status: "idle" | "success" | "error"; message: string };
@@ -153,13 +165,16 @@ function ReviewForm({ taskId, decision }: { taskId: string; decision: "APPROVE" 
   );
 }
 
-export function AgentDashboard({ agents, approvalTasks, recentTasks, events }: AgentDashboardProps) {
+export function AgentDashboard({ agents, approvalTasks, recentTasks, events, scheduler }: AgentDashboardProps) {
   const queued = agents.reduce((total, agent) => total + agent.queuedTasks, 0);
   const active = agents.reduce((total, agent) => total + agent.activeTasks, 0);
   const completed = agents.reduce((total, agent) => total + agent.completedTasks, 0);
 
   return (
     <div className="space-y-6">
+      <section className={`rounded-2xl border p-5 shadow-sm ${scheduler.healthy ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`} aria-label="Automation health">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-bold">{scheduler.healthy ? "Automation is running" : "Automation needs attention"}</p><p className="mt-1 text-sm text-slate-600">Last cycle · {scheduler.latest ? `${scheduler.latest.status.toLowerCase()} ${formatDate(scheduler.latest.finishedAt ?? scheduler.latest.startedAt)} · ${scheduler.latest.tasksCompleted} completed · ${scheduler.latest.tasksFailed} failed` : "No completed cycle recorded"}</p><p className="mt-1 text-xs text-slate-500">Next daily recovery run · {formatDate(scheduler.nextScheduledAt)}. Approvals start immediately.</p></div><FullCycleButton /></div>
+      </section>
       <section aria-label="Agent totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[["Agents", agents.length], ["Queued", queued], ["Running", active], ["Owner review", approvalTasks.length]].map(([label, value]) => (
           <article className="rounded-2xl border bg-white p-5 shadow-sm" key={label}>
@@ -214,6 +229,10 @@ export function AgentDashboard({ agents, approvalTasks, recentTasks, events }: A
               <div>
                 <div className="flex flex-wrap items-center gap-2"><h3 className="font-bold">{task.title}</h3><TaskStatusBadge status={task.status} /></div>
                 <p className="mt-1 text-sm text-slate-500">{task.agentName}{task.transactionLabel ? ` · ${task.transactionLabel}` : ""} · {task.evidenceCount} evidence items</p>
+                <p className="mt-2 text-xs font-bold text-amber-800">{task.actionZone} · {task.capability.replaceAll("_", " ").toLowerCase()} · estimated cost ${(Number(task.estimatedCostCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}</p>
+                {task.expectedBenefit ? <p className="mt-2 text-sm text-slate-700">Why · {task.expectedBenefit}</p> : null}
+                {task.expectedValueCents ? <p className="mt-1 text-sm font-semibold text-emerald-800">Evidence-backed projected value · {(Number(task.expectedValueCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} · not guaranteed</p> : null}
+                {task.materialRisks.length ? <p className="mt-1 text-xs text-red-700">Risks · {task.materialRisks.join(" · ")}</p> : null}
                 <p className="mt-2 text-xs text-slate-500">Updated {formatDate(task.updatedAt)}</p>
               </div>
               <TaskReviewControls taskId={task.id} />

@@ -40,7 +40,7 @@ describe("agent workflow policy", () => {
   });
 
   it("blocks every agent task on a stopped transaction", () => {
-    const roles = ["OPERATIONS_COORDINATOR", "RESEARCH", "SELLER_ACQUISITION", "BUYER_DEVELOPER", "TRANSACTION_COMPLIANCE"] as const;
+    const roles = ["OPERATIONS_COORDINATOR", "RESEARCH", "SELLER_ACQUISITION", "BUYER_DEVELOPER", "PROFIT_UNDERWRITING", "COMMUNICATIONS_DISPOSITION", "TRANSACTION_COMPLIANCE"] as const;
     const results = planAgentWorkflowBatch(roles.map((role) => ({
       id: role,
       role,
@@ -51,19 +51,19 @@ describe("agent workflow policy", () => {
     expect(results.every((result) => result.permittedOutput === "NONE")).toBe(true);
   });
 
-  it("requires owner approval before sensitive drafts", () => {
+  it("allows only evidence-backed, zero-cost internal drafting", () => {
     const result = evaluateAgentTask({ role: "SELLER_ACQUISITION", taskType: "DRAFT_OFFER" });
-    expect(result.outcome).toBe("OWNER_APPROVAL_REQUIRED");
+    expect(result.outcome).toBe("BLOCKED");
     expect(result.allowed).toBe(false);
+    expect(evaluateAgentTask({ role: "SELLER_ACQUISITION", taskType: "DRAFT_OFFER", evidenceComplete: true }).outcome).toBe("PROCESS");
   });
 
-  it("defaults every agent to supervised owner approval", () => {
+  it("allows compliant internal public research without owner input", () => {
     const result = evaluateAgentTask({ role: "RESEARCH", taskType: "RESEARCH_PROPERTY" });
-    expect(result.outcome).toBe("OWNER_APPROVAL_REQUIRED");
-    expect(result.reasons).toContain("Supervised mode requires explicit owner approval.");
+    expect(result.outcome).toBe("PROCESS");
   });
 
-  it("unlocks autonomous internal work only after every eligibility gate is proven", () => {
+  it("does not make green internal research wait for outbound autonomy gates", () => {
     expect(evaluateAutonomyEligibility(provenAutonomy)).toEqual({ eligible: true, reasons: [] });
     const locked = evaluateAgentTask({
       role: "RESEARCH",
@@ -71,18 +71,17 @@ describe("agent workflow policy", () => {
       operatingMode: "AUTONOMOUS",
       autonomyEvidence: { ...provenAutonomy, counselApproved: false },
     });
-    expect(locked.outcome).toBe("OWNER_APPROVAL_REQUIRED");
-    expect(locked.reasons).toContain("Autonomous operation is locked.");
+    expect(locked.outcome).toBe("PROCESS");
   });
 
-  it("keeps sensitive drafts owner-gated in eligible autonomous mode", () => {
+  it("keeps evidence-gated drafts blocked until evidence exists", () => {
     const result = evaluateAgentTask({
       role: "BUYER_DEVELOPER",
       taskType: "DRAFT_BUYER_OUTREACH",
       operatingMode: "AUTONOMOUS",
       autonomyEvidence: provenAutonomy,
     });
-    expect(result.outcome).toBe("OWNER_APPROVAL_REQUIRED");
+    expect(result.outcome).toBe("BLOCKED");
   });
 
   it("fails compliance review closed when evidence is incomplete", () => {
@@ -97,7 +96,6 @@ describe("agent workflow policy", () => {
   });
 
   it.each([
-    "SEND_OUTBOUND_MESSAGE",
     "ISSUE_LEGAL_CONCLUSION",
     "EXECUTE_CONTRACT",
     "MOVE_FUNDS",
@@ -106,6 +104,18 @@ describe("agent workflow policy", () => {
     const result = evaluateAgentTask({ role: taskType === "ISSUE_LEGAL_CONCLUSION" || taskType === "ISSUE_CLOSING_INSTRUCTION" ? "TRANSACTION_COMPLIANCE" : "OPERATIONS_COORDINATOR", taskType, ownerApproved: true });
     expect(result.outcome).toBe("BLOCKED");
     expect(result.allowed).toBe(false);
+  });
+
+  it("keeps outbound communication yellow and exact-approval gated", () => {
+    const waiting = evaluateAgentTask({ role: "COMMUNICATIONS_DISPOSITION", taskType: "SEND_OUTBOUND_MESSAGE", evidenceComplete: true, evidenceCount: 3, actionZone: "YELLOW", costClass: "METERED", estimatedCostCents: BigInt(2) });
+    expect(waiting.outcome).toBe("OWNER_APPROVAL_REQUIRED");
+    const approved = evaluateAgentTask({ role: "COMMUNICATIONS_DISPOSITION", taskType: "SEND_OUTBOUND_MESSAGE", evidenceComplete: true, evidenceCount: 3, ownerApproved: true, actionZone: "YELLOW", costClass: "METERED", estimatedCostCents: BigInt(2) });
+    expect(approved.outcome).toBe("PROCESS");
+  });
+
+  it("blocks red actions and unknown costs regardless of profit or approval", () => {
+    expect(evaluateAgentTask({ role: "TRANSACTION_COMPLIANCE", taskType: "ISSUE_LEGAL_CONCLUSION", ownerApproved: true, actionZone: "RED" }).outcome).toBe("BLOCKED");
+    expect(evaluateAgentTask({ role: "RESEARCH", taskType: "RESEARCH_PROPERTY", actionZone: "GREEN", costClass: "UNKNOWN_COST" }).outcome).toBe("BLOCKED");
   });
 
   it("allows only explicit role handoff paths", () => {

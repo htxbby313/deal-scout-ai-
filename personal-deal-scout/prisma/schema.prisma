@@ -49,7 +49,43 @@ enum AgentRole {
   RESEARCH
   SELLER_ACQUISITION
   BUYER_DEVELOPER
+  PROFIT_UNDERWRITING
+  COMMUNICATIONS_DISPOSITION
   TRANSACTION_COMPLIANCE
+}
+
+enum AgentActionZone {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum AgentCostClass {
+  FREE
+  METERED
+  FIXED_COST
+  UNKNOWN_COST
+}
+
+enum AgentSchedulerStatus {
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum AgentCycleTrigger {
+  CRON
+  OWNER
+  EVENT
+  RECOVERY
+}
+
+enum AgentCapabilityMode {
+  AUTOMATIC_INTERNAL
+  APPROVAL_REQUIRED
+  AUTONOMOUS_EXTERNAL
+  BLOCKED
 }
 
 enum AgentStatus {
@@ -764,6 +800,7 @@ model Agent {
   eventsCreated            AgentEvent[]      @relation("AgentEventActor")
   handoffsSent             AgentEvent[]      @relation("AgentEventSource")
   handoffsReceived         AgentEvent[]      @relation("AgentEventTarget")
+  capabilityGrants         AgentCapabilityGrant[]
   campaignAssignments     CampaignAgentAssignment[]
 
   @@index([status, autonomyMode])
@@ -778,6 +815,13 @@ model AgentTask {
   description           String?
   status                AgentTaskStatus   @default(QUEUED)
   priority              AgentTaskPriority @default(NORMAL)
+  actionZone            AgentActionZone    @default(GREEN)
+  costClass             AgentCostClass     @default(FREE)
+  capability            String             @default("INTERNAL_RESEARCH")
+  estimatedCostCents    BigInt             @default(0)
+  expectedValueCents    BigInt?
+  expectedBenefit       String?
+  materialRisks         String[]            @default([])
   ownerApprovalRequired Boolean           @default(true)
   ownerApprovedAt       DateTime?
   ownerApprovedBy       String?
@@ -805,6 +849,53 @@ model AgentTask {
   @@index([transactionId, status])
   @@index([propertyId])
   @@index([developerId])
+}
+
+model AgentCapabilityGrant {
+  id                    String              @id @default(cuid())
+  agentId               String
+  capability            String
+  mode                  AgentCapabilityMode
+  jurisdictionState     String?
+  channel               String?
+  maximumCostCents      BigInt              @default(0)
+  minimumEvidenceCount  Int                 @default(1)
+  minimumSuccessfulRuns Int                 @default(30)
+  counselApprovedAt     DateTime?
+  complianceApprovedAt  DateTime?
+  ownerApprovedAt       DateTime?
+  ownerApprovedBy       String?
+  expiresAt             DateTime?
+  suspendedAt           DateTime?
+  suspensionReason      String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  agent                 Agent               @relation(fields: [agentId], references: [id], onDelete: Restrict)
+
+  @@unique([agentId, capability, jurisdictionState, channel])
+  @@index([mode, expiresAt, suspendedAt])
+}
+
+model AgentSchedulerCycle {
+  id                    String               @id @default(cuid())
+  trigger               AgentCycleTrigger
+  status                AgentSchedulerStatus @default(RUNNING)
+  deploymentId          String?
+  tasksCreated          Int                  @default(0)
+  tasksProcessed        Int                  @default(0)
+  tasksCompleted        Int                  @default(0)
+  tasksFailed           Int                  @default(0)
+  tasksWaitingApproval  Int                  @default(0)
+  propertiesConsidered  Int                  @default(0)
+  developersConsidered  Int                  @default(0)
+  transactionsConsidered Int                 @default(0)
+  researchSummary       Json?
+  errors                Json?
+  startedAt             DateTime             @default(now())
+  finishedAt            DateTime?
+
+  @@index([status, startedAt])
+  @@index([trigger, startedAt])
 }
 
 model AgentRun {
