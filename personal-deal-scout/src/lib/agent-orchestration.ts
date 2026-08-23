@@ -15,7 +15,7 @@ const TEAM: Array<{ role: AgentRole; name: string; description: string }> = [
   { role: "OPERATIONS_COORDINATOR", name: "Operations Coordinator", description: "Coordinates evidence-backed work and owner handoffs." },
   { role: "RESEARCH", name: "Research Agent", description: "Refreshes public-source property and developer evidence." },
   { role: "SELLER_ACQUISITION", name: "Seller Acquisition Agent", description: "Assesses objective seller and transaction fit without contacting anyone." },
-  { role: "BUYER_DEVELOPER", name: "Buyer and Developer Agent", description: "Matches verified buyers to documented opportunities." },
+  { role: "BUYER_DEVELOPER", name: "Developer Relationships Agent", description: "Finds contactable developers, builds relationship context and buy boxes, then matches transaction-ready buyers." },
   { role: "PROFIT_UNDERWRITING", name: "Profit Underwriting Agent", description: "Calculates evidence-backed, non-guaranteed profit and blocks invented numbers." },
   { role: "COMMUNICATIONS_DISPOSITION", name: "Communications and Disposition Agent", description: "Prepares exact approval packages and delegates approved delivery through gated providers." },
   { role: "TRANSACTION_COMPLIANCE", name: "Transaction Compliance Agent", description: "Builds internal checklists and blocks unsupported progression." },
@@ -95,7 +95,7 @@ async function performTask(task: Awaited<ReturnType<typeof loadTask>>) {
     return current ? { summary: "Current property research reused without a duplicate external scan.", output: { researchRunId: current.id, status: current.status, reused: true } } : { summary: "Property research completed.", output: await researchProperty(task.propertyId) };
   }
   if (taskType === "RESEARCH_DEVELOPER" && task.developerId) { const queued = await enqueueDeveloperResearch(task.developerId); return { summary: "Developer research processed.", output: await runQueuedDeveloperResearch(queued.id) }; }
-  if (taskType === "MATCH_BUYER" && task.propertyId) { const matches = await scoreDeveloperMatches(task.propertyId, false); return { summary: `${matches.length} buyer matches ranked for owner review.`, output: { matches: matches.slice(0, 10) } }; }
+  if (taskType === "MATCH_BUYER" && task.propertyId) { const matches = await scoreDeveloperMatches(task.propertyId, false); return { summary: `${matches.length} developer relationship prospects ranked for owner review.`, output: { matches: matches.slice(0, 10) } }; }
   if (taskType === "ASSESS_SELLER_FIT") return { summary: "Seller-fit checklist prepared; authority, consent, goals, and minimum proceeds remain owner-verified fields.", output: { verifiedPropertyEvidence: task.evidenceCount, contactAttempted: false, protectedTraitsUsed: false } };
   if (taskType === "UNDERWRITE_PROFIT" && task.propertyId) {
     const db = getPrisma();
@@ -132,7 +132,7 @@ async function chainCompletedAgentTask(task: NonNullable<Awaited<ReturnType<type
   if (task.taskType === "RESEARCH_PROPERTY") {
     await Promise.all([
       createTaskIfMissing({ role: "SELLER_ACQUISITION", taskType: "ASSESS_SELLER_FIT", title: `Assess seller opportunity · ${property.address}`, description: "Evaluate evidence-backed seller opportunity without contacting anyone.", transactionId: task.transactionId ?? undefined, propertyId: task.propertyId, evidenceCount, ownerApprovalRequired: false }),
-      createTaskIfMissing({ role: "BUYER_DEVELOPER", taskType: "MATCH_BUYER", title: `Match verified buyers · ${property.address}`, description: "Rank verified buyer and developer matches without outreach.", transactionId: task.transactionId ?? undefined, propertyId: task.propertyId, evidenceCount, ownerApprovalRequired: false }),
+      createTaskIfMissing({ role: "BUYER_DEVELOPER", taskType: "MATCH_BUYER", title: `Match developer prospects · ${property.address}`, description: "Rank contactable developer prospects and documented buy-box matches without outreach.", transactionId: task.transactionId ?? undefined, propertyId: task.propertyId, evidenceCount, ownerApprovalRequired: false }),
     ]);
   }
   if (["ASSESS_SELLER_FIT", "MATCH_BUYER"].includes(task.taskType)) {

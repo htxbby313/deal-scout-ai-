@@ -402,8 +402,9 @@ function qualificationFor(
     contactName: string | null;
     contactUrl?: string | null;
   },
-  _verifiedProjects: number,
+  verifiedProjects: number,
 ): QualificationStatus {
+  void verifiedProjects; // Purchase history improves matching, not relationship eligibility.
   return developerRelationshipQualification(developer);
 }
 
