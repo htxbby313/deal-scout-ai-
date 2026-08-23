@@ -1,10 +1,9 @@
-import { handleCallback } from "@vercel/queue";
-import { agentQueueMessageSchema } from "@/lib/agent-queue";
+import { agentOperationsQueue, agentQueueMessageSchema } from "@/lib/agent-queue";
 import { executeApprovedAgentTask, executeDealScoutOperations } from "@/lib/agent-operations";
 
 export const maxDuration = 300;
 
-export const POST = handleCallback(
+export const POST = agentOperationsQueue.handleCallback(
   async (untrustedMessage) => {
     const message = agentQueueMessageSchema.parse(untrustedMessage);
     if (message.kind === "APPROVED_TASK") {

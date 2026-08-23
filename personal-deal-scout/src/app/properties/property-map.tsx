@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { rankColor, US_STATE_CODES } from "@/lib/map-ranking";
+import { OpenStreetPropertyMap } from "@/app/openstreet-maps";
 
 export type MapProperty = { id: string; address: string; city: string; state: string; zipCode: string; county?: string; neighborhood?: string; latitude?: number; longitude?: number; estimatedValue?: number };
 
@@ -65,7 +66,7 @@ export default function PropertyMap({ properties, onSelect, baseColor, rankCateg
   }, [apiKey, baseColor, mapped, onSelect, properties, rankCategory]);
 
   return <div className="overflow-hidden rounded-2xl border bg-white shadow-sm"><div className="border-b p-4"><div className="flex items-center justify-between gap-3"><div><h2 className="font-bold">United States interactive listing map</h2><p className="mt-1 text-xs text-slate-500">Pan, zoom, and select any sourced, geocoded property. Region filters update both map and list.</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">{mapped.length} mapped</span></div></div>
-    {apiKey ? <div aria-label="Google map of sourced properties" className="h-[430px] w-full" ref={mapNode} /> : <div className="flex h-[430px] items-center justify-center bg-slate-100 p-8 text-center text-sm text-slate-600">Google Maps is not configured for this deployment.</div>}
+    {apiKey ? <div aria-label="Google map of sourced properties" className="h-[430px] w-full" ref={mapNode} /> : <div aria-label="OpenStreetMap of sourced properties"><OpenStreetPropertyMap baseColor={baseColor} onSelect={onSelect} properties={mapped} rankCategory={rankCategory} /></div>}
     {mapError ? <p className="border-t bg-red-50 p-3 text-xs font-semibold text-red-800">{mapError}</p> : null}
     {!mapped.length ? <p className="border-t bg-amber-50 p-3 text-xs font-semibold text-amber-900">No saved coordinates match these region filters. Automatic research will retry geocoding; unsupported addresses remain clearly marked for review.</p> : null}
   </div>;

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { AgentCycleTrigger } from "@prisma/client";
-import { send } from "@vercel/queue";
+import { QueueClient } from "@vercel/queue";
 import { z } from "zod";
 
 export const AGENT_OPERATIONS_TOPIC = "deal-scout-agent-operations";
+export const agentOperationsQueue = new QueueClient({ region: process.env.VERCEL_REGION || "iad1" });
 
 export const agentQueueMessageSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -24,7 +25,7 @@ function cycleKey(trigger: AgentCycleTrigger) {
 }
 
 export async function enqueueAgentOperations(trigger: AgentCycleTrigger) {
-  return send(
+  return agentOperationsQueue.send(
     AGENT_OPERATIONS_TOPIC,
     { kind: "OPERATIONS_CYCLE", trigger } satisfies AgentQueueMessage,
     { idempotencyKey: cycleKey(trigger), retentionSeconds: 86_400 },
@@ -32,7 +33,7 @@ export async function enqueueAgentOperations(trigger: AgentCycleTrigger) {
 }
 
 export async function enqueueApprovedAgentTask(taskId: string) {
-  return send(
+  return agentOperationsQueue.send(
     AGENT_OPERATIONS_TOPIC,
     { kind: "APPROVED_TASK", taskId } satisfies AgentQueueMessage,
     { idempotencyKey: `approved-task-${taskId}`, retentionSeconds: 86_400 },

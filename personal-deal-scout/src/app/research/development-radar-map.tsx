@@ -6,6 +6,7 @@ import type { RadarMapListing, RadarMapSignal } from "@/app/research/development
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { rankColor, US_STATE_CODES } from "@/lib/map-ranking";
 import { useThemeColor } from "@/lib/theme-color";
+import { OpenStreetDevelopmentMap } from "@/app/openstreet-maps";
 
 type BoundaryProperties = { GEOID?: string; BASENAME?: string };
 type Boundaries = FeatureCollection<Geometry, BoundaryProperties>;
@@ -40,10 +41,20 @@ export default function DevelopmentRadarMap({ signals, listings, rankCategory }:
   const baseColor = useThemeColor();
   const mapNode = useRef<HTMLDivElement>(null);
   const [mapError, setMapError] = useState("");
+  const [fallbackBoundaries, setFallbackBoundaries] = useState<Boundaries | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const signalByFips = useMemo(() => new Map(signals.map((signal, index) => [signal.fips, { signal, index }])), [signals]);
   const stateRanks = useMemo(() => { const result = new Map<string, number>(); signals.forEach((signal, index) => { if (!result.has(signal.stateFips)) result.set(signal.stateFips, index); }); return result; }, [signals]);
   const mappedListings = useMemo(() => listings.filter((listing) => US_STATE_CODES.has(listing.state.toUpperCase()) && listing.latitude >= 18 && listing.latitude <= 72 && listing.longitude >= -179 && listing.longitude <= -60), [listings]);
+
+  useEffect(() => {
+    if (apiKey || !signals.length) return;
+    let disposed = false;
+    Promise.all([fetchBoundaries(25, signals.map((signal) => signal.fips)), fetchBoundaries(24, [...new Set(signals.map((signal) => signal.stateFips))])]).then(([counties, states]) => {
+      if (!disposed) setFallbackBoundaries({ type: "FeatureCollection", features: [...(states?.features ?? []), ...(counties?.features ?? [])] });
+    }).catch((error: unknown) => { if (!disposed) setMapError(error instanceof Error ? error.message : "Census boundaries are unavailable."); });
+    return () => { disposed = true; };
+  }, [apiKey, signals]);
 
   useEffect(() => {
     if (!apiKey || !mapNode.current) return;
@@ -107,7 +118,7 @@ export default function DevelopmentRadarMap({ signals, listings, rankCategory }:
 
   return <section className="mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm">
     <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><h2 className="text-xl font-bold">United States development and listing map</h2><p className="mt-1 text-sm text-slate-500">Official Census county and state boundaries correspond to the ranked radar. Exact listing markers show saved address, county, and neighborhood data.</p></div></div>
-    {apiKey ? <div aria-label="Google map of development signals and listings" className="h-[560px] w-full" ref={mapNode} /> : <div className="flex h-[560px] items-center justify-center bg-slate-100 p-8 text-center text-sm text-slate-600">Google Maps is not configured for this deployment.</div>}
+    {apiKey ? <div aria-label="Google map of development signals and listings" className="h-[560px] w-full" ref={mapNode} /> : <div aria-label="OpenStreetMap of development signals and listings"><OpenStreetDevelopmentMap baseColor={baseColor} boundaries={fallbackBoundaries} listings={mappedListings} rankCategory={rankCategory} signals={signals} /></div>}
     <div className="flex flex-wrap gap-3 border-t p-4 text-xs"><span className="font-bold">{signals.length} ranked counties</span><span>·</span><span className="font-bold">{stateRanks.size} highlighted states</span><span>·</span><span className="font-bold">{mappedListings.length} exact listings appear as you zoom in</span>{mapError ? <span className="font-semibold text-red-700">· {mapError}</span> : null}</div>
   </section>;
 }

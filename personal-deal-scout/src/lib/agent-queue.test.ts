@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { send } = vi.hoisted(() => ({
   send: vi.fn(async () => ({ messageId: "message-1" })),
 }));
-vi.mock("@vercel/queue", () => ({ send }));
+vi.mock("@vercel/queue", () => ({ QueueClient: class { send = send; } }));
 
 import {
   AGENT_OPERATIONS_TOPIC,
