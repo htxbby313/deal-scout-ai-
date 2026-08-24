@@ -223,6 +223,7 @@ export async function readOperatingLayer(
         const currentGates = latestAcquisitionGates(funnel.gates);
         return {
           id: funnel.id,
+          propertyId: funnel.propertyId,
           property: funnel.property.address,
           market: `${funnel.property.city}, ${funnel.property.state}`,
           stage: funnel.stage,

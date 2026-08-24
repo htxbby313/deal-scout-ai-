@@ -88,14 +88,16 @@ export function WorkspaceShell({
 
         <nav
           aria-label="Primary"
-          className="flex gap-1.5 overflow-x-auto px-3 pb-3 lg:min-h-0 lg:flex-1 lg:block lg:space-y-1.5 lg:overflow-x-hidden lg:overflow-y-auto lg:px-3"
+          className="grid grid-cols-5 gap-1 px-2 pb-3 lg:min-h-0 lg:flex-1 lg:block lg:space-y-1.5 lg:overflow-x-hidden lg:overflow-y-auto lg:px-3"
         >
           {primaryNavigation.map((item) => {
-            const selected = (item.active as readonly string[]).includes(active);
+            const selected = (item.active as readonly string[]).includes(
+              active,
+            );
             return (
               <Link
                 aria-current={selected ? "page" : undefined}
-                className={`flex min-w-max items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition sm:text-xs lg:flex-row lg:gap-3 lg:px-3 lg:py-2.5 lg:text-sm ${
                   selected
                     ? "bg-blue-50 text-blue-800"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"

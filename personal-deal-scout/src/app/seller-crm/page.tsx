@@ -57,8 +57,14 @@ export default async function SellerCrmPage({
     }),
     getPrisma().messageApproval.findMany({
       where: {
-        subject: { startsWith: "Pricing request:" },
         status: { in: ["PENDING", "APPROVED", "SENT_BLOCKED"] },
+        OR: [
+          { subject: { startsWith: "Acquisitions relationship:" } },
+          {
+            subject: { startsWith: "Pricing request:" },
+            leadId: { not: null },
+          },
+        ],
       },
       orderBy: { updatedAt: "desc" },
       take: 24,
@@ -157,10 +163,10 @@ export default async function SellerCrmPage({
           </p>
           <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">Conversations</h1>
+              <h1 className="text-2xl font-bold">Contacts & conversations</h1>
               <p className="mt-1 text-sm text-slate-500">
-                Every seller conversation, next step, property fact, and
-                approval stays attached to its deal.
+                Build seller and buyer relationships, follow the next step, and
+                keep every conversation attached to its deal.
               </p>
             </div>
             <details className="rounded-xl border bg-white">
@@ -211,6 +217,24 @@ export default async function SellerCrmPage({
           </div>
         </header>
         <nav
+          aria-label="Contact type"
+          className="flex gap-2 border-b bg-white px-4 py-3 sm:px-6"
+        >
+          <Link
+            aria-current="page"
+            className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+            href="/seller-crm"
+          >
+            Sellers
+          </Link>
+          <Link
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-800"
+            href="/developers"
+          >
+            Buyers & developers
+          </Link>
+        </nav>
+        <nav
           aria-label="Conversation pipeline"
           className="grid grid-cols-2 gap-2 border-b bg-white px-4 pb-4 sm:grid-cols-5 sm:px-6"
         >
@@ -237,7 +261,7 @@ export default async function SellerCrmPage({
           open={developerDrafts.some((draft) => draft.status === "PENDING")}
         >
           <summary className="cursor-pointer font-bold">
-            Developer conversation drafts ·{" "}
+            Buyer and developer drafts ·{" "}
             {
               developerDrafts.filter((draft) => draft.status === "PENDING")
                 .length
@@ -287,8 +311,9 @@ export default async function SellerCrmPage({
           </div>
           {!developerDrafts.length ? (
             <p className="mt-3 text-sm text-slate-500">
-              No developer conversation drafts yet. Agents create them after
-              property-to-developer matching.
+              No relationship drafts are ready. Deal Scout creates a general
+              buy-box introduction first; specific properties stay blocked until
+              the required contract and disposition gates are satisfied.
             </p>
           ) : null}
         </details>

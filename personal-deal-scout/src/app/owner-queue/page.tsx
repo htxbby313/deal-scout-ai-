@@ -17,6 +17,7 @@ export default async function OwnerQueuePage() {
   const agentTasks = items.filter((item) => item.kind === "AGENT_TASK");
   const urgent = items.filter((item) => item.urgent).length;
   const dealItems = items.length - agentTasks.length;
+  const firstItem = items[0];
   const problemEvents = activity.filter((event) =>
     /gap|fail|block|missing|manual/i.test(event.summary),
   );
@@ -34,22 +35,39 @@ export default async function OwnerQueuePage() {
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         <header className="border-b pb-6">
           <p className="text-sm font-semibold text-blue-700">Today</p>
-          <h1 className="mt-1 text-3xl font-bold">Dashboard</h1>
+          <h1 className="mt-1 text-3xl font-bold">
+            What needs attention today
+          </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Your agents keep working in the background. This page shows only the
-            decisions and exceptions that need you.
+            {items.length
+              ? `${items.length} item${items.length === 1 ? "" : "s"} need your attention: ${dealItems} deal decision${dealItems === 1 ? "" : "s"} and ${agentTasks.length} agent recommendation${agentTasks.length === 1 ? "" : "s"}.`
+              : "You’re caught up. Research continues automatically in the background."}
           </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              className="inline-flex min-h-11 items-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+              href={firstItem?.href ?? "/properties"}
+            >
+              {firstItem ? "Continue working" : "Review opportunities"}
+            </Link>
+            <Link
+              className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:border-blue-400"
+              href="/seller-crm"
+            >
+              Open conversations
+            </Link>
+          </div>
         </header>
         <section
           aria-label="Owner summary"
           className="mt-6 grid gap-3 sm:grid-cols-3"
         >
           <article className="rounded-2xl border bg-white p-5">
-            <p className="text-sm text-slate-500">Decisions</p>
+            <p className="text-sm text-slate-500">Ready for review</p>
             <p className="mt-2 text-3xl font-bold">{items.length}</p>
           </article>
           <article className="rounded-2xl border bg-white p-5">
-            <p className="text-sm text-slate-500">Research problems</p>
+            <p className="text-sm text-slate-500">Research follow-ups</p>
             <p className="mt-2 text-3xl font-bold">{problemEvents.length}</p>
           </article>
           <article className="rounded-2xl border bg-white p-5">

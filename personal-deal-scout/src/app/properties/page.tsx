@@ -88,7 +88,7 @@ export default async function PropertiesPage() {
             <p className="text-sm font-semibold text-blue-700">
               Source-backed opportunities
             </p>
-            <h1 className="mt-1 text-3xl font-bold">Properties</h1>
+            <h1 className="mt-1 text-3xl font-bold">Opportunities</h1>
             <p className="mt-2 text-sm text-slate-600">
               Deal Scout researches every address automatically. A contact name
               and phone are the minimum outreach route; email is optional.

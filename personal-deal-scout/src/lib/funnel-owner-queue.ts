@@ -63,7 +63,16 @@ export async function readFunnelOwnerQueue() {
       take: 100,
     }),
     db.messageApproval.findMany({
-      where: { status: "PENDING", subject: { startsWith: "Pricing request:" } },
+      where: {
+        status: "PENDING",
+        OR: [
+          { subject: { startsWith: "Acquisitions relationship:" } },
+          {
+            subject: { startsWith: "Pricing request:" },
+            leadId: { not: null },
+          },
+        ],
+      },
       orderBy: { updatedAt: "asc" },
       take: 100,
     }),
@@ -115,7 +124,7 @@ export async function readFunnelOwnerQueue() {
       id: item.id,
       kind: "DEVELOPER_DRAFT" as const,
       label: item.subject ?? `Developer conversation · ${item.recipientLabel}`,
-      detail: `Draft for ${item.recipientLabel}; no message has been sent.`,
+      detail: `${item.subject?.startsWith("Acquisitions relationship:") ? "Relationship introduction" : "Contract-cleared opportunity"} for ${item.recipientLabel}; no message has been sent.`,
       createdAt: item.createdAt,
       urgent: false,
       href: "/seller-crm#developer-drafts",

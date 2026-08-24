@@ -167,13 +167,26 @@ export default async function DevelopersPage({
   return (
     <WorkspaceShell active="developers">
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
+        <nav aria-label="Contact type" className="mb-5 flex gap-2">
+          <Link
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-800"
+            href="/seller-crm"
+          >
+            Sellers
+          </Link>
+          <Link
+            aria-current="page"
+            className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+            href="/developers"
+          >
+            Buyers & developers
+          </Link>
+        </nav>
         <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-blue-700">
-              Developer intelligence
-            </p>
+            <p className="text-sm font-semibold text-blue-700">Contacts</p>
             <h1 className="mt-1 text-3xl font-bold">
-              Developer Relationship List
+              Buyer & developer relationships
             </h1>
             <p className="mt-2 text-sm text-slate-600">
               Build acquisition relationships from a contact name, business
