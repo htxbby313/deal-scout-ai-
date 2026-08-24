@@ -155,6 +155,7 @@ export default async function DevelopersPage({
         }))
         .filter((item) => item.match)
         .sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0))
+        .slice(0, 3)
     : [];
   const qualifiedCount = db.developers.filter((developer) =>
     qualified.includes(developer.qualificationStatus),

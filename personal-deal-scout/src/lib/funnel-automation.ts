@@ -1,40 +1,325 @@
 import "server-only";
 
+import { latestAcquisitionGates } from "@/lib/acquisition-gate-versioning";
+
 import { Prisma, type AcquisitionStage } from "@prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { evaluateFunnelExpiration } from "@/lib/funnel-automation-policy";
 import { PROPERTY_RESEARCH_VERSION } from "@/lib/property-research";
 
-export async function createStagePolicy(input: { stage: AcquisitionStage; reviewIntervalHours: number; expiryAction: "REFRESH_RESEARCH" | "MANUAL_VERIFICATION" | "NURTURE" | "DISQUALIFY" | "ARCHIVE"; requiredGateTypes: Array<"PROPERTY_EVIDENCE" | "SELLER_CONTACT" | "UNDERWRITING" | "COMPLIANCE" | "CONTRACT" | "BUYER_COVERAGE" | "DISPOSITION" | "CLOSING">; entryCriteria: Prisma.InputJsonValue; exitCriteria: Prisma.InputJsonValue; highValueThresholdCents?: bigint; reason: string; actor: string; effectiveAt?: Date; expiresAt?: Date }) {
-  if (!Number.isInteger(input.reviewIntervalHours) || input.reviewIntervalHours < 1 || input.reason.trim().length < 10) throw new Error("A positive review interval and meaningful reason are required.");
-  const criteriaValid = (value: Prisma.InputJsonValue) => Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "object" && item !== null && "code" in item && typeof item.code === "string" && item.code.trim() && "description" in item && typeof item.description === "string" && item.description.trim());
-  if (!criteriaValid(input.entryCriteria) || !criteriaValid(input.exitCriteria)) throw new Error("Entry and exit criteria must be JSON arrays containing code and description.");
-  return getPrisma().$transaction(async (tx) => { const latest = await tx.acquisitionStagePolicy.findFirst({ where: { stage: input.stage }, orderBy: { version: "desc" } }); return tx.acquisitionStagePolicy.create({ data: { stage: input.stage, reviewIntervalHours: input.reviewIntervalHours, expiryAction: input.expiryAction, requiredGateTypes: input.requiredGateTypes, entryCriteria: input.entryCriteria, exitCriteria: input.exitCriteria, highValueThresholdCents: input.highValueThresholdCents, reason: input.reason, effectiveAt: input.effectiveAt, expiresAt: input.expiresAt, version: (latest?.version ?? 0) + 1, active: false, createdBy: input.actor } }); }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+export async function createStagePolicy(input: {
+  stage: AcquisitionStage;
+  reviewIntervalHours: number;
+  expiryAction:
+    | "REFRESH_RESEARCH"
+    | "MANUAL_VERIFICATION"
+    | "NURTURE"
+    | "DISQUALIFY"
+    | "ARCHIVE";
+  requiredGateTypes: Array<
+    | "PROPERTY_EVIDENCE"
+    | "SELLER_CONTACT"
+    | "UNDERWRITING"
+    | "COMPLIANCE"
+    | "CONTRACT"
+    | "BUYER_COVERAGE"
+    | "DISPOSITION"
+    | "CLOSING"
+  >;
+  entryCriteria: Prisma.InputJsonValue;
+  exitCriteria: Prisma.InputJsonValue;
+  highValueThresholdCents?: bigint;
+  reason: string;
+  actor: string;
+  effectiveAt?: Date;
+  expiresAt?: Date;
+}) {
+  if (
+    !Number.isInteger(input.reviewIntervalHours) ||
+    input.reviewIntervalHours < 1 ||
+    input.reason.trim().length < 10
+  )
+    throw new Error(
+      "A positive review interval and meaningful reason are required.",
+    );
+  const criteriaValid = (value: Prisma.InputJsonValue) =>
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (item) =>
+        typeof item === "object" &&
+        item !== null &&
+        "code" in item &&
+        typeof item.code === "string" &&
+        item.code.trim() &&
+        "description" in item &&
+        typeof item.description === "string" &&
+        item.description.trim(),
+    );
+  if (!criteriaValid(input.entryCriteria) || !criteriaValid(input.exitCriteria))
+    throw new Error(
+      "Entry and exit criteria must be JSON arrays containing code and description.",
+    );
+  return getPrisma().$transaction(
+    async (tx) => {
+      const latest = await tx.acquisitionStagePolicy.findFirst({
+        where: { stage: input.stage },
+        orderBy: { version: "desc" },
+      });
+      return tx.acquisitionStagePolicy.create({
+        data: {
+          stage: input.stage,
+          reviewIntervalHours: input.reviewIntervalHours,
+          expiryAction: input.expiryAction,
+          requiredGateTypes: input.requiredGateTypes,
+          entryCriteria: input.entryCriteria,
+          exitCriteria: input.exitCriteria,
+          highValueThresholdCents: input.highValueThresholdCents,
+          reason: input.reason,
+          effectiveAt: input.effectiveAt,
+          expiresAt: input.expiresAt,
+          version: (latest?.version ?? 0) + 1,
+          active: false,
+          createdBy: input.actor,
+        },
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
-export async function activateStagePolicy(input:{policyId:string;actor:string;reason:string}){if(input.reason.trim().length<10)throw new Error("A meaningful activation reason is required.");return getPrisma().$transaction(async tx=>{const policy=await tx.acquisitionStagePolicy.findUniqueOrThrow({where:{id:input.policyId}});if(!policy.entryCriteria||!policy.exitCriteria)throw new Error("Entry and exit criteria are required before activation.");await tx.acquisitionStagePolicy.updateMany({where:{stage:policy.stage,active:true},data:{active:false}});return tx.acquisitionStagePolicy.update({where:{id:policy.id},data:{active:true,activatedBy:input.actor,activatedAt:new Date(),reason:`${policy.reason}\nActivation: ${input.reason.trim()}`}});},{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});}
+export async function activateStagePolicy(input: {
+  policyId: string;
+  actor: string;
+  reason: string;
+}) {
+  if (input.reason.trim().length < 10)
+    throw new Error("A meaningful activation reason is required.");
+  return getPrisma().$transaction(
+    async (tx) => {
+      const policy = await tx.acquisitionStagePolicy.findUniqueOrThrow({
+        where: { id: input.policyId },
+      });
+      if (!policy.entryCriteria || !policy.exitCriteria)
+        throw new Error(
+          "Entry and exit criteria are required before activation.",
+        );
+      await tx.acquisitionStagePolicy.updateMany({
+        where: { stage: policy.stage, active: true },
+        data: { active: false },
+      });
+      return tx.acquisitionStagePolicy.update({
+        where: { id: policy.id },
+        data: {
+          active: true,
+          activatedBy: input.actor,
+          activatedAt: new Date(),
+          reason: `${policy.reason}\nActivation: ${input.reason.trim()}`,
+        },
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
 
-export async function recordFunnelBlocker(input: { funnelId: string; code: string; explanation: string; sourceUrl?: string; expiresAt?: Date }) { if (!input.code.trim() || input.explanation.trim().length < 10) throw new Error("Blocker code and explanation are required."); if (input.sourceUrl && new URL(input.sourceUrl).protocol !== "https:") throw new Error("Blocker evidence must use HTTPS."); return getPrisma().acquisitionFunnelBlocker.create({ data: input }); }
+export async function recordFunnelBlocker(input: {
+  funnelId: string;
+  code: string;
+  explanation: string;
+  sourceUrl?: string;
+  expiresAt?: Date;
+}) {
+  if (!input.code.trim() || input.explanation.trim().length < 10)
+    throw new Error("Blocker code and explanation are required.");
+  if (input.sourceUrl && new URL(input.sourceUrl).protocol !== "https:")
+    throw new Error("Blocker evidence must use HTTPS.");
+  return getPrisma().acquisitionFunnelBlocker.create({ data: input });
+}
 
-export async function resolveFunnelBlocker(input: { blockerId: string; actor: string; resolution: string; waive?: boolean }) { if (input.resolution.trim().length < 10) throw new Error("A meaningful resolution is required."); return getPrisma().acquisitionFunnelBlocker.update({ where: { id: input.blockerId }, data: { status: input.waive ? "WAIVED" : "RESOLVED", resolvedAt: new Date(), resolvedBy: input.actor, resolution: input.resolution } }); }
+export async function resolveFunnelBlocker(input: {
+  blockerId: string;
+  actor: string;
+  resolution: string;
+  waive?: boolean;
+}) {
+  if (input.resolution.trim().length < 10)
+    throw new Error("A meaningful resolution is required.");
+  return getPrisma().acquisitionFunnelBlocker.update({
+    where: { id: input.blockerId },
+    data: {
+      status: input.waive ? "WAIVED" : "RESOLVED",
+      resolvedAt: new Date(),
+      resolvedBy: input.actor,
+      resolution: input.resolution,
+    },
+  });
+}
 
 export async function runFunnelExpirationCycle(now = new Date()) {
   const db = getPrisma();
-  const funnels = await db.acquisitionFunnel.findMany({ where: { nextReviewAt: { lte: now }, stage: { notIn: ["CLOSED","DISQUALIFIED","NURTURE","ARCHIVED"] } }, include: { transaction: true, blockers: { where: { status: "OPEN" } }, gates: true, stageHistory: { orderBy: { sequence: "desc" }, take: 1 } } });
-  let refreshed = 0; let manual = 0; let routed = 0;
+  const funnels = await db.acquisitionFunnel.findMany({
+    where: {
+      nextReviewAt: { lte: now },
+      stage: { notIn: ["CLOSED", "DISQUALIFIED", "NURTURE", "ARCHIVED"] },
+    },
+    include: {
+      transaction: true,
+      blockers: { where: { status: "OPEN" } },
+      gates: true,
+      stageHistory: { orderBy: { sequence: "desc" }, take: 1 },
+    },
+  });
+  let refreshed = 0;
+  let manual = 0;
+  let routed = 0;
   for (const funnel of funnels) {
-    const policy = await db.acquisitionStagePolicy.findFirst({ where: { stage: funnel.stage, active: true, OR: [{ effectiveAt: null }, { effectiveAt: { lte: now } }], AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }] }, orderBy: { version: "desc" } });
+    const policy = await db.acquisitionStagePolicy.findFirst({
+      where: {
+        stage: funnel.stage,
+        active: true,
+        OR: [{ effectiveAt: null }, { effectiveAt: { lte: now } }],
+        AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
+      },
+      orderBy: { version: "desc" },
+    });
     const latestHistory = funnel.stageHistory[0];
-    const staleGates = policy?.requiredGateTypes.filter((type) => !funnel.gates.some((gate) => gate.type === type && ["SATISFIED","WAIVED"].includes(gate.status) && (!gate.expiresAt || gate.expiresAt > now))) ?? [];
-    const decision = evaluateFunnelExpiration({ stage: funnel.stage, stageHistoryId: latestHistory?.id ?? "", controlStatus: funnel.transaction?.controlStatus, nextReviewAt: funnel.nextReviewAt, openBlockers: funnel.blockers.map((blocker) => blocker.code), missingOrStaleGates: staleGates, policy: policy ? { stage: policy.stage, reviewIntervalHours: policy.reviewIntervalHours, expiryAction: policy.expiryAction, requiredGateTypes: policy.requiredGateTypes } : null, now });
-    if (!decision.due || !policy || !latestHistory || !decision.action) continue;
-    await db.$transaction(async (tx) => {
-      const existing = await tx.acquisitionExpirationEvent.findUnique({ where: { funnelId_stageHistoryId: { funnelId: funnel.id, stageHistoryId: latestHistory.id } } }); if (existing) return;
-      if (decision.action === "REFRESH_RESEARCH") { const active = await tx.propertyResearchRun.findFirst({ where: { propertyId: funnel.propertyId, status: { in: ["QUEUED","RUNNING"] } } }); if (!active) await tx.propertyResearchRun.create({ data: { propertyId: funnel.propertyId, status: "QUEUED", researchVersion: PROPERTY_RESEARCH_VERSION } }); refreshed += 1; }
-      if (decision.action === "MANUAL_VERIFICATION") { const existingBlocker = await tx.acquisitionFunnelBlocker.findFirst({ where: { funnelId: funnel.id, code: "EXPIRATION_MANUAL_REVIEW", status: "OPEN" } }); if (!existingBlocker) await tx.acquisitionFunnelBlocker.create({ data: { funnelId: funnel.id, code: "EXPIRATION_MANUAL_REVIEW", explanation: "The stage expired with unresolved blockers and requires owner review." } }); manual += 1; }
-      if (decision.targetStage) { const latestSequence = latestHistory.sequence; await tx.acquisitionStageHistory.update({ where: { id: latestHistory.id }, data: { exitedAt: now } }); await tx.acquisitionStageHistory.create({ data: { funnelId: funnel.id, sequence: latestSequence + 1, fromStage: funnel.stage, toStage: decision.targetStage as AcquisitionStage, actor: "system", responsibleActor: "owner", reason: `Stage expiration policy routed this opportunity to ${decision.targetStage}.`, evidence: { policyId: policy.id, policyVersion: policy.version }, blockerSnapshot: decision.reasons } }); await tx.acquisitionFunnel.update({ where: { id: funnel.id }, data: { stage: decision.targetStage as AcquisitionStage, stageEnteredAt: now, lastActivityAt: now, nextReviewAt: null, expiresAt: null, responsibleActor: "owner" } }); routed += 1; } else await tx.acquisitionFunnel.update({ where: { id: funnel.id }, data: { nextReviewAt: new Date(now.getTime() + policy.reviewIntervalHours * 3_600_000) } });
-      await tx.acquisitionExpirationEvent.create({ data: { funnelId: funnel.id, policyId: policy.id, stageHistoryId: latestHistory.id, action: decision.action, resultStage: decision.targetStage as AcquisitionStage | null, reason: decision.reasons.join(", ") || "Configured stage review interval expired.", evidence: { policyVersion: policy.version, staleGates, openBlockers: funnel.blockers.map((blocker) => blocker.code) } } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    const currentGates = latestAcquisitionGates(funnel.gates);
+    const staleGates =
+      policy?.requiredGateTypes.filter(
+        (type) =>
+          !currentGates.some(
+            (gate) =>
+              gate.type === type &&
+              ["SATISFIED", "WAIVED"].includes(gate.status) &&
+              (!gate.expiresAt || gate.expiresAt > now),
+          ),
+      ) ?? [];
+    const decision = evaluateFunnelExpiration({
+      stage: funnel.stage,
+      stageHistoryId: latestHistory?.id ?? "",
+      controlStatus: funnel.transaction?.controlStatus,
+      nextReviewAt: funnel.nextReviewAt,
+      openBlockers: funnel.blockers.map((blocker) => blocker.code),
+      missingOrStaleGates: staleGates,
+      policy: policy
+        ? {
+            stage: policy.stage,
+            reviewIntervalHours: policy.reviewIntervalHours,
+            expiryAction: policy.expiryAction,
+            requiredGateTypes: policy.requiredGateTypes,
+          }
+        : null,
+      now,
+    });
+    if (!decision.due || !policy || !latestHistory || !decision.action)
+      continue;
+    await db.$transaction(
+      async (tx) => {
+        const existing = await tx.acquisitionExpirationEvent.findUnique({
+          where: {
+            funnelId_stageHistoryId: {
+              funnelId: funnel.id,
+              stageHistoryId: latestHistory.id,
+            },
+          },
+        });
+        if (existing) return;
+        if (decision.action === "REFRESH_RESEARCH") {
+          const active = await tx.propertyResearchRun.findFirst({
+            where: {
+              propertyId: funnel.propertyId,
+              status: { in: ["QUEUED", "RUNNING"] },
+            },
+          });
+          if (!active)
+            await tx.propertyResearchRun.create({
+              data: {
+                propertyId: funnel.propertyId,
+                status: "QUEUED",
+                researchVersion: PROPERTY_RESEARCH_VERSION,
+              },
+            });
+          refreshed += 1;
+        }
+        if (decision.action === "MANUAL_VERIFICATION") {
+          const existingBlocker = await tx.acquisitionFunnelBlocker.findFirst({
+            where: {
+              funnelId: funnel.id,
+              code: "EXPIRATION_MANUAL_REVIEW",
+              status: "OPEN",
+            },
+          });
+          if (!existingBlocker)
+            await tx.acquisitionFunnelBlocker.create({
+              data: {
+                funnelId: funnel.id,
+                code: "EXPIRATION_MANUAL_REVIEW",
+                explanation:
+                  "The stage expired with unresolved blockers and requires owner review.",
+              },
+            });
+          manual += 1;
+        }
+        if (decision.targetStage) {
+          const latestSequence = latestHistory.sequence;
+          await tx.acquisitionStageHistory.update({
+            where: { id: latestHistory.id },
+            data: { exitedAt: now },
+          });
+          await tx.acquisitionStageHistory.create({
+            data: {
+              funnelId: funnel.id,
+              sequence: latestSequence + 1,
+              fromStage: funnel.stage,
+              toStage: decision.targetStage as AcquisitionStage,
+              actor: "system",
+              responsibleActor: "owner",
+              reason: `Stage expiration policy routed this opportunity to ${decision.targetStage}.`,
+              evidence: { policyId: policy.id, policyVersion: policy.version },
+              blockerSnapshot: decision.reasons,
+            },
+          });
+          await tx.acquisitionFunnel.update({
+            where: { id: funnel.id },
+            data: {
+              stage: decision.targetStage as AcquisitionStage,
+              stageEnteredAt: now,
+              lastActivityAt: now,
+              nextReviewAt: null,
+              expiresAt: null,
+              responsibleActor: "owner",
+            },
+          });
+          routed += 1;
+        } else
+          await tx.acquisitionFunnel.update({
+            where: { id: funnel.id },
+            data: {
+              nextReviewAt: new Date(
+                now.getTime() + policy.reviewIntervalHours * 3_600_000,
+              ),
+            },
+          });
+        await tx.acquisitionExpirationEvent.create({
+          data: {
+            funnelId: funnel.id,
+            policyId: policy.id,
+            stageHistoryId: latestHistory.id,
+            action: decision.action,
+            resultStage: decision.targetStage as AcquisitionStage | null,
+            reason:
+              decision.reasons.join(", ") ||
+              "Configured stage review interval expired.",
+            evidence: {
+              policyVersion: policy.version,
+              staleGates,
+              openBlockers: funnel.blockers.map((blocker) => blocker.code),
+            },
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
   return { scanned: funnels.length, refreshed, manual, routed };
 }

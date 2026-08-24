@@ -44,6 +44,18 @@ enum PropertyMediaKind {
   OTHER
 }
 
+enum MediaRightsStatus {
+  OWNED
+  LICENSED
+  PERMISSION_DOCUMENTED
+  INTERNAL_ONLY
+  EXTERNAL_APPROVED
+  LINK_ONLY
+  UNKNOWN
+  RESTRICTED
+  REJECTED
+}
+
 enum AgentRole {
   OPERATIONS_COORDINATOR
   RESEARCH
@@ -209,6 +221,7 @@ model Property {
   countyObservations CountyFactObservation[]
   countyEntityMatches CountyEntityMatch[]
   discoveryReferences PropertyDiscoveryReference[]
+  comparableSales ComparableSale[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
@@ -268,12 +281,41 @@ model PropertyMedia {
   kind          PropertyMediaKind @default(LISTING_PHOTO)
   position      Int               @default(0)
   sendApproved  Boolean           @default(false)
+  rightsStatus  MediaRightsStatus @default(UNKNOWN)
+  rightsEvidenceUrl String?
+  externalApprovedAt DateTime?
   discoveredAt  DateTime          @default(now())
   reviewedAt    DateTime?
   property      Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, url])
   @@index([propertyId, position])
+}
+
+model ComparableSale {
+  id                 String   @id @default(cuid())
+  propertyId         String
+  address            String
+  distanceMiles      Decimal
+  soldDate           DateTime
+  soldPriceCents     BigInt
+  propertyType       String?
+  bedrooms           Decimal?
+  bathrooms          Decimal?
+  squareFeet         Int?
+  lotSquareFeet      Int?
+  yearBuilt          Int?
+  condition          String?
+  sourceUrl          String
+  observedAt         DateTime
+  verificationStatus String   @default("VERIFIED_PUBLIC_RECORD")
+  confidence         Int
+  createdBy          String
+  createdAt          DateTime @default(now())
+  property           Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, address, soldDate, sourceUrl])
+  @@index([propertyId, soldDate, distanceMiles])
 }
 
 model Lead {

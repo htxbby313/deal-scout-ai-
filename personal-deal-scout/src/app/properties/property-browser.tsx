@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
   addPropertyMediaAction,
@@ -69,6 +70,9 @@ export type PropertyView = {
     caption?: string;
     altText: string;
     sendApproved: boolean;
+    rightsStatus: string;
+    rightsEvidenceUrl?: string;
+    externalApprovedAt?: string;
     discoveredAt: string;
   }>;
   researchRuns: Array<{
@@ -243,17 +247,47 @@ function PhotoPanel({ property }: { property: PropertyView }) {
                 <form action={reviewPropertyMediaAction} className="mt-3">
                   <input name="propertyId" type="hidden" value={property.id} />
                   <input name="mediaId" type="hidden" value={item.id} />
+                  <input name="approved" type="hidden" value="true" />
+                  <p className="mb-2 text-[11px] font-semibold text-slate-600">
+                    Rights: {item.rightsStatus.replaceAll("_", " ")} ·{" "}
+                    {item.sendApproved
+                      ? "External use approved"
+                      : "External use blocked"}
+                  </p>
+                  <select
+                    className="mb-2 w-full rounded-lg border px-2 py-2 text-xs"
+                    defaultValue={item.rightsStatus || "UNKNOWN"}
+                    name="rightsStatus"
+                  >
+                    {[
+                      "UNKNOWN",
+                      "OWNED",
+                      "LICENSED",
+                      "PERMISSION_DOCUMENTED",
+                      "INTERNAL_ONLY",
+                      "EXTERNAL_APPROVED",
+                      "LINK_ONLY",
+                      "RESTRICTED",
+                      "REJECTED",
+                    ].map((status) => (
+                      <option key={status} value={status}>
+                        {status.replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </select>
                   <input
-                    name="approved"
-                    type="hidden"
-                    value={item.sendApproved ? "false" : "true"}
+                    className="mb-2 w-full rounded-lg border px-2 py-2 text-xs"
+                    defaultValue={item.rightsEvidenceUrl}
+                    name="rightsEvidenceUrl"
+                    placeholder="Rights evidence URL when required"
+                    type="url"
                   />
                   <button
                     className={`w-full rounded-lg px-2 py-2 text-xs font-bold ${item.sendApproved ? "bg-emerald-700 text-white" : "bg-amber-100 text-amber-900"}`}
                   >
                     {item.sendApproved
-                      ? "Approved for developer ✓"
-                      : "Review and approve"}
+                      ? "Update rights decision"
+                      : "Save rights decision"}
                   </button>
                 </form>
               </div>
@@ -886,6 +920,12 @@ export function PropertyBrowser({
               </button>
             </div>
             <div className="p-5">
+              <Link
+                className="mb-5 block rounded-xl bg-blue-700 px-4 py-3 text-center text-sm font-bold text-white"
+                href={`/deals/${selected.id}`}
+              >
+                Analyze in Deal Desk
+              </Link>
               <section
                 className={`rounded-xl p-4 ${actionable(selected) ? "bg-emerald-50 text-emerald-900" : selected.opportunityStatus === "REJECTED" ? "bg-red-50 text-red-900" : "bg-amber-50 text-amber-900"}`}
               >

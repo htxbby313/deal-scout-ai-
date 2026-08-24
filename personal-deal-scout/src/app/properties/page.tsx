@@ -6,6 +6,7 @@ import {
 } from "@/app/properties/property-browser";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { SubmitButton } from "@/app/submit-button";
+import { registerZillowReferenceAction } from "@/app/deal-desk-actions";
 import { requireOwner } from "@/lib/auth";
 import { calculateMatches, readDatabase } from "@/lib/database";
 import { getPrisma } from "@/lib/prisma";
@@ -111,6 +112,74 @@ export default async function PropertiesPage() {
         <div className="mt-6">
           <PropertyBrowser properties={properties} />
         </div>
+        <details className="mt-6 rounded-2xl border bg-white p-5">
+          <summary className="cursor-pointer font-bold">
+            Zillow Scout Inbox
+          </summary>
+          <p className="mt-2 text-sm text-slate-600">
+            Record a human-selected Zillow property link without server-side
+            page scraping. Deal Scout will match an existing opportunity or
+            create a verification-stage record, then run normal official-source
+            research.
+          </p>
+          <form
+            action={registerZillowReferenceAction}
+            className="mt-4 grid gap-3 sm:grid-cols-2"
+          >
+            <input
+              className="rounded-lg border px-3 py-2 sm:col-span-2"
+              name="url"
+              placeholder="Direct Zillow property URL"
+              required
+              type="url"
+            />
+            <input
+              className="rounded-lg border px-3 py-2"
+              name="observedAddress"
+              placeholder="Street address"
+              required
+            />
+            <input
+              className="rounded-lg border px-3 py-2"
+              name="observedCity"
+              placeholder="City"
+              required
+            />
+            <input
+              className="rounded-lg border px-3 py-2"
+              maxLength={2}
+              minLength={2}
+              name="observedState"
+              placeholder="State"
+              required
+            />
+            <input
+              className="rounded-lg border px-3 py-2"
+              name="observedZipCode"
+              placeholder="ZIP code"
+              required
+            />
+            <input
+              className="rounded-lg border px-3 py-2"
+              name="observedAskingPrice"
+              placeholder="Observed asking price"
+              type="number"
+            />
+            <input
+              className="rounded-lg border px-3 py-2"
+              name="observedAvailability"
+              placeholder="Observed availability"
+            />
+            <textarea
+              className="rounded-lg border px-3 py-2 sm:col-span-2"
+              name="observationNotes"
+              placeholder="Observation notes"
+            />
+            <button className="rounded-xl bg-slate-950 px-4 py-3 font-bold text-white sm:col-span-2">
+              Add to Scout Inbox
+            </button>
+          </form>
+        </details>
         <details className="mt-6 rounded-2xl border bg-white p-5">
           <summary className="cursor-pointer font-bold">
             County evidence and conflicts · {countyEvidence.length}

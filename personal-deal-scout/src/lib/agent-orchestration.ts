@@ -16,9 +16,8 @@ import {
   runQueuedDeveloperResearch,
 } from "@/lib/developer-research";
 import {
-  calculateMatches,
   generateDeveloperPricingRequest,
-  readDatabase,
+  generateDeveloperRelationshipDraft,
   scoreDeveloperMatches,
 } from "@/lib/database";
 import { createAutomaticSellerDraft } from "@/lib/seller-engagement";
@@ -237,20 +236,6 @@ export async function createTaskIfMissing(input: {
 export async function seedAgentWork() {
   const db = getPrisma();
   await ensureAgentTeam();
-  const matchingSnapshot = await readDatabase();
-  const developerSnapshotById = new Map(
-    matchingSnapshot.developers.map((developer) => [developer.id, developer]),
-  );
-  const calculatedTopProspect = new Map(
-    matchingSnapshot.properties.map((property) => [
-      property.id,
-      calculateMatches(
-        property,
-        matchingSnapshot.developers,
-        matchingSnapshot.developerProjects,
-      )[0]?.developerId,
-    ]),
-  );
   let propertiesConsidered = 0;
   let developersConsidered = 0;
   let transactionsConsidered = 0;
@@ -308,42 +293,6 @@ export async function seedAgentWork() {
           evidenceCount,
           ownerApprovalRequired: false,
         });
-      const persistedProspects = property.matches.map(
-        ({ developer }) => developer,
-      );
-      const calculatedProspectId = calculatedTopProspect.get(property.id);
-      const calculatedProspect = calculatedProspectId
-        ? developerSnapshotById.get(calculatedProspectId)
-        : undefined;
-      const prospects = persistedProspects.length
-        ? persistedProspects
-        : calculatedProspect
-          ? [calculatedProspect]
-          : [];
-      await Promise.all(
-        prospects
-          .filter((developer) =>
-            Boolean(
-              developer.email ||
-              developer.phone ||
-              developer.contactUrl ||
-              developer.website,
-            ),
-          )
-          .map((developer) =>
-            createTaskIfMissing({
-              role: "BUYER_DEVELOPER",
-              taskType: "DRAFT_BUYER_OUTREACH",
-              title: `Draft developer conversation · ${developer.companyName} · ${property.address}`,
-              description:
-                "Prepare a pricing and relationship conversation draft, including requests for missing contact details, without sending anything.",
-              propertyId: property.id,
-              developerId: developer.id,
-              evidenceCount,
-              ownerApprovalRequired: false,
-            }),
-          ),
-      );
     }
     if (page.length < 100) break;
     propertyCursor = page.at(-1)!.id;
@@ -367,6 +316,22 @@ export async function seedAgentWork() {
         evidenceCount: developer.contactVerifiedAt ? 1 : 0,
         ownerApprovalRequired: false,
       });
+      if (
+        developer.email ||
+        developer.phone ||
+        developer.contactUrl ||
+        developer.website
+      )
+        await createTaskIfMissing({
+          role: "BUYER_DEVELOPER",
+          taskType: "DRAFT_BUYER_OUTREACH",
+          title: `Prepare relationship conversation · ${developer.companyName}`,
+          description:
+            "Learn the developer's verified buy box and acquisitions process without presenting a property.",
+          developerId: developer.id,
+          evidenceCount: developer.contactVerifiedAt ? 1 : 0,
+          ownerApprovalRequired: false,
+        });
     }
     if (page.length < 100) break;
     developerCursor = page.at(-1)!.id;
@@ -472,15 +437,10 @@ async function performTask(task: Awaited<ReturnType<typeof loadTask>>) {
           output: { ...draft, contactAttempted: false },
         };
   }
-  if (
-    taskType === "DRAFT_BUYER_OUTREACH" &&
-    task.propertyId &&
-    task.developerId
-  ) {
-    const draft = await generateDeveloperPricingRequest(
-      task.propertyId,
-      task.developerId,
-    );
+  if (taskType === "DRAFT_BUYER_OUTREACH" && task.developerId) {
+    const draft = task.propertyId
+      ? await generateDeveloperPricingRequest(task.propertyId, task.developerId)
+      : await generateDeveloperRelationshipDraft(task.developerId);
     if (!draft)
       throw new Error("Developer conversation draft could not be created.");
     return {
@@ -697,39 +657,6 @@ async function chainCompletedAgentTask(
       evidenceCount,
       ownerApprovalRequired: false,
     });
-  }
-  if (task.taskType === "MATCH_BUYER") {
-    const prospects = await db.developerMatch.findMany({
-      where: { propertyId: task.propertyId },
-      include: { developer: true },
-      orderBy: { score: "desc" },
-      take: 1,
-    });
-    await Promise.all(
-      prospects
-        .filter(({ developer }) =>
-          Boolean(
-            developer.email ||
-            developer.phone ||
-            developer.contactUrl ||
-            developer.website,
-          ),
-        )
-        .map(({ developer }) =>
-          createTaskIfMissing({
-            role: "BUYER_DEVELOPER",
-            taskType: "DRAFT_BUYER_OUTREACH",
-            title: `Draft developer conversation · ${developer.companyName} · ${property.address}`,
-            description:
-              "Prepare a pricing and relationship conversation draft, including requests for missing contact details, without sending anything.",
-            transactionId: task.transactionId ?? undefined,
-            propertyId: task.propertyId ?? undefined,
-            developerId: developer.id,
-            evidenceCount,
-            ownerApprovalRequired: false,
-          }),
-        ),
-    );
   }
   if (["ASSESS_SELLER_FIT", "MATCH_BUYER"].includes(task.taskType)) {
     const completed = await db.agentTask.findMany({

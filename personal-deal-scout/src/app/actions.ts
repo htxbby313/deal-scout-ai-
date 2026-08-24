@@ -287,9 +287,12 @@ export async function reviewPropertyMediaAction(formData: FormData) {
     propertyId,
     value(formData, "mediaId"),
     value(formData, "approved") === "true",
+    value(formData, "rightsStatus"),
+    value(formData, "rightsEvidenceUrl") || undefined,
   );
   revalidatePath("/properties");
   revalidatePath("/disposition");
+  revalidatePath(`/deals/${propertyId}`);
 }
 
 export async function addPropertyMediaAction(formData: FormData) {

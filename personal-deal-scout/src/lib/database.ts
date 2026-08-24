@@ -13,6 +13,7 @@ import { canSendOutbound, propertyReadiness } from "@/lib/domain";
 import { evaluateLegacyOutboundBoundary } from "@/lib/legacy-outbound-boundary";
 import { logOperation } from "@/lib/operational-logging";
 import { developerRelationshipQualification } from "@/lib/developer-qualification";
+import { evaluatePropertyPresentation } from "@/lib/property-presentation-policy";
 
 export type AuditType =
   | "database.migrated"
@@ -75,6 +76,9 @@ export type PropertyMediaRecord = {
   kind: "LISTING_PHOTO" | "MAP" | "PARCEL" | "DOCUMENT" | "OTHER";
   position: number;
   sendApproved: boolean;
+  rightsStatus: string;
+  rightsEvidenceUrl?: string;
+  externalApprovedAt?: string;
   discoveredAt: string;
   reviewedAt?: string;
 };
@@ -520,6 +524,11 @@ export async function readDatabase(): Promise<Database> {
           ...m,
           kind: m.kind as PropertyMediaRecord["kind"],
           caption: optional(m.caption),
+          rightsStatus: m.rightsStatus,
+          rightsEvidenceUrl: optional(m.rightsEvidenceUrl),
+          externalApprovedAt: m.externalApprovedAt
+            ? iso(m.externalApprovedAt)
+            : undefined,
           discoveredAt: iso(m.discoveredAt),
           reviewedAt: m.reviewedAt ? iso(m.reviewedAt) : undefined,
         })),
@@ -865,6 +874,25 @@ export function calculateMatches(
         d.qualificationStatus !== "REJECTED" &&
         Boolean(d.email || d.phone || d.contactUrl || d.website),
     )
+    .filter((developer) => {
+      const explicitMarketFit = developer.targetZipCodes.includes(
+        property.zipCode,
+      );
+      const verifiedMarketFit = projects.some(
+        (project) =>
+          project.developerId === developer.id &&
+          project.verifiedAt &&
+          project.sourceUrl &&
+          (project.zipCode === property.zipCode ||
+            (project.city.toLowerCase() === property.city.toLowerCase() &&
+              project.state === property.state)),
+      );
+      const priceFits =
+        !developer.maximumPurchasePrice ||
+        !property.estimatedValue ||
+        developer.maximumPurchasePrice >= property.estimatedValue;
+      return (explicitMarketFit || verifiedMarketFit) && priceFits;
+    })
     .map((developer) => {
       let score = 10;
       const reasons: string[] = [
@@ -920,7 +948,10 @@ export function calculateMatches(
         reasons,
       };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort(
+      (a, b) => b.score - a.score || a.developerId.localeCompare(b.developerId),
+    )
+    .slice(0, 5);
 }
 
 export async function scoreDeveloperMatches(
@@ -949,6 +980,12 @@ export async function scoreDeveloperMatches(
             update: { score: match.score, reasons: match.reasons },
             create: { propertyId, ...match },
           });
+        await tx.developerMatch.deleteMany({
+          where: {
+            propertyId,
+            developerId: { notIn: matches.map((match) => match.developerId) },
+          },
+        });
         await audit(
           tx,
           "developer.matches.scored",
@@ -1004,19 +1041,79 @@ export async function generateDraftApproval(
     return safeError(error, "generate message draft");
   }
 }
+export async function generateDeveloperRelationshipDraft(developerId: string) {
+  const db = getPrisma();
+  const developer = await db.developer.findUnique({
+    where: { id: developerId },
+  });
+  if (!developer) throw new Error("Developer not found.");
+  const plan = planDeveloperConversationRoute(developer);
+  if (!plan.ready)
+    throw new Error(
+      `Developer contact research incomplete: ${plan.missing.join(", ")}.`,
+    );
+  const subject = `Acquisitions relationship: ${developer.companyName}`;
+  const existing = await db.messageApproval.findFirst({
+    where: {
+      recipientLabel: developer.companyName,
+      subject,
+      status: { in: ["PENDING", "APPROVED", "SENT_BLOCKED"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (existing) return existing;
+  const body = `Hello ${developer.contactName?.trim() || developer.companyName},\n\nI’m Cole with Coleman & Co. Holdings LLC. We research off-market acquisition opportunities and would like to learn your current buy box before discussing any specific property. Could you confirm your target markets, property types, price range, closing timeline, and the best acquisitions contact?${plan.missing.length ? ` We also need to confirm your ${plan.missing.join(" and ")}.` : ""}\n\nNo property is being offered in this message. We will only present a specific opportunity after we hold the necessary contractual interest and the transaction is cleared for disposition.\n\nContact route: ${plan.route}`;
+  return db.$transaction(async (tx) => {
+    const approval = await tx.messageApproval.create({
+      data: {
+        channel: plan.channel,
+        recipientLabel: developer.companyName,
+        subject,
+        body,
+        provider: "disabled",
+      },
+    });
+    await audit(
+      tx,
+      "developer.pricing_request.created",
+      `Generated relationship draft for ${developer.companyName}.`,
+      {
+        developerId,
+        approvalId: approval.id,
+        relationshipOnly: true,
+        propertyPresented: false,
+      },
+    );
+    return approval;
+  });
+}
 export async function generateDeveloperPricingRequest(
   propertyId: string,
   developerId: string,
 ) {
   try {
     const db = getPrisma();
-    const [property, developer, lead] = await Promise.all([
+    const [property, developer, lead, transaction] = await Promise.all([
       db.property.findUnique({ where: { id: propertyId } }),
       db.developer.findUnique({ where: { id: developerId } }),
       db.lead.findUnique({ where: { propertyId } }),
+      db.dealTransaction.findFirst({
+        where: { propertyId, controlStatus: { not: "STOPPED" } },
+        include: {
+          documents: true,
+          approvals: true,
+          acquisitionFunnel: { include: { gates: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
     if (!property || !developer)
       throw new Error("Property or developer not found.");
+    const presentation = evaluatePropertyPresentation(transaction);
+    if (!presentation.allowed)
+      throw new Error(
+        `Property presentation blocked: ${presentation.blockers.join(", ")}. Use a relationship-only conversation until every contract and disposition control is satisfied.`,
+      );
     const subject = `Pricing request: ${property.address}`;
     const existing = await db.messageApproval.findFirst({
       where: {
@@ -1034,7 +1131,7 @@ export async function generateDeveloperPricingRequest(
       throw new Error(
         `Developer contact research incomplete: ${plan.missing.join(", ")}.`,
       );
-    const body = `I have a possible property in ${property.zipCode}.\n\nAddress: ${property.address}\nLot size: ${property.lotSize || "unknown"}\nYear built: ${property.yearBuilt || "unknown"}\nNearby / fit notes: ${(match?.reasons ?? []).join(" ") || "Potential redevelopment candidate."}\n\nWhere would you need to be on price?${plan.missing.length ? ` Please also confirm your best ${plan.missing.join(" and ")} for future opportunities.` : ""}\n\nManual contact route: ${plan.route}`;
+    const body = `Coleman & Co. Holdings LLC holds a documented contractual interest in a property that fits your verified acquisition criteria.\n\nAddress: ${property.address}\nZIP: ${property.zipCode}\nLot size: ${property.lotSize || "unknown"}\nYear built: ${property.yearBuilt || "unknown"}\nFit evidence: ${(match?.reasons ?? []).join(" ") || "Verified buy-box fit."}\n\nWould you like to review the approved deal package and provide pricing feedback?${plan.missing.length ? ` Please also confirm your best ${plan.missing.join(" and ")} for future opportunities.` : ""}\n\nContact route: ${plan.route}`;
     return await db.$transaction(async (tx) => {
       const approval = await tx.messageApproval.create({
         data: {
