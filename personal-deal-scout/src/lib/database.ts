@@ -14,6 +14,7 @@ import { evaluateLegacyOutboundBoundary } from "@/lib/legacy-outbound-boundary";
 import { logOperation } from "@/lib/operational-logging";
 import { developerRelationshipQualification } from "@/lib/developer-qualification";
 import { evaluatePropertyPresentation } from "@/lib/property-presentation-policy";
+import { routeForeclosure } from "@/lib/foreclosure-routing";
 
 export type AuditType =
   | "database.migrated"
@@ -1856,6 +1857,18 @@ export async function importForeclosureCsv(
   let propertiesCreated = 0;
   let leadsCreated = 0;
   let skipped = 0;
+  let heldForVerification = 0;
+  let readyForOwnerOutreach = 0;
+  const numeric = (raw?: string) => {
+    if (!raw) return undefined;
+    const value = Number(raw.replace(/[$,\s]/g, ""));
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const truthy = (raw?: string) =>
+    ["true", "yes", "y", "1", "pre-foreclosure", "preforeclosure"].includes(
+      (raw ?? "").trim().toLowerCase(),
+    );
+
   await getPrisma().$transaction(async (tx) => {
     for (const row of rows) {
       const address =
@@ -1866,65 +1879,203 @@ export async function importForeclosureCsv(
         skipped += 1;
         continue;
       }
+
       const ownerName =
         row["Owner1 Full Name"] ||
         row["Owner Full Name"] ||
         row["Owner Name"] ||
         "Unknown Owner";
+      const sourceUrl =
+        row["Source URL"] ||
+        row["Official URL"] ||
+        row["Foreclosure URL"] ||
+        row["Listing URL"];
+      const decision = routeForeclosure({
+        stage:
+          row["Foreclosure Stage"] ||
+          row["Property Status"] ||
+          row["Stage"],
+        ownerName,
+        preforeclosure:
+          truthy(row.Preforeclosure) || truthy(row["Pre-Foreclosure"]),
+        auctionDate:
+          row["Auction Date"] ||
+          row["Sale Date"] ||
+          row["Trustee Sale Date"],
+        sourceName: row.Source || parsed.sourceName,
+        sourceUrl,
+        authorizedSaleUrl: row["Listing URL"] || row["Bid URL"] || row["Authorized Sale URL"],
+        estimatedValue: numeric(
+          row["Estimated Value"] || row["Market Value"] || row["ARV"],
+        ),
+        estimatedDebt: numeric(
+          row["Estimated Debt"] ||
+            row["Loan Balance"] ||
+            row["Total Debt"],
+        ),
+        liensAndTaxes: numeric(
+          row["Liens and Taxes"] ||
+            row["Total Liens"] ||
+            row["Delinquent Taxes"],
+        ),
+      });
+      const workflowNotes = [
+        "--- Foreclosure routing ---",
+        parsed.sourceName ? `Source: ${parsed.sourceName}` : "",
+        `Foreclosure stage: ${decision.stage}`,
+        `Acquisition route: ${decision.route}`,
+        `Routing status: ${decision.status}`,
+        `Next action: ${decision.nextAction}`,
+        decision.estimatedEquity != null
+          ? `Estimated equity before transaction costs: $${decision.estimatedEquity.toLocaleString("en-US")}`
+          : "",
+        decision.blockers.length
+          ? `Routing blockers: ${decision.blockers.join("; ")}`
+          : "Routing blockers: none",
+        "--- End foreclosure routing ---",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
       const existing = await tx.property.findUnique({
         where: { address_zipCode: { address, zipCode } },
       });
-      const property =
-        existing ??
-        (await tx.property.create({
-          data: {
-            address,
-            city,
-            state: (row.State || "TX").toUpperCase(),
-            zipCode,
-            ownerName,
-            yearBuilt: row["Year Built"] || undefined,
-            notes: parsed.sourceName
-              ? `Source: ${parsed.sourceName}`
-              : undefined,
-          },
-        }));
+      const property = existing
+        ? await tx.property.update({
+            where: { id: existing.id },
+            data: {
+              notes: [
+                (existing.notes ?? "")
+                  .replace(/\n?--- Foreclosure routing ---[\s\S]*?--- End foreclosure routing ---/g, "")
+                  .trim(),
+                workflowNotes,
+              ]
+                .filter(Boolean)
+                .join("\n"),
+              sourceUrl: sourceUrl || existing.sourceUrl,
+              opportunityStatus:
+                decision.stage === "HUD_OWNED" ||
+                decision.stage === "TAX_FORECLOSURE"
+                  ? "GOVERNMENT_SALE"
+                  : existing.opportunityStatus,
+            },
+          })
+        : await tx.property.create({
+            data: {
+              address,
+              city,
+              state: (row.State || "TX").toUpperCase(),
+              zipCode,
+              ownerName,
+              yearBuilt: row["Year Built"] || undefined,
+              estimatedValue: numeric(
+                row["Estimated Value"] || row["Market Value"] || row["ARV"],
+              ),
+              sourceName: row.Source || parsed.sourceName,
+              sourceUrl,
+              opportunityStatus:
+                decision.stage === "HUD_OWNED" ||
+                decision.stage === "TAX_FORECLOSURE"
+                  ? "GOVERNMENT_SALE"
+                  : "NEEDS_VERIFICATION",
+              notes: workflowNotes,
+            },
+          });
       if (!existing) propertiesCreated += 1;
-      const lead = await tx.lead.findUnique({
+
+      const readyForOutreach =
+        decision.route === "OWNER_OUTREACH" &&
+        decision.status === "READY_FOR_DILIGENCE" &&
+        decision.canContactOwner;
+      if (readyForOutreach) readyForOwnerOutreach += 1;
+      else heldForVerification += 1;
+
+      const existingLead = await tx.lead.findUnique({
         where: { propertyId: property.id },
       });
-      if (!lead) {
-        const created = await tx.lead.create({
-          data: {
-            propertyId: property.id,
-            ownerName,
-            status: "READY_TO_CONTACT",
-            priority: row.Preforeclosure === "true" ? "High" : "Medium",
-            nextActionType:
-              "Research foreclosure lead and verify owner contact",
-            nextActionAt: "Today",
+      const leadNotes = [
+        `Route: ${decision.route}`,
+        `Stage: ${decision.stage}`,
+        decision.blockers.length
+          ? `Blockers: ${decision.blockers.join("; ")}`
+          : "Blockers: none",
+        readyForOutreach
+          ? "Personalized outreach may be drafted for approval."
+          : "Outbound owner outreach remains locked until routing blockers are cleared.",
+      ].join("\n");
+      const lead = existingLead
+        ? await tx.lead.update({
+            where: { id: existingLead.id },
+            data: {
+              ownerName,
+              status: readyForOutreach
+                ? "READY_TO_CONTACT"
+                : "RESEARCH_REQUIRED",
+              priority: readyForOutreach ? "High" : "Medium",
+              nextActionType: decision.nextAction,
+              nextActionAt: "Today",
+              notes: leadNotes,
+            },
+          })
+        : await tx.lead.create({
+            data: {
+              propertyId: property.id,
+              ownerName,
+              status: readyForOutreach
+                ? "READY_TO_CONTACT"
+                : "RESEARCH_REQUIRED",
+              priority: readyForOutreach ? "High" : "Medium",
+              nextActionType: decision.nextAction,
+              nextActionAt: "Today",
+              notes: leadNotes,
+            },
+          });
+      await tx.task.upsert({
+        where: {
+          leadId_title: {
+            leadId: lead.id,
+            title: lead.nextActionType,
           },
-        });
-        await tx.task.create({
-          data: {
-            leadId: created.id,
-            title: created.nextActionType,
-            type: "CSV_IMPORT_REVIEW",
-            priority: created.priority,
-            dueAt: created.nextActionAt,
-          },
-        });
-        leadsCreated += 1;
-      }
+        },
+        update: {
+          type: "FORECLOSURE_ROUTING_REVIEW",
+          priority: lead.priority,
+          dueAt: lead.nextActionAt,
+          status: "OPEN",
+          completedAt: null,
+        },
+        create: {
+          leadId: lead.id,
+          title: lead.nextActionType,
+          type: "FORECLOSURE_ROUTING_REVIEW",
+          priority: lead.priority,
+          dueAt: lead.nextActionAt,
+        },
+      });
+      if (!existingLead) leadsCreated += 1;
     }
+
     await audit(
       tx,
       "csv.foreclosure_imported",
-      `Imported foreclosure CSV: ${propertiesCreated} propertie(s), ${leadsCreated} lead(s).`,
-      { sourceName: parsed.sourceName, rows: rows.length, skipped },
+      `Imported foreclosure CSV: ${propertiesCreated} propertie(s), ${leadsCreated} routed lead(s), ${heldForVerification} held for verification, ${readyForOwnerOutreach} ready for owner outreach.`,
+      {
+        sourceName: parsed.sourceName,
+        rows: rows.length,
+        skipped,
+        heldForVerification,
+        readyForOwnerOutreach,
+      },
     );
   });
-  return { rows: rows.length, propertiesCreated, leadsCreated, skipped };
+  return {
+    rows: rows.length,
+    propertiesCreated,
+    leadsCreated,
+    skipped,
+    heldForVerification,
+    readyForOwnerOutreach,
+  };
 }
 
 export const __testables = {
