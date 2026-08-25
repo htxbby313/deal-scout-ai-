@@ -17,4 +17,20 @@ describe("CSV parsing", () => {
   it("retains extra cells from malformed rows for safe normalization", () => {
     expect(__testables.parseCsvRows("Company,Criteria\nAcme,Land,Texas")[0]).toEqual({ Company: "Acme", Criteria: "Land", __extra_0: "Texas" });
   });
+
+  it("recognizes underscore property-export location headers", () => {
+    expect(
+      __testables.propertyCsvLocation({
+        Property_Street_Address: "214 Glencrest Dr",
+        Property_City: "San Antonio",
+        Property_State: "tx",
+        Property_Zip_Code: "78201",
+      }),
+    ).toEqual({
+      address: "214 Glencrest Dr",
+      city: "San Antonio",
+      state: "TX",
+      zipCode: "78201",
+    });
+  });
 });

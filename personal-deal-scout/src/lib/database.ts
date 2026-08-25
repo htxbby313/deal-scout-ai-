@@ -1535,6 +1535,35 @@ function validUrl(value: string) {
   return /^https?:\/\//i.test(value) ? value : "";
 }
 
+function csvFlag(value: string) {
+  return /^(?:1|true|yes|y)$/i.test(value.trim());
+}
+
+function propertyCsvLocation(row: Record<string, string>) {
+  const address = csvValue(
+    row,
+    "Street Address",
+    "Property Address",
+    "Address",
+    "Property_Street_Address",
+    "Formated_Address",
+    "Formatted_Address",
+  );
+  const city = csvValue(row, "City", "Property_City");
+  const state = csvValue(row, "State", "Property_State").toUpperCase();
+  const zipCode = csvValue(
+    row,
+    "Zip Code",
+    "ZIP Code",
+    "Zip",
+    "ZIP",
+    "Property_Zip_Code",
+  );
+  return address && city && state.length === 2 && zipCode.length >= 5
+    ? { address, city, state, zipCode }
+    : null;
+}
+
 function noteLines(entries: Array<[string, string]>) {
   return (
     entries
@@ -1750,103 +1779,178 @@ export async function importPropertiesCsv(
 ) {
   const parsed = crmCsvImportSchema.parse(input);
   const rows = parseCsvRows(parsed.csvText);
-  let created = 0;
-  let skipped = 0;
+  let incomplete = 0;
+  let duplicates = 0;
   const createdIds: string[] = [];
-  await getPrisma().$transaction(async (tx) => {
-    for (const row of rows) {
-      const address = csvValue(
-        row,
-        "Street Address",
-        "Property Address",
-        "Address",
-      );
-      const city = csvValue(row, "City");
-      const state = csvValue(row, "State").toUpperCase();
-      const zipCode = csvValue(row, "Zip Code", "ZIP Code", "Zip", "ZIP");
-      if (!address || !city || state.length !== 2 || zipCode.length < 5) {
-        skipped += 1;
-        continue;
-      }
-      const existing = await tx.property.findUnique({
-        where: { address_zipCode: { address, zipCode } },
-      });
-      if (existing) {
-        skipped += 1;
-        continue;
-      }
-      const property = await tx.property.create({
-        data: {
-          address,
-          city,
-          state,
-          zipCode,
-          ownerName:
-            csvValue(
-              row,
-              "Owner1 Full Name",
-              "Owner Full Name",
-              "Owner Name",
-              "Owner",
-            ) || "Unknown Owner",
-          propertyType:
-            csvValue(row, "Property Type", "Asset Type", "Asset Class") ||
-            undefined,
-          yearBuilt: csvValue(row, "Year Built", "Year") || undefined,
-          lotSize: csvValue(row, "Lot Size", "Acreage", "Acres") || undefined,
-          estimatedValue: csvNumber(
-            csvValue(
-              row,
-              "Estimated Value",
-              "Asking Price",
-              "List Price",
-              "Price",
-            ),
+  const candidates = rows.flatMap((row) => {
+    const location = propertyCsvLocation(row);
+    if (!location) {
+      incomplete += 1;
+      return [];
+    }
+    const { address, city, state, zipCode } = location;
+    const contactPhone = Array.from({ length: 10 }, (_, index) => index + 1)
+      .map((index) => ({
+        phone: validPhone(csvValue(row, `Phone_${index}`)),
+        blocked:
+          csvFlag(csvValue(row, `Phone_${index}_DNC`)) ||
+          csvFlag(csvValue(row, `Phone_${index}_IsLitigator`)),
+      }))
+      .find((entry) => entry.phone && !entry.blocked)?.phone;
+    const contactEmail = Array.from({ length: 4 }, (_, index) => index + 1)
+      .map((index) => validEmail(csvValue(row, `Email_${index}`)))
+      .find(Boolean);
+    return [
+      {
+        address,
+        city,
+        state,
+        zipCode,
+        ownerName:
+          csvValue(
+            row,
+            "Owner1 Full Name",
+            "Owner Full Name",
+            "Owner Name",
+            "Owner",
+            "Full_Name",
+          ) || "Unknown Owner",
+        propertyType:
+          csvValue(
+            row,
+            "Property Type",
+            "Asset Type",
+            "Asset Class",
+            "Property_House_Type",
+          ) || undefined,
+        yearBuilt:
+          csvValue(row, "Year Built", "Year", "Property_Year_Built") ||
+          undefined,
+        lotSize:
+          csvValue(
+            row,
+            "Lot Size",
+            "Acreage",
+            "Acres",
+            "Property_Lot_Size_Sq_Ft",
+          ) || undefined,
+        estimatedValue: csvNumber(
+          csvValue(
+            row,
+            "Estimated Value",
+            "Asking Price",
+            "List Price",
+            "Price",
+            "Property_Estimated_Value",
           ),
-          contactName:
-            csvValue(row, "Contact Name", "Seller Contact", "Agency Contact") ||
-            undefined,
-          contactPhone:
-            validPhone(csvValue(row, "Contact Phone", "Phone")) || undefined,
-          contactEmail:
-            validEmail(csvValue(row, "Contact Email", "Email")) || undefined,
-          sourceName:
-            csvValue(row, "Source Name", "Agency", "Government Source") ||
-            parsed.sourceName ||
-            undefined,
-          sourceUrl:
-            validUrl(
-              csvValue(row, "Source URL", "Official URL", "Listing URL"),
-            ) || undefined,
-          sourceRecordDate:
-            csvValue(row, "Record Date", "Listing Date", "Sale Date") ||
-            undefined,
-          opportunityStatus: "NEEDS_VERIFICATION",
-          confidence: 0,
-          notes: noteLines([
-            [
-              "Source",
-              csvValue(row, "Source", "Source URL") ||
-                parsed.sourceName ||
-                "CSV import",
-            ],
-            ["Zoning", csvValue(row, "Zoning")],
-            ["Utilities", csvValue(row, "Utilities")],
-            ["Additional notes", csvValue(row, "Notes", "Additional Notes")],
-          ]),
-        },
+        ),
+        contactName:
+          csvValue(
+            row,
+            "Contact Name",
+            "Seller Contact",
+            "Agency Contact",
+            "Full_Name",
+          ) || undefined,
+        contactPhone:
+          validPhone(csvValue(row, "Contact Phone", "Phone")) ||
+          contactPhone ||
+          undefined,
+        contactEmail:
+          validEmail(csvValue(row, "Contact Email", "Email")) ||
+          contactEmail ||
+          undefined,
+        sourceName:
+          csvValue(row, "Source Name", "Agency", "Government Source") ||
+          parsed.sourceName ||
+          undefined,
+        sourceUrl:
+          validUrl(
+            csvValue(row, "Source URL", "Official URL", "Listing URL"),
+          ) || undefined,
+        sourceRecordDate:
+          csvValue(
+            row,
+            "Record Date",
+            "Listing Date",
+            "Sale Date",
+            "Skip_Traced_Date",
+          ) || undefined,
+        opportunityStatus: "NEEDS_VERIFICATION" as const,
+        confidence: 0,
+        notes: noteLines([
+          [
+            "Source",
+            csvValue(row, "Source", "Source URL", "Skip_Traced_Source") ||
+              parsed.sourceName ||
+              "CSV import",
+          ],
+          ["County", csvValue(row, "County", "Property_County_Name")],
+          ["Zoning", csvValue(row, "Zoning")],
+          ["Utilities", csvValue(row, "Utilities")],
+          ["Additional notes", csvValue(row, "Notes", "Additional Notes")],
+        ]),
+      },
+    ];
+  });
+  const uniqueCandidates = new Map<string, (typeof candidates)[number]>();
+  for (const candidate of candidates) {
+    const key = `${candidate.address.trim().toLowerCase()}|${candidate.zipCode.trim()}`;
+    if (uniqueCandidates.has(key)) duplicates += 1;
+    else uniqueCandidates.set(key, candidate);
+  }
+  const deduplicated = [...uniqueCandidates.values()];
+  const db = getPrisma();
+  const existingKeys = new Set<string>();
+  for (let offset = 0; offset < deduplicated.length; offset += 500) {
+    const chunk = deduplicated.slice(offset, offset + 500);
+    const existing = await db.property.findMany({
+      where: {
+        OR: chunk.map(({ address, zipCode }) => ({ address, zipCode })),
+      },
+      select: { address: true, zipCode: true },
+    });
+    for (const property of existing)
+      existingKeys.add(
+        `${property.address.trim().toLowerCase()}|${property.zipCode.trim()}`,
+      );
+  }
+  const pending = deduplicated.filter((candidate) => {
+    const exists = existingKeys.has(
+      `${candidate.address.trim().toLowerCase()}|${candidate.zipCode.trim()}`,
+    );
+    if (exists) duplicates += 1;
+    return !exists;
+  });
+  await db.$transaction(async (tx) => {
+    for (let offset = 0; offset < pending.length; offset += 250) {
+      const created = await tx.property.createManyAndReturn({
+        data: pending.slice(offset, offset + 250),
+        select: { id: true },
       });
-      createdIds.push(property.id);
-      created += 1;
+      createdIds.push(...created.map(({ id }) => id));
     }
     await audit(
       tx,
       "csv.properties_imported",
-      `Imported property CSV: ${created} propertie(s) created, ${skipped} row(s) skipped.`,
-      { sourceName: parsed.sourceName, rows: rows.length, created, skipped },
+      `Imported property CSV: ${createdIds.length} propertie(s) created, ${duplicates} duplicate row(s), ${incomplete} incomplete row(s).`,
+      {
+        sourceName: parsed.sourceName,
+        rows: rows.length,
+        created: createdIds.length,
+        duplicates,
+        incomplete,
+      },
     );
   });
-  return { rows: rows.length, created, skipped, createdIds };
+  return {
+    rows: rows.length,
+    created: createdIds.length,
+    skipped: duplicates + incomplete,
+    duplicates,
+    incomplete,
+    createdIds,
+  };
 }
 
 export async function importForeclosureCsv(
@@ -2081,6 +2185,7 @@ export async function importForeclosureCsv(
 export const __testables = {
   calculateMatches,
   calculateDeveloperPropertyMatches,
+  propertyCsvLocation,
   qualificationFor,
   parseCsvLine,
   parseCsvRows,

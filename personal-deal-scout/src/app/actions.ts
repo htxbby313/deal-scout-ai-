@@ -13,6 +13,7 @@ import {
 import {
   addSourcedPropertyMedia,
   enqueuePropertyResearch,
+  enqueuePropertyResearchBatch,
   researchProperty,
   runAutomaticPropertyResearchBatch,
   runQueuedPropertyResearch,
@@ -509,17 +510,15 @@ export async function importPropertiesCsvAction(
   await requireOwner();
   try {
     const result = await importPropertiesCsv(await csvFile(formData));
-    const runs: Array<{ id: string }> = [];
-    for (const propertyId of result.createdIds)
-      runs.push(await enqueuePropertyResearch(propertyId));
+    const runs = await enqueuePropertyResearchBatch(result.createdIds);
     if (runs.length)
       after(async () => {
-        for (const run of runs) await runQueuedPropertyResearch(run.id);
+        await runAutomaticPropertyResearchBatch(25);
       });
     revalidatePath("/properties");
     return {
       status: "success",
-      message: `Imported ${result.created} propertie(s); automatic public-source research started for ${result.createdIds.length}. Skipped ${result.skipped} duplicate or incomplete row(s).`,
+      message: `Imported ${result.created} propertie(s); automatic public-source research queued for ${result.createdIds.length}. Skipped ${result.duplicates} duplicate and ${result.incomplete} incomplete row(s).`,
     };
   } catch (error) {
     return {
