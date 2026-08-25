@@ -1904,6 +1904,7 @@ export async function importForeclosureCsv(
           row["Trustee Sale Date"],
         sourceName: row.Source || parsed.sourceName,
         sourceUrl,
+        authorizedSaleUrl: row["Listing URL"] || row["Bid URL"] || row["Authorized Sale URL"],
         estimatedValue: numeric(
           row["Estimated Value"] || row["Market Value"] || row["ARV"],
         ),
