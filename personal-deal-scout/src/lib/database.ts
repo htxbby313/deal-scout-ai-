@@ -105,6 +105,7 @@ export type PropertyRecord = {
   latitude?: number;
   longitude?: number;
   marketFips?: string;
+  propertyType?: string;
   yearBuilt?: string;
   lotSize?: string;
   estimatedValue?: number;
@@ -499,6 +500,7 @@ export async function readDatabase(): Promise<Database> {
         opportunityStatus: p.opportunityStatus as OpportunityStatus,
         yearBuilt: optional(p.yearBuilt),
         lotSize: optional(p.lotSize),
+        propertyType: optional(p.propertyType),
         estimatedValue: optional(p.estimatedValue),
         notes: optional(p.notes),
         contactName: optional(p.contactName),
@@ -887,11 +889,15 @@ export function calculateMatches(
             (project.city.toLowerCase() === property.city.toLowerCase() &&
               project.state === property.state)),
       );
+      const statedMarketFit = statedDeveloperMarketFit(property, developer);
       const priceFits =
         !developer.maximumPurchasePrice ||
         !property.estimatedValue ||
         developer.maximumPurchasePrice >= property.estimatedValue;
-      return (explicitMarketFit || verifiedMarketFit) && priceFits;
+      return (
+        (explicitMarketFit || verifiedMarketFit || statedMarketFit.matched) &&
+        priceFits
+      );
     })
     .map((developer) => {
       let score = 10;
@@ -911,6 +917,11 @@ export function calculateMatches(
       if (developer.targetZipCodes.includes(property.zipCode)) {
         score += 35;
         reasons.push("Builds in the same ZIP code.");
+      }
+      const statedMarketFit = statedDeveloperMarketFit(property, developer);
+      if (statedMarketFit.matched) {
+        score += statedMarketFit.score;
+        reasons.push(statedMarketFit.reason);
       }
       const cityCount = history.filter(
         (p) => p.city.toLowerCase() === property.city.toLowerCase(),
@@ -952,6 +963,65 @@ export function calculateMatches(
       (a, b) => b.score - a.score || a.developerId.localeCompare(b.developerId),
     )
     .slice(0, 5);
+}
+
+function statedDeveloperMarketFit(
+  property: Pick<PropertyRecord, "city" | "state" | "propertyType">,
+  developer: Pick<DeveloperRecord, "notes">,
+) {
+  const criteria = (developer.notes ?? "")
+    .split(/\r?\n/)
+    .filter((line) =>
+      /^(Acquisition criteria|Active acquisition signal|Property types):/i.test(
+        line.trim(),
+      ),
+    )
+    .join(" ")
+    .toLowerCase();
+  if (!criteria)
+    return { matched: false, score: 0, reason: "No stated market fit." };
+
+  const city = property.city.trim().toLowerCase();
+  const state = property.state.trim().toLowerCase();
+  const cityMatched = city.length > 2 && criteria.includes(city);
+  const stateMatched = new RegExp(
+    `(^|[^a-z])${state.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z]|$)`,
+    "i",
+  ).test(criteria);
+  const nationwide =
+    /\b(nationwide|national|major us markets|major u\.s\. markets|across the (?:united states|us|u\.s\.))\b/i.test(
+      criteria,
+    );
+  const propertyType = property.propertyType?.trim().toLowerCase();
+  const typeMatched = Boolean(
+    propertyType &&
+    (criteria.includes(propertyType) ||
+      (propertyType.includes("land") &&
+        /\b(land|acre|development|ground-up)\b/i.test(criteria))),
+  );
+
+  if (cityMatched)
+    return {
+      matched: true,
+      score: typeMatched ? 20 : 16,
+      reason:
+        "The imported acquisition criteria names this city; confirm the buy box in conversation.",
+    };
+  if (stateMatched)
+    return {
+      matched: true,
+      score: typeMatched ? 15 : 11,
+      reason:
+        "The imported acquisition criteria names this state; confirm the buy box in conversation.",
+    };
+  if (nationwide)
+    return {
+      matched: true,
+      score: typeMatched ? 8 : 4,
+      reason:
+        "The imported criteria states broad U.S. coverage; local appetite still needs confirmation.",
+    };
+  return { matched: false, score: 0, reason: "No stated market fit." };
 }
 
 export async function scoreDeveloperMatches(

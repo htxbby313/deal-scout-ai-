@@ -205,6 +205,68 @@ describe("production foundation business rules", () => {
     );
   });
 
+  it("uses imported acquisition geography for preliminary relationship matches without treating headquarters as a buy box", () => {
+    const property = {
+      id: "p1",
+      address: "10 Main",
+      city: "San Antonio",
+      state: "TX",
+      zipCode: "78201",
+      ownerName: "Owner",
+      propertyType: "Land",
+      opportunityStatus: "NEEDS_VERIFICATION",
+      confidence: 50,
+      researchFindings: [],
+      media: [],
+      researchRuns: [],
+      createdAt: "",
+      updatedAt: "",
+    } satisfies PropertyRecord;
+    const base = {
+      phone: "713-555-0101",
+      targetZipCodes: ["Unknown"],
+      active: true,
+      qualificationStatus: "QUALIFIED" as const,
+      researchRuns: [],
+      createdAt: "",
+      updatedAt: "",
+    };
+    const matches = __testables.calculateMatches(
+      property,
+      [
+        {
+          ...base,
+          id: "texas",
+          companyName: "Texas Buyer",
+          notes:
+            "Target markets: Miami, FL\nProperty types: Land\nAcquisition criteria: Land and development opportunities in TX",
+        },
+        {
+          ...base,
+          id: "national",
+          companyName: "National Buyer",
+          notes:
+            "Target markets: Palm Beach, FL\nAcquisition criteria: Ground-up opportunities in major US markets",
+        },
+        {
+          ...base,
+          id: "florida",
+          companyName: "Florida Buyer",
+          notes:
+            "Target markets: Dallas, TX\nAcquisition criteria: Multifamily acquisitions in FL",
+        },
+      ],
+      [],
+    );
+    expect(matches.map((match) => match.developerId)).toEqual([
+      "texas",
+      "national",
+    ]);
+    expect(matches[0]?.reasons.join(" ")).toContain(
+      "confirm the buy box in conversation",
+    );
+  });
+
   it("uses contactability for relationship qualification while purchase history remains matching evidence", () => {
     const developer = {
       phone: "713-555-0100",
