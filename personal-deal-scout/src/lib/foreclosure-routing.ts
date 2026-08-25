@@ -27,6 +27,7 @@ export type ForeclosureRoutingInput = {
   auctionDate?: string | null;
   sourceName?: string | null;
   sourceUrl?: string | null;
+  authorizedSaleUrl?: string | null;
   estimatedValue?: number | null;
   estimatedDebt?: number | null;
   liensAndTaxes?: number | null;
@@ -89,7 +90,7 @@ export function routeForeclosure(input: ForeclosureRoutingInput): ForeclosureRou
   }
 
   if (stage === "HUD_OWNED") {
-    if (!input.sourceUrl) blockers.push("Current authorized HUD sale or listing channel is unverified");
+    if (!input.authorizedSaleUrl) blockers.push("Current authorized HUD sale or listing channel is unverified");
     reasons.push("HUD-owned homes use an authorized listing and formal bid process");
     return {
       stage,
