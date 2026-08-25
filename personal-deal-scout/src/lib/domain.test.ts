@@ -205,6 +205,57 @@ describe("production foundation business rules", () => {
     );
   });
 
+  it("ranks up to three properties for each eligible developer without requiring a property top-five slot", () => {
+    const properties = Array.from(
+      { length: 4 },
+      (_, index): PropertyRecord => ({
+        id: `p${index}`,
+        address: `${index} Main`,
+        city: "Houston",
+        state: "TX",
+        zipCode: `7700${index}`,
+        ownerName: "Owner",
+        estimatedValue: 250000,
+        opportunityStatus: "GOVERNMENT_SALE",
+        confidence: 70,
+        researchFindings: [],
+        media: [],
+        researchRuns: [],
+        createdAt: "",
+        updatedAt: "",
+      }),
+    );
+    const developers = Array.from(
+      { length: 7 },
+      (_, index): DeveloperRecord => ({
+        id: `d${index}`,
+        companyName: `D${index}`,
+        phone: "713-555-0101",
+        targetZipCodes: [],
+        notes: "Acquisition criteria: Development opportunities in TX",
+        active: true,
+        qualificationStatus: "QUALIFIED",
+        researchRuns: [],
+        createdAt: "",
+        updatedAt: "",
+      }),
+    );
+
+    expect(
+      __testables.calculateMatches(properties[0], developers, []).map(
+        (match) => match.developerId,
+      ),
+    ).not.toContain("d6");
+    expect(
+      __testables.calculateDeveloperPropertyMatches(
+        "d6",
+        properties,
+        developers,
+        [],
+      ),
+    ).toHaveLength(3);
+  });
+
   it("uses imported acquisition geography for preliminary relationship matches without treating headquarters as a buy box", () => {
     const property = {
       id: "p1",

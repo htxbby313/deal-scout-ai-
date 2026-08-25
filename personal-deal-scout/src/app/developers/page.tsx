@@ -9,7 +9,7 @@ import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
 import {
   readDatabase,
-  calculateMatches,
+  calculateDeveloperPropertyMatches,
   type QualificationStatus,
 } from "@/lib/database";
 import { getPrisma } from "@/lib/prisma";
@@ -144,18 +144,17 @@ export default async function DevelopersPage({
         )
     : [];
   const matches = selected
-    ? db.properties
-        .map((property) => ({
-          property,
-          match: calculateMatches(
-            property,
-            db.developers,
-            db.developerProjects,
-          ).find((item) => item.developerId === selected.id),
-        }))
-        .filter((item) => item.match)
-        .sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0))
-        .slice(0, 3)
+    ? calculateDeveloperPropertyMatches(
+        selected.id,
+        db.properties,
+        db.developers,
+        db.developerProjects,
+      ).flatMap((match) => {
+        const property = db.properties.find(
+          (candidate) => candidate.id === match.propertyId,
+        );
+        return property ? [{ property, match }] : [];
+      })
     : [];
   const qualifiedCount = db.developers.filter((developer) =>
     qualified.includes(developer.qualificationStatus),
@@ -418,7 +417,7 @@ export default async function DevelopersPage({
                     </ul>
                   </article>
                   <article className="rounded-xl border p-4">
-                    <b>Actionable matches · {matches.length}</b>
+                    <b>Best-fit opportunities · {matches.length} of 3</b>
                     <div className="mt-3 space-y-2">
                       {matches.slice(0, 3).map(({ property, match }) => (
                         <div
@@ -434,7 +433,9 @@ export default async function DevelopersPage({
                       ))}
                       {!matches.length ? (
                         <p className="text-sm text-slate-500">
-                          No verified property matches.
+                          No supported buy-box match yet. Research the market
+                          criteria or start a relationship conversation to
+                          confirm it.
                         </p>
                       ) : null}
                     </div>

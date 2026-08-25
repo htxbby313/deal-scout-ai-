@@ -858,7 +858,7 @@ export async function createDeveloperProject(
   }
 }
 
-export function calculateMatches(
+function calculateAllMatches(
   property: PropertyRecord,
   developers: DeveloperRecord[],
   projects: DeveloperProjectRecord[],
@@ -961,8 +961,37 @@ export function calculateMatches(
     })
     .sort(
       (a, b) => b.score - a.score || a.developerId.localeCompare(b.developerId),
+    );
+}
+
+export function calculateMatches(
+  property: PropertyRecord,
+  developers: DeveloperRecord[],
+  projects: DeveloperProjectRecord[],
+) {
+  return calculateAllMatches(property, developers, projects).slice(0, 5);
+}
+
+export function calculateDeveloperPropertyMatches(
+  developerId: string,
+  properties: PropertyRecord[],
+  developers: DeveloperRecord[],
+  projects: DeveloperProjectRecord[],
+) {
+  if (!developers.some((developer) => developer.id === developerId)) return [];
+
+  return properties
+    .flatMap((property) => {
+      const match = calculateAllMatches(property, developers, projects).find(
+        (candidate) => candidate.developerId === developerId,
+      );
+      return match ? [{ propertyId: property.id, ...match }] : [];
+    })
+    .sort(
+      (a, b) =>
+        b.score - a.score || a.propertyId.localeCompare(b.propertyId),
     )
-    .slice(0, 5);
+    .slice(0, 3);
 }
 
 function statedDeveloperMarketFit(
@@ -1900,6 +1929,7 @@ export async function importForeclosureCsv(
 
 export const __testables = {
   calculateMatches,
+  calculateDeveloperPropertyMatches,
   qualificationFor,
   parseCsvLine,
   parseCsvRows,
