@@ -1990,43 +1990,69 @@ export async function importForeclosureCsv(
       if (readyForOutreach) readyForOwnerOutreach += 1;
       else heldForVerification += 1;
 
-      const lead = await tx.lead.findUnique({
+      const existingLead = await tx.lead.findUnique({
         where: { propertyId: property.id },
       });
-      if (!lead) {
-        const created = await tx.lead.create({
-          data: {
-            propertyId: property.id,
-            ownerName,
-            status: readyForOutreach
-              ? "READY_TO_CONTACT"
-              : "RESEARCH_REQUIRED",
-            priority: readyForOutreach ? "High" : "Medium",
-            nextActionType: decision.nextAction,
-            nextActionAt: "Today",
-            notes: [
-              `Route: ${decision.route}`,
-              `Stage: ${decision.stage}`,
-              decision.blockers.length
-                ? `Blockers: ${decision.blockers.join("; ")}`
-                : "Blockers: none",
-              readyForOutreach
-                ? "Personalized outreach may be drafted for approval."
-                : "Outbound owner outreach remains locked until routing blockers are cleared.",
-            ].join("\n"),
+      const leadNotes = [
+        `Route: ${decision.route}`,
+        `Stage: ${decision.stage}`,
+        decision.blockers.length
+          ? `Blockers: ${decision.blockers.join("; ")}`
+          : "Blockers: none",
+        readyForOutreach
+          ? "Personalized outreach may be drafted for approval."
+          : "Outbound owner outreach remains locked until routing blockers are cleared.",
+      ].join("\n");
+      const lead = existingLead
+        ? await tx.lead.update({
+            where: { id: existingLead.id },
+            data: {
+              ownerName,
+              status: readyForOutreach
+                ? "READY_TO_CONTACT"
+                : "RESEARCH_REQUIRED",
+              priority: readyForOutreach ? "High" : "Medium",
+              nextActionType: decision.nextAction,
+              nextActionAt: "Today",
+              notes: leadNotes,
+            },
+          })
+        : await tx.lead.create({
+            data: {
+              propertyId: property.id,
+              ownerName,
+              status: readyForOutreach
+                ? "READY_TO_CONTACT"
+                : "RESEARCH_REQUIRED",
+              priority: readyForOutreach ? "High" : "Medium",
+              nextActionType: decision.nextAction,
+              nextActionAt: "Today",
+              notes: leadNotes,
+            },
+          });
+      await tx.task.upsert({
+        where: {
+          leadId_title: {
+            leadId: lead.id,
+            title: lead.nextActionType,
           },
-        });
-        await tx.task.create({
-          data: {
-            leadId: created.id,
-            title: created.nextActionType,
-            type: "FORECLOSURE_ROUTING_REVIEW",
-            priority: created.priority,
-            dueAt: created.nextActionAt,
-          },
-        });
-        leadsCreated += 1;
-      }
+        },
+        update: {
+          type: "FORECLOSURE_ROUTING_REVIEW",
+          priority: lead.priority,
+          dueAt: lead.nextActionAt,
+          status: "OPEN",
+          completedAt: null,
+        },
+        create: {
+          leadId: lead.id,
+          title: lead.nextActionType,
+          type: "FORECLOSURE_ROUTING_REVIEW",
+          priority: lead.priority,
+          dueAt: lead.nextActionAt,
+        },
+      });
+      if (!existingLead) leadsCreated += 1;
     }
 
     await audit(
