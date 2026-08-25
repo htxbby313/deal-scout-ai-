@@ -1920,6 +1920,7 @@ export async function importForeclosureCsv(
         ),
       });
       const workflowNotes = [
+        "--- Foreclosure routing ---",
         parsed.sourceName ? `Source: ${parsed.sourceName}` : "",
         `Foreclosure stage: ${decision.stage}`,
         `Acquisition route: ${decision.route}`,
@@ -1931,6 +1932,7 @@ export async function importForeclosureCsv(
         decision.blockers.length
           ? `Routing blockers: ${decision.blockers.join("; ")}`
           : "Routing blockers: none",
+        "--- End foreclosure routing ---",
       ]
         .filter(Boolean)
         .join("\n");
@@ -1942,11 +1944,17 @@ export async function importForeclosureCsv(
         ? await tx.property.update({
             where: { id: existing.id },
             data: {
-              notes: [existing.notes, workflowNotes].filter(Boolean).join("\n"),
+              notes: [
+                (existing.notes ?? "")
+                  .replace(/\n?--- Foreclosure routing ---[\s\S]*?--- End foreclosure routing ---/g, "")
+                  .trim(),
+                workflowNotes,
+              ]
+                .filter(Boolean)
+                .join("\n"),
               sourceUrl: sourceUrl || existing.sourceUrl,
               opportunityStatus:
                 decision.stage === "HUD_OWNED" ||
-                decision.stage === "BANK_REO" ||
                 decision.stage === "TAX_FORECLOSURE"
                   ? "GOVERNMENT_SALE"
                   : existing.opportunityStatus,
@@ -1967,7 +1975,6 @@ export async function importForeclosureCsv(
               sourceUrl,
               opportunityStatus:
                 decision.stage === "HUD_OWNED" ||
-                decision.stage === "BANK_REO" ||
                 decision.stage === "TAX_FORECLOSURE"
                   ? "GOVERNMENT_SALE"
                   : "NEEDS_VERIFICATION",
