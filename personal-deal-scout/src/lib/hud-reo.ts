@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { fetchWithRetry } from "@/lib/research-runtime";
+import { routeForeclosure } from "@/lib/foreclosure-routing";
 
 export const HUD_REO_SOURCE = "HUD FHA Single Family REO";
 export const HUD_REO_LAYER = "https://egis.hud.gov/arcgis/rest/services/cpdmaps/HudSfReo/MapServer/1";
@@ -62,7 +63,9 @@ export async function importHudReoCounty(fips: string) {
       let created = 0; let refreshed = 0; let skipped = 0; const liveIds: string[] = [];
       for (const record of countyListings) {
         const address = record.ADDRESS.trim(); const zipCode = String(record.DISPLAY_ZIP_CODE).padStart(5, "0");
-        const evidence = { city: record.CITY.trim(), state: record.STATE_CODE, ownerName: "U.S. Department of Housing and Urban Development", latitude: record.MAP_LATITUDE, longitude: record.MAP_LONGITUDE, marketFips: fips, opportunityStatus: "GOVERNMENT_SALE" as const, sourceName: HUD_REO_SOURCE, sourceUrl: hudRecordSourceUrl(record.OBJECTID), sourceRecordDate: dateFromEpoch(record.DATE_ACQUIRED), lastVerifiedAt: capturedAt, confidence: 90, notes: `HUD FHA case ${record.CASE_NUM}. Public listing status step 6 observed ${capturedAt.toISOString().slice(0, 10)}. HUD acquisition date is stored as the source record date; asking price and seller contact were not published in this layer.` };
+        const sourceUrl = hudRecordSourceUrl(record.OBJECTID);
+        const routing = routeForeclosure({ ownerName: "U.S. Department of Housing and Urban Development", sourceName: HUD_REO_SOURCE, sourceUrl });
+        const evidence = { city: record.CITY.trim(), state: record.STATE_CODE, ownerName: "U.S. Department of Housing and Urban Development", latitude: record.MAP_LATITUDE, longitude: record.MAP_LONGITUDE, marketFips: fips, opportunityStatus: "GOVERNMENT_SALE" as const, sourceName: HUD_REO_SOURCE, sourceUrl, sourceRecordDate: dateFromEpoch(record.DATE_ACQUIRED), lastVerifiedAt: capturedAt, confidence: 90, notes: `HUD FHA case ${record.CASE_NUM}. Public status step 6 observed ${capturedAt.toISOString().slice(0, 10)}. HUD acquisition date is the source record date, not a current listing date. Acquisition route: ${routing.route}. Routing status: ${routing.status}. Next action: ${routing.nextAction}. Blockers: ${routing.blockers.join("; ") || "none"}. Asking price, authorized bid channel, bidder period, and broker contact were not published in this layer.` };
         const existing = await tx.property.findUnique({ where: { address_zipCode: { address, zipCode } } });
         if (!existing) { const property = await tx.property.create({ data: { address, zipCode, ...evidence } }); liveIds.push(property.id); created += 1; }
         else if (existing.sourceName === HUD_REO_SOURCE) { await tx.property.update({ where: { id: existing.id }, data: evidence }); liveIds.push(existing.id); refreshed += 1; }
