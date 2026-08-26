@@ -288,7 +288,7 @@ export async function seedAgentWork() {
           taskType: "DRAFT_SELLER_OUTREACH",
           title: `Draft seller conversation · ${property.address}`,
           description:
-            "Prepare a respectful seller conversation draft from available contact evidence and request missing details without sending anything.",
+            "Draft a brief inquiry from Tay at Coleman & Co. Ask about the seller's plans without assuming distress or intent to sell. Use only known facts, preserve required disclosures, and do not send anything.",
           propertyId: property.id,
           evidenceCount,
           ownerApprovalRequired: false,
@@ -327,7 +327,7 @@ export async function seedAgentWork() {
           taskType: "DRAFT_BUYER_OUTREACH",
           title: `Prepare relationship conversation · ${developer.companyName}`,
           description:
-            "Learn the developer's verified buy box and acquisitions process without presenting a property.",
+            "Draft a brief, personal inquiry from Tay at Coleman & Co. Ask what a good opportunity looks like for the buyer's team. No pitch, invented familiarity, property presentation, or delivery.",
           developerId: developer.id,
           evidenceCount: developer.contactVerifiedAt ? 1 : 0,
           ownerApprovalRequired: false,
@@ -651,7 +651,7 @@ async function chainCompletedAgentTask(
       taskType: "DRAFT_SELLER_OUTREACH",
       title: `Draft seller conversation · ${property.address}`,
       description:
-        "Prepare a respectful seller conversation draft from available contact evidence and request missing details without sending anything.",
+        "Draft a brief inquiry from Tay at Coleman & Co. Ask about the seller's plans without assuming distress or intent to sell. Use only known facts, preserve required disclosures, and do not send anything.",
       transactionId: task.transactionId ?? undefined,
       propertyId: task.propertyId,
       evidenceCount,

@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { sellerIntroductionTemplate } from "../src/lib/conversation-voice";
 
 const prisma = new PrismaClient();
 
@@ -24,7 +25,7 @@ async function main() {
   await prisma.messageTemplate.upsert({
     where: { type_channel: { type: "Seller introduction", channel: "SMS" } },
     update: {},
-    create: { type: "Seller introduction", channel: "SMS", body: "Hi [OWNER], I am researching the property at [PROPERTY]. Would you be open to a conversation?" },
+    create: { type: "Seller introduction", channel: "SMS", body: sellerIntroductionTemplate },
   });
   await prisma.auditLog.create({ data: { type: "database.migrated", summary: "Seeded production-safe defaults.", details: { systemMode: "RESEARCH", providersEnabled: false } } });
 }

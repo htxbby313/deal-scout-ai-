@@ -1,3 +1,5 @@
+import { sellerIntroduction } from "@/lib/conversation-voice";
+
 export function planSellerConversationDraft(input: {
   address: string;
   contactName?: string | null;
@@ -28,9 +30,6 @@ export function planSellerConversationDraft(input: {
       ? ownerName
       : "Property contact"
     : contactName;
-  const request = missing.length
-    ? ` I would also like to confirm the best ${missing.join(" and ")} for this conversation.`
-    : "";
 
   return {
     ready: true as const,
@@ -38,7 +37,7 @@ export function planSellerConversationDraft(input: {
     channel: input.phone?.trim() ? ("SMS" as const) : ("INTERNAL" as const),
     recipientLabel,
     missing,
-    body: `Hi ${recipientLabel}, this is Cole with Coleman & Co. Holdings LLC. I am reaching out about ${input.address}. Would you be open to a brief conversation about the property and your plans for it? There is no obligation.${request}`,
+    body: sellerIntroduction({ address: input.address, name: recipientLabel, hasPhone: Boolean(input.phone?.trim()) }),
   };
 }
 

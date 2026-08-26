@@ -1,5 +1,6 @@
 import "server-only";
 import { planDeveloperConversationRoute } from "@/lib/conversation-drafting";
+import { buyerIntroduction, currentBuiltInTemplate, propertyPackageInquiry } from "@/lib/conversation-voice";
 
 import { Prisma, type PrismaClient } from "@prisma/client";
 import {
@@ -1113,7 +1114,7 @@ export async function generateDraftApproval(
       }),
     ]);
     if (!template || !lead) throw new Error("Template or lead not found.");
-    const body = template.body
+    const body = currentBuiltInTemplate(template.body)
       .replaceAll("[OWNER]", lead.ownerName)
       .replaceAll("[PROPERTY]", lead.property.address)
       .replaceAll("[ZIP]", lead.property.zipCode);
@@ -1162,7 +1163,7 @@ export async function generateDeveloperRelationshipDraft(developerId: string) {
     orderBy: { createdAt: "desc" },
   });
   if (existing) return existing;
-  const body = `Hello ${developer.contactName?.trim() || developer.companyName},\n\nI’m Cole with Coleman & Co. Holdings LLC. We research off-market acquisition opportunities and would like to learn your current buy box before discussing any specific property. Could you confirm your target markets, property types, price range, closing timeline, and the best acquisitions contact?${plan.missing.length ? ` We also need to confirm your ${plan.missing.join(" and ")}.` : ""}\n\nNo property is being offered in this message. We will only present a specific opportunity after we hold the necessary contractual interest and the transaction is cleared for disposition.\n\nContact route: ${plan.route}`;
+  const body = buyerIntroduction(developer.contactName);
   return db.$transaction(async (tx) => {
     const approval = await tx.messageApproval.create({
       data: {
@@ -1231,7 +1232,7 @@ export async function generateDeveloperPricingRequest(
       throw new Error(
         `Developer contact research incomplete: ${plan.missing.join(", ")}.`,
       );
-    const body = `Coleman & Co. Holdings LLC holds a documented contractual interest in a property that fits your verified acquisition criteria.\n\nAddress: ${property.address}\nZIP: ${property.zipCode}\nLot size: ${property.lotSize || "unknown"}\nYear built: ${property.yearBuilt || "unknown"}\nFit evidence: ${(match?.reasons ?? []).join(" ") || "Verified buy-box fit."}\n\nWould you like to review the approved deal package and provide pricing feedback?${plan.missing.length ? ` Please also confirm your best ${plan.missing.join(" and ")} for future opportunities.` : ""}\n\nContact route: ${plan.route}`;
+    const body = propertyPackageInquiry({ ...property, name: developer.contactName });
     return await db.$transaction(async (tx) => {
       const approval = await tx.messageApproval.create({
         data: {

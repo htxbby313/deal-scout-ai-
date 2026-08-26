@@ -21,7 +21,8 @@ describe("conversation drafting", () => {
     if (plan.ready) {
       expect(plan.missing).toEqual(["email"]);
       expect(plan.channel).toBe("SMS");
-      expect(plan.body).toContain("confirm the best email");
+      expect(plan.body).toContain("I'm Tay");
+      expect(plan.body).not.toContain("email");
     }
   });
 
@@ -34,7 +35,8 @@ describe("conversation drafting", () => {
     if (plan.ready) {
       expect(plan.channel).toBe("INTERNAL");
       expect(plan.missing).toContain("seller phone");
-      expect(plan.body).toContain("seller phone");
+      expect(plan.body).toContain("number I could reach them on");
+      expect(plan.body).not.toContain("Property contact");
     }
   });
 

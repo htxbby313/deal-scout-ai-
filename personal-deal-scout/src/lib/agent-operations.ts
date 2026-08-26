@@ -1,4 +1,6 @@
 import type { AgentCycleTrigger } from "@prisma/client";
+import { refreshPendingConversationVoice } from "@/lib/conversation-voice-refresh";
+import { logOperation } from "@/lib/operational-logging";
 import {
   beginAgentSchedulerCycle,
   finishAgentSchedulerCycle,
@@ -20,6 +22,10 @@ import { synchronizeCampaignCountyCoverage } from "@/lib/campaign-service";
 export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
   const cycle = await beginAgentSchedulerCycle(trigger);
   try {
+    const conversationVoice = await refreshPendingConversationVoice().catch((error) => {
+      logOperation("warn", "conversation_voice_refresh_deferred", { error });
+      return { status: "deferred" as const };
+    });
     const recovery = await recoverAutomaticResearchWork();
     const research = await runAutomaticResearchCycle();
     const [funnels, counties] = await Promise.all([
@@ -40,6 +46,7 @@ export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
       status: "COMPLETED",
       startedAt: cycle.startedAt,
       researchSummary: {
+        conversationVoice,
         recovery,
         research,
         funnels,
@@ -50,7 +57,7 @@ export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
       },
       seed: seeded,
     });
-    return { cycleId: cycle.id, agents, conversationDrafts };
+    return { cycleId: cycle.id, agents, conversationDrafts, conversationVoice };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Agent operations cycle failed.";

@@ -211,7 +211,7 @@ export const tasks = [
 export const messageDrafts = [
   {
     type: "Initial seller SMS",
-    draft: "Hi Sarah, this is Cole. I was reviewing properties in your area and wanted to ask if you would consider a simple cash offer for 412 Oak Street. No pressure either way.",
+    draft: "Hi Sarah, I'm Tay with Coleman & Co. Holdings LLC. I wanted to ask about 412 Oak Street. Would you be open to talking about your plans for it?",
   },
   {
     type: "Developer pricing request",
@@ -219,7 +219,7 @@ export const messageDrafts = [
   },
   {
     type: "Offer follow-up",
-    draft: "Wanted to follow up on the offer range we discussed. If the timing still works, I can walk through the next steps and keep everything subject to review.",
+    draft: "Hi, it's Tay with Coleman & Co. Holdings LLC. Have you had a chance to think about the offer range we discussed? Happy to talk through any questions.",
   },
 ];
 
