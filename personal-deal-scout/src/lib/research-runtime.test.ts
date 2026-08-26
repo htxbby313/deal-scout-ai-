@@ -1,10 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { __researchRuntimeTestables, chunkedMap, fetchValidatedJson, fetchWithRetry, htmlToText, normalizeText, stableUnique, stableUniqueBy } from "@/lib/research-runtime";
+import { __researchRuntimeTestables, chunkedMap, fetchValidatedJson, fetchWithRetry, htmlToText, normalizeText, stableUnique, stableUniqueBy, runWithResearchDeadline } from "@/lib/research-runtime";
 
 afterEach(() => { vi.unstubAllGlobals(); __researchRuntimeTestables.resetCircuits(); });
 
 describe("research runtime", () => {
+  it("a photo-stage deadline cannot extend the enclosing research budget", async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    const request = vi.fn();
+    vi.stubGlobal("fetch", request);
+    try {
+      await expect(runWithResearchDeadline(now + 100, () => runWithResearchDeadline(now + 45_000, async () => {
+        clock.mockReturnValue(now + 101);
+        return fetchWithRetry("https://deadline.example.gov", { attempts: 1, minimumHostIntervalMs: 0 });
+      }))).rejects.toThrow("time budget");
+      expect(request).not.toHaveBeenCalled();
+    } finally { clock.mockRestore(); }
+  });
   it("runs sequential chunks while preserving input order", async () => {
     let active = 0; let maximum = 0;
     const result = await chunkedMap([1, 2, 3, 4, 5], 2, async (value) => { active += 1; maximum = Math.max(maximum, active); await Promise.resolve(); active -= 1; return value * 2; });

@@ -1,7 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { __propertyResearchTestables } from "@/lib/property-research";
+import { __propertyResearchTestables, propertyPhotoSourceUrls, PROPERTY_RESEARCH_VERSION } from "@/lib/property-research";
 
 describe("property research source parsing", () => {
+  it("finds real lazy-loaded and responsive photos instead of placeholders", () => {
+    const html = '<img alt="1200 Main Street" src="/placeholder.gif" data-src="/front.jpg"><img alt="1200 Main Street rear" srcset="/rear-small.jpg 320w, /rear-large.jpg 1200w"><img alt="Different Road" src="/other.jpg">';
+    expect(__propertyResearchTestables.listingImageUrls(html, "https://listing.example.com/home", "1200 Main Street"))
+      .toEqual(["https://listing.example.com/front.jpg", "https://listing.example.com/rear-large.jpg"]);
+  });
+
+  it("reads structured photo objects with spaced script attributes, excluding agent logos", () => {
+    const html = '<script type = "application/ld+json">{"@graph":[{"@type":"RealEstateAgent","image":"https://listing.example.com/logo.jpg"},{"@type":"House","address":{"streetAddress":"1200 Main Street","addressLocality":"Jackson","postalCode":"39201"},"photo":{"@type":"ImageObject","url":"/house.jpg"}}]}</script>';
+    expect(__propertyResearchTestables.listingImageUrls(html, "https://listing.example.com/home", "1200 Main Street")).toEqual(["https://listing.example.com/house.jpg"]);
+    expect(__propertyResearchTestables.pageMatchesProperty(html, { address: "1200 Main Street", city: "Jackson", state: "MS", zipCode: "39201" })).toBe(true);
+  });
+
+  it("deduplicates photos and excludes unsafe image targets", () => {
+    const html = '<meta property="og:image" content="https://127.0.0.1/private.jpg"><meta property="twitter:image" content="/front.jpg"><img alt="1200 Main" data-original="/front.jpg">';
+    expect(__propertyResearchTestables.listingImageUrls(html, "https://listing.example.com/home", "1200 Main Street")).toEqual(["https://listing.example.com/front.jpg"]);
+  });
+
+  it("uses known listing evidence without fetching conflicting or unrelated evidence", () => {
+    expect(propertyPhotoSourceUrls({ sourceUrl: "https://listing.example.com/a", verificationSourceUrl: "https://listing.example.com/a", findings: [
+      { topic: "LISTING", status: "VERIFIED", sourceUrl: "https://listing.example.com/b" },
+      { topic: "TAX", status: "VERIFIED", sourceUrl: "https://county.example.com/tax" },
+      { topic: "PHOTOS", status: "CONFLICT", sourceUrl: "https://listing.example.com/conflict" },
+    ] })).toEqual(["https://listing.example.com/a", "https://listing.example.com/b"]);
+    expect(PROPERTY_RESEARCH_VERSION).toBeGreaterThan(3);
+  });
+
   it("extracts attributed Open Graph photos regardless of attribute order", () => {
     const html = '<meta content="/photos/parcel.jpg" property="og:image"><meta name="twitter:image" content="https://cdn.example.com/front.jpg">';
     expect(__propertyResearchTestables.imageUrls(html, "https://listing.example.com/property/1")).toEqual(["https://listing.example.com/photos/parcel.jpg", "https://cdn.example.com/front.jpg"]);

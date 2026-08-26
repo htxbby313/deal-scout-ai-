@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import { PropertyPhoto } from "./property-photo";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -110,7 +110,6 @@ const labels = {
 };
 const actionable = (property: PropertyView) =>
   propertyReadiness(property).actionable;
-const sourceImageLoader = ({ src }: { src: string }) => src;
 const PropertyMap = dynamic(() => import("@/app/properties/property-map"), {
   ssr: false,
 });
@@ -213,10 +212,10 @@ function ResearchPanel({ property }: { property: PropertyView }) {
 function PhotoPanel({ property }: { property: PropertyView }) {
   return (
     <section className="mt-7 border-t pt-6">
-      <h3 className="font-bold">Developer photo package</h3>
+      <h3 className="font-bold">Property photos</h3>
       <p className="mt-1 text-xs leading-5 text-slate-500">
-        Found images retain attribution. Approve only after confirming the
-        subject and permission to share.
+        Available source photos appear here automatically. Sharing with buyers
+        has a separate rights review.
       </p>
       {property.media.length ? (
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -225,16 +224,7 @@ function PhotoPanel({ property }: { property: PropertyView }) {
               className="overflow-hidden rounded-xl border"
               key={item.id}
             >
-              <Image
-                alt={item.altText}
-                className="h-32 w-full bg-slate-100 object-cover"
-                height={256}
-                loader={sourceImageLoader}
-                referrerPolicy="no-referrer"
-                src={item.url}
-                unoptimized
-                width={480}
-              />
+              <PropertyPhoto photos={[item]} />
               <div className="p-3">
                 <a
                   className="block truncate text-xs font-bold text-blue-700 underline"
@@ -296,13 +286,13 @@ function PhotoPanel({ property }: { property: PropertyView }) {
         </div>
       ) : (
         <p className="mt-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-          No verified photo found through integrated sources. Needs manual
-          verification.
+          No source photo is available yet. Automatic research checks saved
+          listing and evidence pages; you do not need to upload a photo.
         </p>
       )}
       <details className="mt-4 rounded-xl border p-3">
         <summary className="cursor-pointer text-xs font-bold">
-          Add a sourced photo manually
+          Add a photo yourself (optional)
         </summary>
         <form action={addPropertyMediaAction} className="mt-3 grid gap-2">
           <input name="propertyId" type="hidden" value={property.id} />
@@ -787,26 +777,7 @@ export function PropertyBrowser({
             type="button"
           >
             <div className="relative grid min-h-40 place-items-center overflow-hidden bg-slate-100">
-              {property.media[0] ? (
-                <Image
-                  alt={property.media[0].altText}
-                  className="object-cover"
-                  fill
-                  loader={sourceImageLoader}
-                  loading={index < 3 ? "eager" : "lazy"}
-                  referrerPolicy="no-referrer"
-                  sizes="(min-width: 1536px) 33vw, (min-width: 768px) 50vw, 100vw"
-                  src={property.media[0].url}
-                  unoptimized
-                />
-              ) : (
-                <>
-                  <span className="text-5xl opacity-40">⌂</span>
-                  <span className="absolute bottom-3 right-3 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
-                    Photo needs verification
-                  </span>
-                </>
-              )}
+              <PropertyPhoto photos={property.media} eager={index < 3} />
               <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-bold">
                 #{index + 1} · {rankCategory}
               </span>

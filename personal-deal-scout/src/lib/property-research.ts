@@ -10,6 +10,7 @@ import {
   fetchWithRetry,
   htmlToText,
   stableUnique,
+  runWithResearchDeadline,
 } from "@/lib/research-runtime";
 import {
   ENFORMION_SOURCE_URL,
@@ -17,8 +18,9 @@ import {
   researchPropertyWithEnformion,
 } from "@/lib/enformion-property";
 import { reserveEnformionLookup } from "@/lib/enformion-budget";
+import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
 
-export const PROPERTY_RESEARCH_VERSION = 3;
+export const PROPERTY_RESEARCH_VERSION = 4;
 
 const TOPICS = [
   ["LISTING", "Current listing or opportunity source"],
@@ -191,7 +193,7 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
   const addressTerms = address
     .toLowerCase()
     .split(/\s+/)
-    .filter((term) => term.length > 2);
+    .filter((term) => term.length > 2 && !/^(street|road|avenue|drive|lane|court|boulevard|highway)$/.test(term) && !/^\d+$/.test(term));
   const MAX_IMAGES = 12;
   let structuredNodes = 0;
   let structuredScripts = 0;
@@ -202,7 +204,7 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
         raw.replaceAll("\\/", "/").replaceAll("&amp;", "&"),
         baseUrl,
       ).toString();
-      if (url.startsWith("https://") && !seen.has(url)) {
+      if (isSafePublicEvidenceUrl(url) && !seen.has(url)) {
         seen.add(url);
         matches.push(url);
       }
@@ -230,8 +232,9 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
     }
     if (typeof value !== "object") return;
     const record = value as Record<string, unknown>;
+    if (["Organization", "RealEstateAgent", "Person", "BreadcrumbList"].includes(String(record["@type"]))) return;
     for (const [key, child] of Object.entries(record)) {
-      if (key === "image" || key === "contentUrl" || key === "@graph")
+      if (["image", "contentUrl", "@graph", "photo", "primaryImageOfPage", "thumbnailUrl"].includes(key))
         addStructuredImages(child, depth + 1);
       else if (child && typeof child === "object")
         addStructuredImages(child, depth + 1);
@@ -245,7 +248,7 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
 
   // Scan relevant tags once. JSON-LD is parsed as JSON instead of regex-scanning the full document.
   const tags =
-    /<meta\b[^>]*>|<img\b[^>]*>|<script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi;
+    /<meta\b[^>]*>|<img\b[^>]*>|<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi;
   for (const match of html.matchAll(tags)) {
     if (matches.length >= MAX_IMAGES) break;
     const tag = match[0];
@@ -258,8 +261,17 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
     } else if (/^<img/i.test(tag)) {
       const alt =
         tag.match(/alt\s*=\s*["']([^"']*)["']/i)?.[1]?.toLowerCase() ?? "";
-      if (addressTerms.some((term) => alt.includes(term)))
-        add(tag.match(/(?:src|data-src)\s*=\s*["']([^"']+)["']/i)?.[1]);
+      const streetNumber = address.match(/^\s*(\d+[a-z]?)/i)?.[1]?.toLowerCase();
+      if (addressTerms.some((term) => alt.includes(term)) && (!streetNumber || normalizedWords(alt).includes(streetNumber))) {
+        const attribute = (name: string) => tag.match(new RegExp(`\\s${name}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
+        // Lazy-loaded galleries often put a placeholder in src. Prefer the real image.
+        const sourceSet = attribute("data-srcset") || attribute("srcset");
+        const largest = sourceSet?.split(",").map((entry) => {
+          const [url, size] = entry.trim().split(/\s+/);
+          return { url, size: Number.parseFloat(size || "1") || 1 };
+        }).sort((a, b) => b.size - a.size)[0]?.url;
+        add(attribute("data-src") || attribute("data-lazy-src") || attribute("data-original") || largest || attribute("src"));
+      }
     } else {
       const body = tag.match(/>([\s\S]*?)<\/script>/i)?.[1];
       structuredScripts += 1;
@@ -307,7 +319,7 @@ function jsonLdAddressText(html: string) {
   let scripts = 0;
   let nodes = 0;
   const pattern =
-    /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   for (const script of html.matchAll(pattern)) {
     scripts += 1;
     if (scripts > JSON_LD_SCRIPT_LIMIT) break;
@@ -540,6 +552,18 @@ async function openStreetMapGeocode(property: {
     : null;
 }
 
+export function propertyPhotoSourceUrls(input: {
+  sourceUrl?: string | null;
+  verificationSourceUrl?: string | null;
+  findings: Array<{ topic: string; status: string; sourceUrl?: string | null }>;
+}) {
+  return stableUnique([
+    input.sourceUrl,
+    input.verificationSourceUrl,
+    ...input.findings.filter((finding) => finding.status === "VERIFIED" && ["LISTING", "PHOTOS"].includes(finding.topic)).map((finding) => finding.sourceUrl),
+  ].filter((url): url is string => typeof url === "string" && isSafePublicEvidenceUrl(url))).slice(0, 6);
+}
+
 export async function researchProperty(
   propertyId: string,
   queuedRunId?: string,
@@ -641,12 +665,14 @@ export async function researchProperty(
     });
   }
 
-  const sourceUrls = stableUnique(
-    [property.sourceUrl, property.verificationSourceUrl].filter(
-      Boolean,
-    ) as string[],
-  );
+  const sourceUrls = propertyPhotoSourceUrls({ ...property, findings: [...existingFindings.values()] });
+  const seenMedia = new Set<string>();
+  const listingDeadline = Date.now() + 45_000;
   for (const sourceUrl of sourceUrls) {
+    if (Date.now() >= listingDeadline) {
+      errors.push("Listing photo research reached its time limit; some sources were not checked.");
+      break;
+    }
     if (
       property.sourceName === HUD_REO_SOURCE &&
       sourceUrl === property.sourceUrl
@@ -654,7 +680,7 @@ export async function researchProperty(
       continue;
     sourcesChecked += 1;
     try {
-      const { html, finalUrl } = await fetchHtml(sourceUrl);
+      const { html, finalUrl } = await runWithResearchDeadline(Math.min(listingDeadline, Date.now() + 7_000), () => fetchHtml(sourceUrl));
       const sourceName = new URL(finalUrl).hostname.replace(/^www\./, "");
       const title =
         meta(html, "og:title") ||
@@ -674,13 +700,16 @@ export async function researchProperty(
           html,
           finalUrl,
           property.address,
-        ).entries())
+        ).entries()) {
+          if (seenMedia.has(url)) continue;
+          seenMedia.add(url);
           media.push({
             url,
             sourceUrl: finalUrl,
             sourceName,
             altText: `${property.address} verified-source image ${position + 1}`,
           });
+        }
         for (const phone of phoneNumbers(html))
           discoveredPhones.push({ phone, sourceUrl: finalUrl, sourceName });
       } else
@@ -842,7 +871,8 @@ export async function researchProperty(
       label: "Property photos",
       value: `${media.length} verified-source image${media.length === 1 ? "" : "s"} found`,
       status: "VERIFIED",
-      sourceName: "Multiple public sources",
+      sourceName: media[0].sourceName,
+      sourceUrl: media[0].sourceUrl,
       confidence: 80,
     });
   if (property.estimatedValue && property.verificationSourceUrl)

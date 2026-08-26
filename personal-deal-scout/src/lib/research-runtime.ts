@@ -53,7 +53,7 @@ export class ResearchDeadlineExceededError extends Error {
 
 export function runWithResearchDeadline<T>(deadlineAt: number, operation: () => Promise<T>) {
   if (!Number.isFinite(deadlineAt) || deadlineAt <= Date.now()) throw new ResearchDeadlineExceededError();
-  return researchDeadline.run(deadlineAt, operation);
+  return researchDeadline.run(Math.min(deadlineAt, researchDeadline.getStore() ?? deadlineAt), operation);
 }
 
 function remainingBudget(deadlineAt?: number) {
