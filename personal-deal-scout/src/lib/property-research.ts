@@ -21,7 +21,7 @@ import { reserveEnformionLookup } from "@/lib/enformion-budget";
 import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
 import { researchPriorityScore } from "@/lib/domain";
 
-export const PROPERTY_RESEARCH_VERSION = 4;
+export const PROPERTY_RESEARCH_VERSION = 5;
 
 const TOPICS = [
   ["LISTING", "Current listing or opportunity source"],
@@ -65,24 +65,13 @@ type DiscoveredMedia = {
 
 export function hasSufficientResearchEvidence(
   findings: Iterable<Pick<Finding, "topic" | "status">>,
-  opportunityStatus?: string,
+  _opportunityStatus?: string,
 ) {
   const items = [...findings];
-  if (items.some((finding) => finding.status === "CONFLICT")) return false;
-  const verified = new Set(
-    items
-      .filter((finding) => finding.status === "VERIFIED")
-      .map((finding) => finding.topic),
+  if (!items.length) return false;
+  return items.every((finding) =>
+    ["VERIFIED", "NOT_FOUND"].includes(finding.status),
   );
-  const identifiable = ["LISTING", "OWNERSHIP", "PARCEL"].some((topic) =>
-    verified.has(topic),
-  );
-  const actionable =
-    opportunityStatus === "GOVERNMENT_SALE" ||
-    ["PRICE", "CONTACT", "TAX", "ZONING", "FLOOD"].some((topic) =>
-      verified.has(topic),
-    );
-  return verified.has("LOCATION") && identifiable && actionable;
 }
 
 export async function enqueuePropertyResearch(propertyId: string) {
@@ -904,15 +893,16 @@ export async function researchProperty(
 
   for (const [topic, label] of TOPICS) {
     if (!findings.has(topic)) {
-      const previous = existingFindings.get(topic);
       findings.set(topic, {
         topic,
         label,
-        value: previous?.value || undefined,
-        status: "NEEDS_MANUAL_VERIFICATION",
-        sourceName: previous?.sourceName || undefined,
-        sourceUrl: previous?.sourceUrl || undefined,
-        confidence: previous?.confidence || 0,
+        value: "No supported public record found in the completed automated search.",
+        status: sourcesChecked > 0 ? "NOT_FOUND" : "NEEDS_MANUAL_VERIFICATION",
+        confidence: sourcesChecked > 0 ? 100 : 0,
+        notes:
+          sourcesChecked > 0
+            ? "No evidence found is a completed research result. It does not verify the underlying fact or make the property actionable."
+            : "No public source was successfully checked; retry or owner review is required.",
       });
     }
   }
@@ -965,8 +955,14 @@ export async function researchProperty(
     );
     await Promise.all(mediaUpserts);
 
-    const manualNeeded = [...findings.values()].filter(
-      (item) => item.status !== "VERIFIED",
+    const verifiedCount = [...findings.values()].filter(
+      (item) => item.status === "VERIFIED",
+    ).length;
+    const notFoundCount = [...findings.values()].filter(
+      (item) => item.status === "NOT_FOUND",
+    ).length;
+    const manualNeeded = [...findings.values()].filter((item) =>
+      ["CONFLICT", "NEEDS_MANUAL_VERIFICATION"].includes(item.status),
     ).length;
     const operationallyReady = hasSufficientResearchEvidence(
       findings.values(),
@@ -977,7 +973,7 @@ export async function researchProperty(
       data: {
         status: operationallyReady ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION",
         sourcesChecked,
-        findingsFound: findings.size - manualNeeded,
+        findingsFound: verifiedCount,
         manualNeeded,
         error: errors.length ? errors.slice(0, 5).join(" | ") : null,
         finishedAt: new Date(),
@@ -986,11 +982,12 @@ export async function researchProperty(
     await tx.auditLog.create({
       data: {
         type: "research.property_dossier",
-        summary: `Researched ${property.address}; ${findings.size - manualNeeded} verified topic(s), ${manualNeeded} routed to manual review.`,
+        summary: `Researched ${property.address}; ${verifiedCount} verified topic(s), ${notFoundCount} public-record searches returned no evidence, ${manualNeeded} routed to manual review.`,
         details: {
           propertyId,
           sourcesChecked,
-          verified: findings.size - manualNeeded,
+          verified: verifiedCount,
+          notFound: notFoundCount,
           errorCount: errors.length,
         },
       },
@@ -1001,8 +998,8 @@ export async function researchProperty(
     verified: [...findings.values()].filter(
       (item) => item.status === "VERIFIED",
     ).length,
-    manualNeeded: [...findings.values()].filter(
-      (item) => item.status !== "VERIFIED",
+    manualNeeded: [...findings.values()].filter((item) =>
+      ["CONFLICT", "NEEDS_MANUAL_VERIFICATION"].includes(item.status),
     ).length,
     mediaFound: media.length,
   };

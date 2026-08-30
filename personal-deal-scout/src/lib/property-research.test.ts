@@ -66,8 +66,11 @@ describe("property research source parsing", () => {
 
   it("treats sufficient evidence as usable without requiring every research topic", () => {
     const verified = (topic: string) => ({ topic, status: "VERIFIED" as const });
-    expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("PARCEL"), verified("TAX")])).toBe(true);
-    expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("OWNERSHIP")], "GOVERNMENT_SALE")).toBe(true);
+    const notFound = (topic: string) => ({ topic, status: "NOT_FOUND" as const });
+    expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), notFound("PARCEL"), notFound("TAX")])).toBe(true);
+    expect(__propertyResearchTestables.hasSufficientResearchEvidence([notFound("LOCATION"), notFound("OWNERSHIP")], "GOVERNMENT_SALE")).toBe(true);
     expect(__propertyResearchTestables.hasSufficientResearchEvidence([verified("LOCATION"), verified("PARCEL"), { topic: "PRICE", status: "CONFLICT" as const }])).toBe(false);
+    expect(__propertyResearchTestables.hasSufficientResearchEvidence([{ topic: "LOCATION", status: "NEEDS_MANUAL_VERIFICATION" as const }])).toBe(false);
+    expect(__propertyResearchTestables.hasSufficientResearchEvidence([])).toBe(false);
   });
 });

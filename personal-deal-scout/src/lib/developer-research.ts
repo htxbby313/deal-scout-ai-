@@ -7,7 +7,7 @@ import { developerRelationshipQualification } from "@/lib/developer-qualificatio
 
 const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-export const DEVELOPER_RESEARCH_VERSION = 2;
+export const DEVELOPER_RESEARCH_VERSION = 3;
 
 function safePublicUrl(raw: string) {
   const url = new URL(raw);
@@ -131,11 +131,12 @@ async function researchDeveloper(developerId: string, runId: string) {
       create: { developerId, address: project.streetAddress, city: project.city, state: project.state, zipCode: project.zipCode, notes: `Official builder page identifies this as the ${project.name} community.`, sourceName: `${project.organization} official website`, sourceUrl: project.sourceUrl, verifiedAt: new Date(), confidence: 90 },
     }));
     await tx.developer.update({ where: { id: developerId }, data: { phone: developer.phone || publicPhone || undefined, email: developer.email || publicEmail || undefined, contactUrl: developer.contactUrl || pages[0]?.finalUrl, contactVerifiedAt: verifiedContact ? new Date() : developer.contactVerifiedAt, lastResearchedAt: new Date(), qualificationStatus } });
-    const operationallyReady = verifiedWebPresence && (verifiedContact || verifiedProjects > 0);
-    await tx.developerResearchRun.update({ where: { id: run.id }, data: { status: operationallyReady ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked: pages.length, findingsFound, manualNeeded: 3 - findingsFound, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
-    await tx.auditLog.create({ data: { type: "research.developer_dossier", summary: `Researched ${developer.companyName}; ${findingsFound} of 3 evidence categories verified.`, details: { developerId, runId: run.id, sourcesChecked: pages.length, verifiedWebPresence, verifiedContact, verifiedProjects } } });
+    const searchCompleted = pages.length > 0;
+    const manualNeeded = searchCompleted ? 0 : 1;
+    await tx.developerResearchRun.update({ where: { id: run.id }, data: { status: searchCompleted ? "COMPLETE" : "NEEDS_MANUAL_VERIFICATION", sourcesChecked: pages.length, findingsFound, manualNeeded, error: errors.length ? errors.join("\n").slice(0, 4000) : null, finishedAt: new Date() } });
+    await tx.auditLog.create({ data: { type: "research.developer_dossier", summary: `Researched ${developer.companyName}; ${findingsFound} of 3 public evidence categories found${searchCompleted ? "; remaining categories recorded as not found" : "; no public source was successfully checked"}.`, details: { developerId, runId: run.id, sourcesChecked: pages.length, verifiedWebPresence, verifiedContact, verifiedProjects, noEvidenceFoundAccepted: searchCompleted } } });
   });
-  return { findingsFound, manualNeeded: 3 - findingsFound };
+  return { findingsFound, manualNeeded: pages.length > 0 ? 0 : 1 };
 }
 
 export async function runQueuedDeveloperResearch(runId: string) {
