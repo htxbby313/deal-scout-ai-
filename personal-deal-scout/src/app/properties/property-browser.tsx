@@ -13,7 +13,11 @@ import {
   type EvidenceUpdateState,
   type ResearchRunState,
 } from "@/app/actions";
-import { propertyReadiness } from "@/lib/domain";
+import {
+  developerMatchesAreVerified,
+  formatSourceRecordDate,
+  propertyReadiness,
+} from "@/lib/domain";
 import { useThemeColor } from "@/lib/theme-color";
 import { evaluateLuxuryRedevelopmentFit } from "@/lib/luxury-redevelopment";
 
@@ -794,7 +798,9 @@ export function PropertyBrowser({
                   </p>
                 </div>
                 <span className="h-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-800">
-                  {property.matches.length} matches
+                  {developerMatchesAreVerified(property)
+                    ? `${property.matches.length} verified matches`
+                    : "Matches locked"}
                 </span>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
@@ -926,7 +932,7 @@ export function PropertyBrowser({
                   ["Contact", selected.contactName || "Missing"],
                   ["Phone", selected.contactPhone || "Missing"],
                   ["Email", selected.contactEmail || "Missing"],
-                  ["Record date", selected.sourceRecordDate || "Missing"],
+                  ["Record date", formatSourceRecordDate(selected.sourceRecordDate)],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-slate-500">{label}</dt>
@@ -968,7 +974,8 @@ export function PropertyBrowser({
               <section className="mt-7">
                 <h3 className="font-bold">Developer matches</h3>
                 <div className="mt-3 space-y-3">
-                  {selected.matches.map((match) => (
+                  {developerMatchesAreVerified(selected)
+                    ? selected.matches.map((match) => (
                     <article
                       className="rounded-xl border p-4"
                       key={match.developerId}
@@ -981,11 +988,18 @@ export function PropertyBrowser({
                         {match.reasons.join(" ")}
                       </p>
                     </article>
-                  ))}
-                  {!selected.matches.length ? (
+                      ))
+                    : null}
+                  {!developerMatchesAreVerified(selected) ? (
+                    <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+                      Preliminary developer candidates are hidden until the
+                      property has confirmed availability, a current price,
+                      verified contact evidence, and dated source records.
+                      Existing routing scores are not proof of buyer interest.
+                    </p>
+                  ) : !selected.matches.length ? (
                     <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-                      Matching stays locked until every evidence requirement and
-                      developer qualification pass.
+                      No developer passed the current qualification and market-fit rules.
                     </p>
                   ) : null}
                 </div>

@@ -19,6 +19,7 @@ import {
 } from "@/lib/enformion-property";
 import { reserveEnformionLookup } from "@/lib/enformion-budget";
 import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
+import { researchPriorityScore } from "@/lib/domain";
 
 export const PROPERTY_RESEARCH_VERSION = 4;
 
@@ -1118,24 +1119,41 @@ export async function runAutomaticPropertyResearchBatch(limit = 2) {
         },
       ],
     },
-    select: { id: true },
-    take: safeLimit,
+    select: {
+      id: true,
+      opportunityStatus: true,
+      confidence: true,
+      sourceUrl: true,
+      verificationSourceUrl: true,
+      verificationDate: true,
+      estimatedValue: true,
+      contactPhone: true,
+      contactEmail: true,
+      contactUrl: true,
+    },
+    take: safeLimit * 20,
   });
+
+  stale.sort((a, b) => researchPriorityScore(b) - researchPriorityScore(a));
 
   // FIX #1: Batch enqueue all stale properties instead of sequential loop
   if (stale.length > 0) {
-    await enqueuePropertyResearchBatch(stale.map((property) => property.id));
+    await enqueuePropertyResearchBatch(stale.slice(0, safeLimit).map((property) => property.id));
   }
 
   // Fetch queued runs
-  const queued = await db.propertyResearchRun.findMany({
+  const queuedCandidates = await db.propertyResearchRun.findMany({
     where: {
       status: "QUEUED",
       property: { opportunityStatus: { not: "REJECTED" } },
     },
+    include: { property: true },
     orderBy: { startedAt: "asc" },
-    take: safeLimit,
+    take: safeLimit * 20,
   });
+  const queued = queuedCandidates
+    .sort((a, b) => researchPriorityScore(b.property) - researchPriorityScore(a.property) || a.startedAt.getTime() - b.startedAt.getTime())
+    .slice(0, safeLimit);
 
   const results = await chunkedMap(queued, 5, (run) =>
     runQueuedPropertyResearch(run.id),

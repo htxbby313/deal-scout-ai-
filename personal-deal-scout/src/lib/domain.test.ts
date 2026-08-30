@@ -17,6 +17,9 @@ import {
   completedTask,
   normalizedPropertyKey,
   propertyReadiness,
+  developerMatchesAreVerified,
+  formatSourceRecordDate,
+  researchPriorityScore,
 } from "./domain";
 
 describe("production foundation business rules", () => {
@@ -417,5 +420,47 @@ describe("production foundation business rules", () => {
         verificationSourceUrl: "",
       }),
     ).toThrow();
+  });
+
+  it("formats source timestamps without exposing raw database values", () => {
+    expect(formatSourceRecordDate("1787636121157")).toMatch(/2026/);
+    expect(formatSourceRecordDate("not-a-date")).toBe("Unrecognized date");
+    expect(formatSourceRecordDate()).toBe("Missing");
+  });
+
+  it("keeps developer scores locked until the property is disposition ready", () => {
+    expect(
+      developerMatchesAreVerified({
+        opportunityStatus: "NEEDS_VERIFICATION",
+        sourceUrl: null,
+      }),
+    ).toBe(false);
+    expect(
+      developerMatchesAreVerified({
+        opportunityStatus: "GOVERNMENT_SALE",
+        sourceUrl: "https://example.gov/original",
+        estimatedValue: 125000,
+        contactPhone: "713-555-0100",
+        verificationSourceUrl: "https://example.gov/listing",
+        verificationDate: "2026-08-17",
+      }),
+    ).toBe(true);
+  });
+
+  it("prioritizes evidence-rich research candidates deterministically", () => {
+    const unverified = researchPriorityScore({
+      opportunityStatus: "NEEDS_VERIFICATION",
+      confidence: 0,
+    });
+    const evidenceRich = researchPriorityScore({
+      opportunityStatus: "GOVERNMENT_SALE",
+      confidence: 80,
+      sourceUrl: "https://example.gov/original",
+      verificationSourceUrl: "https://example.gov/listing",
+      verificationDate: "2026-08-17",
+      estimatedValue: 125000,
+      contactPhone: "713-555-0100",
+    });
+    expect(evidenceRich).toBeGreaterThan(unverified);
   });
 });
