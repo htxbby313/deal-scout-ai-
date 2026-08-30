@@ -65,8 +65,9 @@ type DiscoveredMedia = {
 
 export function hasSufficientResearchEvidence(
   findings: Iterable<Pick<Finding, "topic" | "status">>,
-  _opportunityStatus?: string,
+  opportunityStatus?: string,
 ) {
+  void opportunityStatus;
   const items = [...findings];
   if (!items.length) return false;
   return items.every((finding) =>
