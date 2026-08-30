@@ -24,6 +24,47 @@ export function propertyReadiness(property: PropertyReadinessInput) {
   return { actionable: missing.length === 0, missing };
 }
 
+export function formatSourceRecordDate(value?: string | null) {
+  if (!value?.trim()) return "Missing";
+  const raw = value.trim();
+  const numeric = Number(raw);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(raw);
+  if (Number.isNaN(date.getTime())) return "Unrecognized date";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(date);
+}
+
+export function developerMatchesAreVerified(property: PropertyReadinessInput) {
+  return propertyReadiness(property).actionable;
+}
+
+export type ResearchPriorityInput = {
+  opportunityStatus: string;
+  confidence?: number | null;
+  sourceUrl?: string | null;
+  verificationSourceUrl?: string | null;
+  verificationDate?: string | Date | null;
+  estimatedValue?: number | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  contactUrl?: string | null;
+};
+
+export function researchPriorityScore(property: ResearchPriorityInput) {
+  let score = Math.max(0, Math.min(100, property.confidence ?? 0));
+  if (["CONFIRMED_AVAILABLE", "GOVERNMENT_SALE"].includes(property.opportunityStatus)) score += 100;
+  else if (property.opportunityStatus === "DEVELOPMENT_SIGNAL") score += 40;
+  if (property.sourceUrl) score += 25;
+  if (property.verificationSourceUrl) score += 25;
+  if (property.verificationDate) score += 15;
+  if (property.estimatedValue && property.estimatedValue > 0) score += 15;
+  if (property.contactPhone) score += 20;
+  if (property.contactEmail) score += 10;
+  if (property.contactUrl) score += 5;
+  return score;
+}
+
 export function canSendOutbound(input: {
   approvalStatus: string;
   systemMode: string;

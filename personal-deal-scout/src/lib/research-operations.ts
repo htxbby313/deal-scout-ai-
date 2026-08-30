@@ -3,14 +3,27 @@ import "server-only";
 import { getPrisma } from "@/lib/prisma";
 import { enqueueDeveloperResearchBatch } from "@/lib/developer-research";
 import { enqueuePropertyResearchBatch } from "@/lib/property-research";
+import { researchPriorityScore } from "@/lib/domain";
+
+const priorityFields = {
+  id: true,
+  opportunityStatus: true,
+  confidence: true,
+  sourceUrl: true,
+  verificationSourceUrl: true,
+  verificationDate: true,
+  estimatedValue: true,
+  contactPhone: true,
+  contactEmail: true,
+  contactUrl: true,
+} as const;
 
 export async function readResearchOperations() {
   const db = getPrisma();
   const [properties, developers, events] = await Promise.all([
     db.property.findMany({
       where: { opportunityStatus: { not: "REJECTED" } },
-      select: { id: true, address: true, city: true, state: true, researchRuns: { orderBy: { startedAt: "desc" }, take: 1 } },
-      orderBy: { updatedAt: "desc" },
+      select: { ...priorityFields, address: true, city: true, state: true, researchRuns: { orderBy: { startedAt: "desc" }, take: 1 } },
     }),
     db.developer.findMany({
       where: { active: true },
@@ -19,6 +32,7 @@ export async function readResearchOperations() {
     }),
     db.auditLog.findMany({ where: { type: { in: ["research.property_dossier", "research.developer_dossier"] } }, orderBy: { createdAt: "desc" }, take: 20 }),
   ]);
+  properties.sort((a, b) => researchPriorityScore(b) - researchPriorityScore(a) || a.address.localeCompare(b.address));
   return { properties, developers, events };
 }
 
