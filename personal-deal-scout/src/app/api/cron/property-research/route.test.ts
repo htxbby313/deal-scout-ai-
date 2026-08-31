@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-const { enqueueAgentOperations } = vi.hoisted(() => ({
+const { enqueueAgentOperations, ensureAutomaticPropertyCardMedia } = vi.hoisted(() => ({
   enqueueAgentOperations: vi.fn(async () => ({ messageId: "queue-message-1" })),
+  ensureAutomaticPropertyCardMedia: vi.fn(async () => ({ checked: 2, created: 1 })),
 }));
 vi.mock("@/lib/agent-queue", () => ({ enqueueAgentOperations }));
+vi.mock("@/lib/property-card-media", () => ({ ensureAutomaticPropertyCardMedia }));
 import { GET } from "@/app/api/cron/property-research/route";
 
 const originalSecret = process.env.CRON_SECRET;
@@ -30,7 +32,13 @@ describe("automatic property research cron", () => {
     process.env.CRON_SECRET = "configured-secret";
     const response = await GET(new Request("https://example.com/api/cron/property-research", { headers: { authorization: "Bearer configured-secret" } }));
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toMatchObject({ ok: true, queueMessageId: "queue-message-1", status: "queued" });
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      queueMessageId: "queue-message-1",
+      status: "queued",
+      cardMedia: { checked: 2, created: 1 },
+    });
     expect(enqueueAgentOperations).toHaveBeenCalledWith("CRON");
+    expect(ensureAutomaticPropertyCardMedia).toHaveBeenCalledWith("https://example.com", 100);
   });
 });
