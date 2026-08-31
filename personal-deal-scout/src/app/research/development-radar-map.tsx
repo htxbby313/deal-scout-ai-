@@ -42,7 +42,8 @@ export default function DevelopmentRadarMap({ signals, listings, rankCategory }:
   const mapNode = useRef<HTMLDivElement>(null);
   const [mapError, setMapError] = useState("");
   const [fallbackBoundaries, setFallbackBoundaries] = useState<Boundaries | null>(null);
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+  const googleMapsEnabled = process.env.NEXT_PUBLIC_GOOGLE_MAPS_ENABLED === "true";
+  const apiKey = googleMapsEnabled ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "" : "";
   const signalByFips = useMemo(() => new Map(signals.map((signal, index) => [signal.fips, { signal, index }])), [signals]);
   const stateRanks = useMemo(() => { const result = new Map<string, number>(); signals.forEach((signal, index) => { if (!result.has(signal.stateFips)) result.set(signal.stateFips, index); }); return result; }, [signals]);
   const mappedListings = useMemo(() => listings.filter((listing) => US_STATE_CODES.has(listing.state.toUpperCase()) && listing.latitude >= 18 && listing.latitude <= 72 && listing.longitude >= -179 && listing.longitude <= -60), [listings]);

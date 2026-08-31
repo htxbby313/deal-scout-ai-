@@ -2,6 +2,7 @@ export function evaluateGoogleVisualContext(input: {
   enabled: boolean;
   browserKeyConfigured: boolean;
   serverKeyConfigured: boolean;
+  serverFeaturesRequired?: boolean;
   originRestrictionsVerified: boolean;
   apiRestrictionsVerified: boolean;
   quotasVerified: boolean;
@@ -13,7 +14,8 @@ export function evaluateGoogleVisualContext(input: {
 }) {
   const blockers = Object.entries({
     browser_key_missing: !input.browserKeyConfigured,
-    server_key_missing: !input.serverKeyConfigured,
+    server_key_missing:
+      Boolean(input.serverFeaturesRequired) && !input.serverKeyConfigured,
     origin_restrictions_unverified: !input.originRestrictionsVerified,
     api_restrictions_unverified: !input.apiRestrictionsVerified,
     quotas_unverified: !input.quotasVerified,

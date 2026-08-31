@@ -68,6 +68,7 @@ export default async function SettingsPage() {
     enabled: enabled("GOOGLE_MAPS_ENABLED"),
     browserKeyConfigured: Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
     serverKeyConfigured: Boolean(process.env.GOOGLE_MAPS_SERVER_API_KEY),
+    serverFeaturesRequired: false,
     originRestrictionsVerified: enabled("GOOGLE_MAPS_ORIGIN_RESTRICTIONS_VERIFIED"),
     apiRestrictionsVerified: enabled("GOOGLE_MAPS_API_RESTRICTIONS_VERIFIED"),
     quotasVerified: enabled("GOOGLE_MAPS_QUOTAS_VERIFIED"),
@@ -123,7 +124,7 @@ export default async function SettingsPage() {
             </ul>
           ) : (
             <p className="mt-4 text-sm text-emerald-800">
-              Restricted map access is approved. Server credentials remain hidden from the browser.
+              Restricted browser map access is approved. No server Maps credential is required by the current feature set.
             </p>
           )}
         </section>
