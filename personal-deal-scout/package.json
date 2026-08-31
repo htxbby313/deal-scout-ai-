@@ -13,7 +13,8 @@
     "db:migrate": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate dev",
     "db:migrate:deploy": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate deploy",
     "db:status": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate status",
-    "db:seed": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs prisma/seed.ts"
+    "db:seed": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs prisma/seed.ts",
+    "db:resolve-public-records": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs scripts/resolve-public-record-no-results.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
