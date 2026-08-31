@@ -46,6 +46,7 @@ describe("Google visual-context boundary", () => {
       browserKeyConfigured: true,
       serverKeyConfigured: false,
       serverFeaturesRequired: true,
+      serverApiRestrictionsVerified: true,
       originRestrictionsVerified: true,
       apiRestrictionsVerified: true,
       quotasVerified: true,

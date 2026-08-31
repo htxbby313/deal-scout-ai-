@@ -1,15 +1,12 @@
 import { getPrisma } from "@/lib/prisma";
+import { ownerIsAuthenticated } from "@/lib/auth";
+import { evaluateGoogleVisualContextEnvironment } from "@/lib/google-visual-context";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function googleApiKey() {
-  return (
-    process.env.GOOGLE_MAPS_API_KEY ||
-    process.env.GOOGLE_GEOCODING_API_KEY ||
-    process.env.GOOGLE_CLOUD_API_KEY ||
-    ""
-  );
+  return process.env.GOOGLE_MAPS_SERVER_API_KEY?.trim() || "";
 }
 
 function placeholder(message: string, status = 404) {
@@ -20,13 +17,22 @@ function placeholder(message: string, status = 404) {
       status,
       headers: {
         "content-type": "image/svg+xml; charset=utf-8",
-        "cache-control": "public, max-age=300",
+        "cache-control": "private, no-store",
       },
     },
   );
 }
 
 export async function GET(request: Request) {
+  if (!(await ownerIsAuthenticated()))
+    return placeholder("Owner authentication required", 401);
+
+  const readiness = evaluateGoogleVisualContextEnvironment({
+    serverFeaturesRequired: true,
+  });
+  if (!readiness.allowed)
+    return placeholder("Property imagery is safely disabled", 503);
+
   const key = googleApiKey();
   if (!key) return placeholder("Property imagery unavailable", 503);
 
@@ -45,10 +51,7 @@ export async function GET(request: Request) {
   metadataUrl.searchParams.set("key", key);
 
   try {
-    const metadataResponse = await fetch(metadataUrl, {
-      cache: "force-cache",
-      next: { revalidate: 60 * 60 * 24 * 30 },
-    });
+    const metadataResponse = await fetch(metadataUrl, { cache: "no-store" });
     const metadata = (await metadataResponse.json()) as {
       status?: string;
       location?: { lat?: number; lng?: number };
@@ -80,7 +83,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: {
         "content-type": contentType,
-        "cache-control": "public, s-maxage=2592000, stale-while-revalidate=86400",
+        "cache-control": "private, max-age=86400",
         "x-deal-scout-image-verification": "google-street-view-metadata-ok",
       },
     });

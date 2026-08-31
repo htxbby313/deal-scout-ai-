@@ -10,6 +10,7 @@ import { GET } from "@/app/api/cron/property-research/route";
 const originalSecret = process.env.CRON_SECRET;
 
 afterEach(() => {
+  vi.clearAllMocks();
   if (originalSecret === undefined) delete process.env.CRON_SECRET;
   else process.env.CRON_SECRET = originalSecret;
 });
@@ -40,5 +41,22 @@ describe("automatic property research cron", () => {
     });
     expect(enqueueAgentOperations).toHaveBeenCalledWith("CRON");
     expect(ensureAutomaticPropertyCardMedia).toHaveBeenCalledWith("https://example.com", 100);
+  });
+
+  it("keeps the durable operations cycle healthy when optional card media fails", async () => {
+    process.env.CRON_SECRET = "configured-secret";
+    ensureAutomaticPropertyCardMedia.mockRejectedValueOnce(new Error("database unavailable"));
+
+    const response = await GET(new Request("https://example.com/api/cron/property-research", {
+      headers: { authorization: "Bearer configured-secret" },
+    }));
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      queueMessageId: "queue-message-1",
+      cardMedia: { error: "backfill_failed" },
+    });
+    expect(enqueueAgentOperations).toHaveBeenCalledWith("CRON");
   });
 });

@@ -2,12 +2,13 @@ import Link from "next/link";
 import { ThemeColorPicker } from "@/app/theme-color-picker";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
-import { evaluateGoogleVisualContext } from "@/lib/google-visual-context";
+import { evaluateGoogleVisualContextEnvironment } from "@/lib/google-visual-context";
 
 const googleBlockerLabels: Record<string, string> = {
   provider_disabled: "Google Maps is disabled",
   browser_key_missing: "browser key missing",
   server_key_missing: "server key missing",
+  server_api_restrictions_unverified: "server API restrictions unverified",
   origin_restrictions_unverified: "website restrictions unverified",
   api_restrictions_unverified: "API restrictions unverified",
   quotas_unverified: "usage quota unverified",
@@ -17,8 +18,6 @@ const googleBlockerLabels: Record<string, string> = {
   kill_switch_unverified: "emergency off switch unverified",
   owner_approval_missing: "owner approval date missing",
 };
-
-const enabled = (name: string) => process.env[name] === "true";
 
 const groups = [
   {
@@ -61,25 +60,8 @@ const groups = [
 
 export default async function SettingsPage() {
   await requireOwner();
-  const ownerApprovedAt = process.env.GOOGLE_MAPS_OWNER_APPROVED_AT
-    ? new Date(process.env.GOOGLE_MAPS_OWNER_APPROVED_AT)
-    : null;
-  const googleMaps = evaluateGoogleVisualContext({
-    enabled: enabled("GOOGLE_MAPS_ENABLED"),
-    browserKeyConfigured: Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
-    serverKeyConfigured: Boolean(process.env.GOOGLE_MAPS_SERVER_API_KEY),
+  const googleMaps = evaluateGoogleVisualContextEnvironment({
     serverFeaturesRequired: false,
-    originRestrictionsVerified: enabled("GOOGLE_MAPS_ORIGIN_RESTRICTIONS_VERIFIED"),
-    apiRestrictionsVerified: enabled("GOOGLE_MAPS_API_RESTRICTIONS_VERIFIED"),
-    quotasVerified: enabled("GOOGLE_MAPS_QUOTAS_VERIFIED"),
-    alertsVerified: enabled("GOOGLE_MAPS_BILLING_ALERTS_VERIFIED"),
-    attributionVerified: enabled("GOOGLE_MAPS_ATTRIBUTION_VERIFIED"),
-    telemetryVerified: enabled("GOOGLE_MAPS_TELEMETRY_VERIFIED"),
-    killSwitchVerified: enabled("GOOGLE_MAPS_KILL_SWITCH_VERIFIED"),
-    ownerApprovedAt:
-      ownerApprovedAt && !Number.isNaN(ownerApprovedAt.getTime())
-        ? ownerApprovedAt
-        : null,
   });
   return (
     <WorkspaceShell active="settings">

@@ -9,10 +9,11 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const origin = new URL(request.url).origin;
-  const [queued, cardMedia] = await Promise.all([
-    enqueueAgentOperations("CRON"),
-    ensureAutomaticPropertyCardMedia(origin, 100),
-  ]);
+  const cardMediaPromise = ensureAutomaticPropertyCardMedia(origin, 100)
+    .then((result) => ({ ...result, error: null }))
+    .catch(() => ({ checked: 0, created: 0, updated: 0, error: "backfill_failed" }));
+  const queued = await enqueueAgentOperations("CRON");
+  const cardMedia = await cardMediaPromise;
 
   return Response.json(
     {
