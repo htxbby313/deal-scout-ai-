@@ -1,5 +1,5 @@
 export type RehabMode = "COSMETIC" | "MODERATE" | "HEAVY" | "CUSTOM";
-export type DealStrategy = "WHOLESALE" | "FLIP" | "BRRRR" | "RENTAL";
+export type DealStrategy = "WHOLESALE" | "WHOLETAIL" | "FLIP" | "CREATIVE" | "BRRRR" | "RENTAL" | "PASS";
 export const REHAB_CATEGORIES = [
   "roof",
   "hvac",
@@ -13,6 +13,30 @@ export const REHAB_CATEGORIES = [
   "windows",
   "landscaping",
 ] as const;
+
+export function calculateWholesaleDecision(input: {
+  afterRepairValueCents: bigint | null;
+  repairsCents: bigint;
+  desiredAssignmentFeeCents: bigint;
+  buyerAllowanceCents: bigint;
+  sellerAskingPriceCents: bigint;
+  ruleBps?: number;
+}) {
+  if (!input.afterRepairValueCents) return { maximumAllowableOfferCents: null, expectedSpreadCents: null, decision: "NEEDS_BETTER_NUMBERS" as const };
+  const ruleBps = input.ruleBps ?? 7000;
+  const maximumAllowableOfferCents =
+    (input.afterRepairValueCents * BigInt(ruleBps)) / BigInt(10_000) -
+    input.repairsCents - input.desiredAssignmentFeeCents - input.buyerAllowanceCents;
+  const expectedSpreadCents = maximumAllowableOfferCents - input.sellerAskingPriceCents;
+  const decision = expectedSpreadCents >= input.desiredAssignmentFeeCents
+    ? "STRONG_DEAL" as const
+    : expectedSpreadCents >= BigInt(0)
+      ? "WORTH_CONTACTING" as const
+      : expectedSpreadCents >= -input.desiredAssignmentFeeCents
+        ? "NEEDS_BETTER_NUMBERS" as const
+        : "LIKELY_PASS" as const;
+  return { maximumAllowableOfferCents, expectedSpreadCents, decision };
+}
 
 export function estimateRehab(input: {
   mode: RehabMode;

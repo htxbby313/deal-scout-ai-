@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeDealStrategy, estimateRehab } from "./deal-analysis";
+import { analyzeDealStrategy, calculateWholesaleDecision, estimateRehab } from "./deal-analysis";
 
 describe("deal strategy and rehab analysis", () => {
   it("labels automated rehabilitation figures as estimates", () => {
@@ -37,6 +37,19 @@ describe("deal strategy and rehab analysis", () => {
       status: "VERIFIED_PROFIT_OPPORTUNITY",
       baseCents: BigInt(10_000_000),
       guaranteed: false,
+    });
+  });
+  it("calculates MAO and a plain-language wholesale decision", () => {
+    expect(calculateWholesaleDecision({
+      afterRepairValueCents: BigInt(30_000_000),
+      repairsCents: BigInt(4_000_000),
+      desiredAssignmentFeeCents: BigInt(1_500_000),
+      buyerAllowanceCents: BigInt(500_000),
+      sellerAskingPriceCents: BigInt(14_000_000),
+    })).toEqual({
+      maximumAllowableOfferCents: BigInt(15_000_000),
+      expectedSpreadCents: BigInt(1_000_000),
+      decision: "WORTH_CONTACTING",
     });
   });
 });

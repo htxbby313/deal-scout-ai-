@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import {
   analyzeDealStrategy,
+  calculateWholesaleDecision,
   estimateRehab,
   REHAB_CATEGORIES,
   type DealStrategy,
@@ -42,6 +43,8 @@ export function DealAnalysisCalculator({
   const [transactionCosts, setTransactionCosts] = useState("");
   const [financingCosts, setFinancingCosts] = useState("");
   const [holdingCosts, setHoldingCosts] = useState("");
+  const [assignmentFee, setAssignmentFee] = useState("15000");
+  const [buyerAllowance, setBuyerAllowance] = useState("");
   const [monthlyRent, setMonthlyRent] = useState("");
   const [monthlyExpenses, setMonthlyExpenses] = useState("");
   const rehab = useMemo(
@@ -94,14 +97,33 @@ export function DealAnalysisCalculator({
       monthlyExpenses,
     ],
   );
+  const wholesaleDecision = useMemo(() => calculateWholesaleDecision({
+    afterRepairValueCents: verifiedExitBaseCents ? BigInt(verifiedExitBaseCents) : null,
+    repairsCents: rehab.totalCents,
+    desiredAssignmentFeeCents: cents(assignmentFee),
+    buyerAllowanceCents: cents(buyerAllowance),
+    sellerAskingPriceCents: cents(acquisition),
+  }), [verifiedExitBaseCents, rehab.totalCents, assignmentFee, buyerAllowance, acquisition]);
+  const decisionLabels = {
+    STRONG_DEAL: "Strong deal",
+    WORTH_CONTACTING: "Worth contacting",
+    NEEDS_BETTER_NUMBERS: "Needs better numbers",
+    LIKELY_PASS: "Likely pass",
+  } as const;
   return (
     <div>
+      <section className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+        <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Decision summary</p>
+        <h3 className="mt-1 text-2xl font-bold">{decisionLabels[wholesaleDecision.decision]}</h3>
+        <p className="mt-2 text-sm text-slate-600">This projection uses the sourced base exit value and your editable assumptions. It is not a verified offer or guaranteed profit.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2"><Card label="Maximum allowable offer" value={money(wholesaleDecision.maximumAllowableOfferCents)} /><Card label="Room below asking price" value={money(wholesaleDecision.expectedSpreadCents)} /></div>
+      </section>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Select
           label="Strategy"
           value={strategy}
           onChange={(value) => setStrategy(value as DealStrategy)}
-          options={["WHOLESALE", "FLIP", "BRRRR", "RENTAL"]}
+          options={["WHOLESALE", "WHOLETAIL", "FLIP", "CREATIVE", "BRRRR", "RENTAL", "PASS"]}
         />
         <Select
           label="Rehab level"
@@ -129,10 +151,12 @@ export function DealAnalysisCalculator({
           />
         ) : null}
         <Input
-          label="Acquisition price"
+          label="Seller asking price"
           value={acquisition}
           onChange={setAcquisition}
         />
+        <Input label="Desired assignment fee" value={assignmentFee} onChange={setAssignmentFee} />
+        <Input label="Buyer closing / holding allowance" value={buyerAllowance} onChange={setBuyerAllowance} />
         <Input
           label="Transaction costs"
           value={transactionCosts}

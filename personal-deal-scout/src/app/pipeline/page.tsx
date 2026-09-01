@@ -3,24 +3,10 @@ import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
 import { readOperatingLayer } from "@/lib/operating-layer";
 import { PipelineForms } from "@/app/pipeline/pipeline-forms";
+import { DealWorkspace } from "@/app/pipeline/deal-workspace";
+import { PageHeader } from "@/app/ui-foundation";
 
 export const dynamic = "force-dynamic";
-const stages = [
-  "DISCOVERED",
-  "RESEARCHABLE",
-  "BUYER_FIT",
-  "OUTREACH_READY",
-  "SELLER_ENGAGED",
-  "UNDERWRITING_READY",
-  "OFFER_READY",
-  "CONTRACTED",
-  "DISPOSITION_READY",
-  "CLOSED",
-  "DISQUALIFIED",
-  "NURTURE",
-  "ARCHIVED",
-];
-
 export default async function PipelinePage({
   searchParams,
 }: {
@@ -32,120 +18,8 @@ export default async function PipelinePage({
   return (
     <WorkspaceShell active="pipeline">
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-        <header className="border-b pb-6">
-          <p className="text-sm font-semibold text-blue-700">Deal workflow</p>
-          <h1 className="mt-1 text-3xl font-bold">Deals</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            See where every opportunity stands, what is blocking it, and what
-            should happen next.
-          </p>
-        </header>
-        <form className="mt-6 grid gap-3 rounded-2xl border bg-white p-4 sm:grid-cols-4">
-          <select
-            className="rounded-lg border px-3 py-2"
-            defaultValue={params.stage}
-            name="stage"
-          >
-            <option value="">All stages</option>
-            {stages.map((stage) => (
-              <option key={stage}>{stage}</option>
-            ))}
-          </select>
-          <select
-            className="rounded-lg border px-3 py-2"
-            defaultValue={params.status}
-            name="status"
-          >
-            <option value="">All campaign statuses</option>
-            {[
-              "DRAFT",
-              "PENDING_APPROVAL",
-              "APPROVED",
-              "ACTIVE",
-              "PAUSED",
-              "COMPLETED",
-              "CANCELLED",
-            ].map((status) => (
-              <option key={status}>{status}</option>
-            ))}
-          </select>
-          <select
-            className="rounded-lg border px-3 py-2"
-            defaultValue={params.rank}
-            name="rank"
-          >
-            <option value="">Current activity order</option>
-            <option value="profit-priority">
-              Profit-adjusted acquisition priority
-            </option>
-          </select>
-          <button className="rounded-lg bg-slate-950 px-4 py-2 font-bold text-white">
-            Apply filters
-          </button>
-        </form>
-        <section className="mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm">
-          <div className="border-b p-5">
-            <h2 className="text-xl font-bold">
-              Opportunities · {data.funnels.length}
-            </h2>
-          </div>
-          <div className="divide-y">
-            {data.funnels.map((funnel) => (
-              <article
-                className="grid gap-3 p-5 md:grid-cols-[1.4fr_1fr_1fr_1fr]"
-                key={funnel.id}
-              >
-                <div>
-                  <b>{funnel.property}</b>
-                  <p className="text-xs text-slate-500">{funnel.market}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-500">Stage</span>
-                  <b className="block">{funnel.stage.replaceAll("_", " ")}</b>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-500">Buyer matches</span>
-                  <b className="block">
-                    {funnel.buyerCoverage
-                      ? `${funnel.buyerCoverage} confirmed`
-                      : "No buyer confirmed"}
-                  </b>
-                  <span className="text-xs text-slate-500">
-                    Deal priority: {funnel.score ?? "not scored yet"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-500">
-                    What is needed next
-                  </span>
-                  <b className="block text-amber-800">
-                    {funnel.blockers.length
-                      ? funnel.blockers
-                          .map((blocker) => blocker.replaceAll("_", " "))
-                          .join(", ")
-                      : "Open Deal Desk for next action"}
-                  </b>
-                </div>
-                <p className="text-xs text-slate-500 md:col-span-4">
-                  {funnel.reason}
-                </p>
-                <div className="md:col-span-4">
-                  <Link
-                    className="inline-flex min-h-11 items-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
-                    href={`/deals/${funnel.propertyId}`}
-                  >
-                    Open Deal Desk
-                  </Link>
-                </div>
-              </article>
-            ))}
-            {!data.funnels.length ? (
-              <p className="p-8 text-center text-slate-500">
-                No opportunities match these filters.
-              </p>
-            ) : null}
-          </div>
-        </section>
+        <PageHeader eyebrow="Deals" title="Move the right deals toward closing" description="See each active acquisition in six clear stages, understand the next action, and open the full analysis only when needed." />
+        <DealWorkspace deals={data.funnels} />
         <details className="mt-6 rounded-2xl border bg-white p-5">
           <summary className="cursor-pointer text-lg font-bold">
             Buyer demand, campaigns & readiness

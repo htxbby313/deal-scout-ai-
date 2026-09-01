@@ -50,15 +50,25 @@ try {
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
   await page.screenshot({ path: "artifacts/pr2-leads-desktop.png", fullPage: true });
 
+  await page.goto(`${baseUrl}/pipeline`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Move the right deals toward closing" }).waitFor();
+  for (const label of ["New lead", "Qualified", "Contacting", "Offer", "Under contract", "Closed"]) {
+    await page.getByRole("heading", { name: label, exact: true }).waitFor();
+  }
+  await page.getByRole("button", { name: "List", exact: true }).click();
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
+  await page.screenshot({ path: "artifacts/pr3-deals-desktop.png", fullPage: true });
+
   await page.setViewportSize({ width: 375, height: 812 });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByRole("heading", { name: "Find the next deal worth pursuing" }).waitFor();
+  await page.getByRole("heading", { name: "Move the right deals toward closing" }).waitFor();
   assert.equal(await primary.getByRole("link").count(), 5);
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
-  await page.screenshot({ path: "artifacts/pr2-leads-mobile.png", fullPage: true });
+  await page.screenshot({ path: "artifacts/pr3-deals-mobile.png", fullPage: true });
   await context.close();
 } finally {
   await browser.close();
 }
 
-console.log("Product foundation and Leads browser smoke tests passed at 1440px and 375px.");
+console.log("Product foundation, Leads, and Deals browser smoke tests passed at 1440px and 375px.");
