@@ -6,6 +6,7 @@ import {
   readFunnelOwnerQueue,
   readOwnerAgentActivity,
 } from "@/lib/funnel-owner-queue";
+import { humanLabel } from "@/lib/presentation";
 
 export const dynamic = "force-dynamic";
 export default async function OwnerQueuePage() {
@@ -23,13 +24,13 @@ export default async function OwnerQueuePage() {
   );
   const kindLabel = (kind: string) =>
     ({
-      AGENT_TASK: "Agent recommendation",
+      AGENT_TASK: "Suggested action",
       TRANSACTION_APPROVAL: "Deal approval",
       FUNNEL_BLOCKER: "Deal needs attention",
-      SELLER_ENGAGEMENT: "Seller draft",
-      DEVELOPER_DRAFT: "Developer draft",
+      SELLER_ENGAGEMENT: "Seller follow-up",
+      DEVELOPER_DRAFT: "Buyer follow-up",
       CONTRACT_TEMPLATE: "Contract review",
-    })[kind] ?? kind.replaceAll("_", " ");
+    })[kind] ?? humanLabel(kind);
   return (
     <WorkspaceShell active="owner-queue">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
