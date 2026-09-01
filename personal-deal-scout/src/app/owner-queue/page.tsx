@@ -7,21 +7,31 @@ import {
   readOwnerAgentActivity,
 } from "@/lib/funnel-owner-queue";
 import { humanLabel } from "@/lib/presentation";
+import { getPrisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 export default async function OwnerQueuePage() {
   await requireOwner();
-  const [items, activity] = await Promise.all([
+  const [items, activity, pipelineScores, leadCount] = await Promise.all([
     readFunnelOwnerQueue(),
     readOwnerAgentActivity(),
+    getPrisma().profitPriorityScoreHistory.findMany({
+      distinct: ["funnelId"],
+      orderBy: { calculatedAt: "desc" },
+      select: { projectedBaseCents: true },
+    }),
+    getPrisma().property.count({ where: { opportunityStatus: { not: "REJECTED" } } }),
   ]);
   const agentTasks = items.filter((item) => item.kind === "AGENT_TASK");
-  const urgent = items.filter((item) => item.urgent).length;
   const dealItems = items.length - agentTasks.length;
   const firstItem = items[0];
   const problemEvents = activity.filter((event) =>
     /gap|fail|block|missing|manual/i.test(event.summary),
   );
+  const offersPending = items.filter((item) => ["TRANSACTION_APPROVAL", "CONTRACT_TEMPLATE"].includes(item.kind)).length;
+  const projectedPipelineCents = pipelineScores.reduce((sum, score) => sum + score.projectedBaseCents, BigInt(0));
+  const projectedPipeline = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(projectedPipelineCents) / 100);
+  const today = new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "America/Chicago" }).format(new Date());
   const kindLabel = (kind: string) =>
     ({
       AGENT_TASK: "Suggested action",
@@ -35,7 +45,7 @@ export default async function OwnerQueuePage() {
     <WorkspaceShell active="owner-queue">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         <header className="border-b pb-6">
-          <p className="text-sm font-semibold text-blue-700">Today</p>
+          <p className="text-sm font-semibold text-blue-700">{today}</p>
           <h1 className="mt-1 text-3xl font-bold">
             What needs attention today
           </h1>
@@ -58,24 +68,43 @@ export default async function OwnerQueuePage() {
               Open conversations
             </Link>
           </div>
+          <form action="/properties" className="mt-4 flex max-w-xl gap-2" method="get" role="search">
+            <label className="sr-only" htmlFor="global-search">Search Deal Scout</label>
+            <input className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm" id="global-search" name="q" placeholder="Search address, seller, phone, or market" />
+            <button className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Search</button>
+          </form>
         </header>
         <section
           aria-label="Owner summary"
-          className="mt-6 grid gap-3 sm:grid-cols-3"
+          className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
         >
           <article className="rounded-2xl border bg-white p-5">
-            <p className="text-sm text-slate-500">Ready for review</p>
-            <p className="mt-2 text-3xl font-bold">{items.length}</p>
+            <p className="text-sm text-slate-500">Leads needing action</p>
+            <p className="mt-2 text-3xl font-bold">{dealItems}</p>
           </article>
           <article className="rounded-2xl border bg-white p-5">
-            <p className="text-sm text-slate-500">Research follow-ups</p>
+            <p className="text-sm text-slate-500">Follow-ups due</p>
             <p className="mt-2 text-3xl font-bold">{problemEvents.length}</p>
           </article>
           <article className="rounded-2xl border bg-white p-5">
-            <p className="text-sm text-slate-500">Urgent</p>
-            <p className="mt-2 text-3xl font-bold">{urgent}</p>
+            <p className="text-sm text-slate-500">Offers pending</p>
+            <p className="mt-2 text-3xl font-bold">{offersPending}</p>
+          </article>
+          <article className="rounded-2xl border bg-white p-5">
+            <p className="text-sm text-slate-500">Projected pipeline profit</p>
+            <p className="mt-2 text-3xl font-bold">{projectedPipeline}</p>
           </article>
         </section>
+        {leadCount === 0 ? (
+          <section className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+            <h2 className="text-lg font-bold">Get started in three steps</h2>
+            <ol className="mt-4 grid gap-3 md:grid-cols-3">
+              <li className="rounded-xl bg-white p-4"><b>1. Add or import leads</b><p className="mt-1 text-sm text-slate-600">Start with a property address.</p><Link className="mt-3 inline-block text-sm font-bold text-blue-700" href="/properties#add-lead">Add a lead</Link></li>
+              <li className="rounded-xl bg-white p-4"><b>2. Review the research</b><p className="mt-1 text-sm text-slate-600">See what is verified and what is missing.</p><Link className="mt-3 inline-block text-sm font-bold text-blue-700" href="/properties">Open leads</Link></li>
+              <li className="rounded-xl bg-white p-4"><b>3. Add a buyer</b><p className="mt-1 text-sm text-slate-600">Capture criteria for matching deals.</p><Link className="mt-3 inline-block text-sm font-bold text-blue-700" href="/developers">Open buyers</Link></li>
+            </ol>
+          </section>
+        ) : null}
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)]">
           <section className="overflow-hidden rounded-2xl border bg-white">
             <div className="flex items-center justify-between border-b p-5">

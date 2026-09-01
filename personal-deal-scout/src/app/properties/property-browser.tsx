@@ -20,6 +20,7 @@ import {
 } from "@/lib/domain";
 import { useThemeColor } from "@/lib/theme-color";
 import { evaluateLuxuryRedevelopmentFit } from "@/lib/luxury-redevelopment";
+import { humanLabel } from "@/lib/presentation";
 
 export type PropertyView = {
   id: string;
@@ -105,13 +106,6 @@ const money = (value?: number) =>
         maximumFractionDigits: 0,
       }).format(value)
     : "Value unknown";
-const labels = {
-  NEEDS_VERIFICATION: "Needs verification",
-  DEVELOPMENT_SIGNAL: "Development signal",
-  CONFIRMED_AVAILABLE: "Confirmed available",
-  GOVERNMENT_SALE: "Government sale",
-  REJECTED: "Rejected",
-};
 const actionable = (property: PropertyView) =>
   propertyReadiness(property).actionable;
 const PropertyMap = dynamic(() => import("@/app/properties/property-map"), {
@@ -528,16 +522,17 @@ function RetirementForm({ property }: { property: PropertyView }) {
 }
 
 export function PropertyBrowser({
+  initialQuery = "",
   properties,
 }: {
+  initialQuery?: string;
   properties: PropertyView[];
 }) {
-  const [query, setQuery] = useState("");
-  const [view, setView] = useState<"actionable" | "research">("actionable");
+  const [query, setQuery] = useState(initialQuery);
+  const [view, setView] = useState<"all" | "actionable" | "research">("all");
+  const [showMap, setShowMap] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [state, setState] = useState("");
-  const [county, setCounty] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
   const [sort, setSort] = useState("luxury-fit");
   const [visibleLimit, setVisibleLimit] = useState(24);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -558,41 +553,11 @@ export function PropertyBrowser({
     () => [...new Set(properties.map((property) => property.state))].sort(),
     [properties],
   );
-  const counties = useMemo(
-    () =>
-      [
-        ...new Set(
-          properties
-            .filter((property) => !state || property.state === state)
-            .map((property) => property.county)
-            .filter(Boolean) as string[],
-        ),
-      ].sort(),
-    [properties, state],
-  );
-  const neighborhoods = useMemo(
-    () =>
-      [
-        ...new Set(
-          properties
-            .filter(
-              (property) =>
-                (!state || property.state === state) &&
-                (!county || property.county === county),
-            )
-            .map((property) => property.neighborhood)
-            .filter(Boolean) as string[],
-        ),
-      ].sort(),
-    [properties, state, county],
-  );
   const regionFiltered = useMemo(
     () =>
       properties.filter(
         (property) =>
           (!state || property.state === state) &&
-          (!county || property.county === county) &&
-          (!neighborhood || property.neighborhood === neighborhood) &&
           [
             property.address,
             property.city,
@@ -609,14 +574,12 @@ export function PropertyBrowser({
               value?.toLowerCase().includes(query.toLowerCase()),
             ),
       ),
-    [properties, query, state, county, neighborhood],
+    [properties, query, state],
   );
   const filtered = useMemo(
     () =>
       regionFiltered
-        .filter((property) =>
-          view === "actionable" ? actionable(property) : !actionable(property),
-        )
+        .filter((property) => view === "all" || (view === "actionable" ? actionable(property) : !actionable(property)))
         .toSorted((a, b) => {
           if (sort === "luxury-fit")
             return (
@@ -661,15 +624,15 @@ export function PropertyBrowser({
   return (
     <>
       <div className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(130px,auto))]">
+        <div className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_repeat(2,minmax(150px,auto))]">
           <input
-            aria-label="Search properties"
+            aria-label="Search leads"
             className="min-w-0 rounded-xl border bg-slate-50 px-4 py-2.5 text-sm"
             onChange={(event) => {
               setQuery(event.target.value);
               setVisibleLimit(24);
             }}
-            placeholder="Search address, region, contact, source…"
+            placeholder="Search address, seller, phone, or market…"
             value={query}
           />
           <select
@@ -677,43 +640,12 @@ export function PropertyBrowser({
             className="rounded-xl border px-3 py-2 text-sm"
             onChange={(event) => {
               setState(event.target.value);
-              setCounty("");
-              setNeighborhood("");
               setVisibleLimit(24);
             }}
             value={state}
           >
             <option value="">United States · all states</option>
             {states.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-          <select
-            aria-label="County"
-            className="rounded-xl border px-3 py-2 text-sm"
-            onChange={(event) => {
-              setCounty(event.target.value);
-              setNeighborhood("");
-              setVisibleLimit(24);
-            }}
-            value={county}
-          >
-            <option value="">All counties</option>
-            {counties.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-          <select
-            aria-label="Neighborhood"
-            className="rounded-xl border px-3 py-2 text-sm"
-            onChange={(event) => {
-              setNeighborhood(event.target.value);
-              setVisibleLimit(24);
-            }}
-            value={neighborhood}
-          >
-            <option value="">All neighborhoods</option>
-            {neighborhoods.map((item) => (
               <option key={item}>{item}</option>
             ))}
           </select>
@@ -726,16 +658,19 @@ export function PropertyBrowser({
             }}
             value={sort}
           >
-            <option value="luxury-fit">Luxury redevelopment fit</option>
-            <option value="research-desc">Most researched</option>
-            <option value="confidence">Highest confidence</option>
+            <option value="luxury-fit">Highest potential</option>
+            <option value="research-desc">Most complete research</option>
+            <option value="confidence">Strongest source confidence</option>
             <option value="price-asc">Price low to high</option>
             <option value="price-desc">Price high to low</option>
             <option value="address">Address A–Z</option>
           </select>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <div className="flex rounded-xl border p-1">
+          <div className="flex flex-wrap rounded-xl border p-1">
+            <button className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${view === "all" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => { setView("all"); setVisibleLimit(24); }} type="button">
+              All leads · {properties.length}
+            </button>
             <button
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${view === "actionable" ? "bg-slate-950 text-white" : "text-slate-500"}`}
               onClick={() => {
@@ -744,7 +679,7 @@ export function PropertyBrowser({
               }}
               type="button"
             >
-              Actionable · {actionableCount}
+              Contact ready · {actionableCount}
             </button>
             <button
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${view === "research" ? "bg-amber-600 text-white" : "text-slate-500"}`}
@@ -754,24 +689,26 @@ export function PropertyBrowser({
               }}
               type="button"
             >
-              Needs verification · {properties.length - actionableCount}
+              Needs action · {properties.length - actionableCount}
             </button>
           </div>
+          <button className="ml-auto rounded-lg border px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" onClick={() => setShowMap((shown) => !shown)} type="button">
+            {showMap ? "Hide map" : "Show map"}
+          </button>
         </div>
         <p className="mt-3 text-xs text-slate-500">
-          United States → {state || "state"} → {county || "county"} →{" "}
-          {neighborhood || "neighborhood"} → {filtered.length} address
-          {filtered.length === 1 ? "" : "es"} · ranks reflect {rankCategory}
+          Showing {filtered.length} of {properties.length} lead{properties.length === 1 ? "" : "s"}
+          {state ? ` in ${state}` : ""}. Advanced geographic filters are available in Data & sources.
         </p>
       </div>
-      <div className="mt-5">
+      {showMap ? <div className="mt-5">
         <PropertyMap
           baseColor={mapColor}
           onSelect={setSelectedId}
           properties={regionFiltered}
           rankCategory={rankCategory}
         />
-      </div>
+      </div> : null}
       <div className="mt-5 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
         {filtered.slice(0, visibleLimit).map((property, index) => (
           <button
@@ -786,7 +723,7 @@ export function PropertyBrowser({
                 #{index + 1} · {rankCategory}
               </span>
               <span className="absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-bold">
-                {labels[property.opportunityStatus]}
+                {humanLabel(property.opportunityStatus)}
               </span>
             </div>
             <div className="p-5">
@@ -823,10 +760,7 @@ export function PropertyBrowser({
               <div className="mt-3 rounded-xl border border-slate-200 p-3 text-xs">
                 <span className="text-slate-500">Deal stage</span>
                 <b className="mt-1 block">
-                  {(property.pipelineStage || "DISCOVERED").replaceAll(
-                    "_",
-                    " ",
-                  )}
+                  {humanLabel(property.pipelineStage || "DISCOVERED")}
                 </b>
                 <span className="mt-2 block text-slate-500">
                   Contact: {property.contactName ? "Name ✓" : "Name needed"} ·{" "}
@@ -835,7 +769,7 @@ export function PropertyBrowser({
                 </span>
               </div>
               <p className="mt-4 text-sm font-semibold text-blue-700">
-                Open dossier →
+                Review lead →
               </p>
             </div>
           </button>
@@ -857,9 +791,11 @@ export function PropertyBrowser({
       ) : null}
       {!filtered.length ? (
         <p className="mt-5 rounded-2xl border border-dashed bg-white p-10 text-center text-sm text-slate-500">
-          {view === "actionable"
-            ? "No properties meet the actionable standard yet."
-            : "No properties need verification."}
+                  {view === "all"
+                    ? "No leads match these filters. Clear the search or add a lead."
+                    : view === "actionable"
+                      ? "No leads are contact ready yet."
+                      : "No leads currently need action."}
         </p>
       ) : null}
       {selected ? (
@@ -877,7 +813,7 @@ export function PropertyBrowser({
             <div className="sticky top-0 flex items-center justify-between border-b bg-white p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                  Property evidence
+                  Lead overview
                 </p>
                 <h2
                   className="mt-1 text-xl font-bold"
@@ -901,17 +837,17 @@ export function PropertyBrowser({
                 className="mb-5 block rounded-xl bg-blue-700 px-4 py-3 text-center text-sm font-bold text-white"
                 href={`/deals/${selected.id}`}
               >
-                Analyze in Deal Desk
+                Review deal analysis
               </Link>
               <section
                 className={`rounded-xl p-4 ${actionable(selected) ? "bg-emerald-50 text-emerald-900" : selected.opportunityStatus === "REJECTED" ? "bg-red-50 text-red-900" : "bg-amber-50 text-amber-900"}`}
               >
                 <b>
                   {actionable(selected)
-                    ? "Disposition ready"
+                    ? "Ready to contact"
                     : selected.opportunityStatus === "REJECTED"
                       ? "Retired from pipeline"
-                      : "Verification required"}
+                      : "Needs more information"}
                 </b>
                 {!actionable(selected) &&
                 selected.opportunityStatus !== "REJECTED" ? (
@@ -927,8 +863,7 @@ export function PropertyBrowser({
                     `${selected.city}, ${selected.state} ${selected.zipCode}`,
                   ],
                   ["Owner", selected.ownerName],
-                  ["Status", labels[selected.opportunityStatus]],
-                  ["Confidence", `${selected.confidence}%`],
+                  ["Status", humanLabel(selected.opportunityStatus)],
                   ["Contact", selected.contactName || "Missing"],
                   ["Phone", selected.contactPhone || "Missing"],
                   ["Email", selected.contactEmail || "Missing"],
@@ -940,8 +875,10 @@ export function PropertyBrowser({
                   </div>
                 ))}
               </dl>
-              <section className="mt-7 rounded-xl bg-slate-50 p-4">
-                <h3 className="font-bold">Evidence chain</h3>
+              <details className="mt-7 rounded-xl border border-slate-200 p-4">
+                <summary className="cursor-pointer font-bold">Evidence and research details</summary>
+                <section className="mt-4 rounded-xl bg-slate-50 p-4">
+                <h3 className="font-bold">Source records</h3>
                 {selected.sourceUrl ? (
                   <a
                     className="mt-2 block text-sm font-bold text-blue-700 underline"
@@ -966,10 +903,11 @@ export function PropertyBrowser({
                     Open price/contact verification
                   </a>
                 ) : null}
-              </section>
-              <PhotoPanel property={selected} />
-              <ResearchPanel property={selected} />
-              <EvidenceForm property={selected} />
+                </section>
+                <PhotoPanel property={selected} />
+                <ResearchPanel property={selected} />
+                <EvidenceForm property={selected} />
+              </details>
               <RetirementForm property={selected} />
               <section className="mt-7">
                 <h3 className="font-bold">Developer matches</h3>
