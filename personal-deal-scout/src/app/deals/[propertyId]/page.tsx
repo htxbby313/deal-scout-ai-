@@ -6,6 +6,7 @@ import {
   registerZillowReferenceAction,
 } from "@/app/deal-desk-actions";
 import { DealAnalysisCalculator } from "@/app/deals/[propertyId]/deal-analysis-calculator";
+import { PropertyPhoto } from "@/app/properties/property-photo";
 import { requireOwner } from "@/lib/auth";
 import { latestAcquisitionGates } from "@/lib/acquisition-gate-versioning";
 import { evaluateComparableSales } from "@/lib/comp-engine";
@@ -41,6 +42,7 @@ export default async function DealDeskPage({
     where: { id: propertyId },
     include: {
       researchFindings: { orderBy: { observedAt: "desc" } },
+      media: { orderBy: { position: "asc" }, take: 5 },
       comparableSales: true,
       discoveryReferences: { orderBy: { submittedAt: "desc" } },
       matches: {
@@ -112,6 +114,24 @@ export default async function DealDeskPage({
         >
           ← Opportunities
         </Link>
+        <section aria-label="Property photos" className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
+          {property.media.length ? (
+            <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2">
+              <div className="sm:col-span-2 lg:row-span-2">
+                <PropertyPhoto className="h-72 lg:h-[420px]" eager photos={[property.media[0]]} />
+              </div>
+              {property.media.slice(1, 5).map((item) => (
+                <PropertyPhoto className="h-40 lg:h-[208px]" key={item.id} photos={[item]} />
+              ))}
+            </div>
+          ) : (
+            <PropertyPhoto className="h-64 lg:h-80" photos={[]} />
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-xs text-slate-600">
+            <span>{property.media.length ? `${property.media.length} sourced photo${property.media.length === 1 ? "" : "s"} · internal workspace display` : "No verified source photo available"}</span>
+            {property.media[0] ? <a className="font-bold text-blue-700 underline" href={property.media[0].sourceUrl} rel="noreferrer" target="_blank">Open photo source</a> : null}
+          </div>
+        </section>
         <header className="mt-4 rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -122,6 +142,12 @@ export default async function DealDeskPage({
               <p className="mt-2 text-slate-600">
                 {property.city}, {property.state} {property.zipCode}
               </p>
+              <p className="mt-4 text-3xl font-bold text-slate-950">{price(property.estimatedValue)}</p>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-slate-700">
+                <span>{property.propertyType || "Property type unknown"}</span>
+                <span>{property.yearBuilt ? `Built ${property.yearBuilt}` : "Year built unknown"}</span>
+                <span>{property.lotSize || "Lot size unknown"}</span>
+              </div>
             </div>
             <span className="w-fit rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white">
               {transaction?.acquisitionFunnel?.stage.replaceAll("_", " ") ??

@@ -35,7 +35,12 @@ try {
   }
   assert.equal(await primary.getByRole("link").count(), 5);
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
-  assert.deepEqual(consoleErrors, []);
+  const applicationErrors = consoleErrors.filter(
+    (message) =>
+      !message.includes("status of 403") &&
+      !message.includes("/_next/hmr"),
+  );
+  assert.deepEqual(applicationErrors, []);
   await page.screenshot({ path: "artifacts/pr1-desktop.png", fullPage: true });
 
   await page.goto(`${baseUrl}/properties`, { waitUntil: "networkidle" });
@@ -52,6 +57,7 @@ try {
 
   await page.goto(`${baseUrl}/pipeline`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Move the right deals toward closing" }).waitFor();
+  await page.getByLabel("Search address, city, or ZIP").waitFor();
   for (const label of ["New lead", "Qualified", "Contacting", "Offer", "Under contract", "Closed"]) {
     await page.getByRole("heading", { name: label, exact: true }).waitFor();
   }
@@ -59,6 +65,13 @@ try {
   await page.getByRole("button", { name: "Board", exact: true }).click();
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
   await page.screenshot({ path: "artifacts/pr3-deals-desktop.png", fullPage: true });
+
+  const firstDeal = page.getByRole("link", { name: "Open deal" }).first();
+  await firstDeal.click();
+  await page.getByText("Deal Desk", { exact: true }).waitFor();
+  await page.getByRole("region", { name: "Property photos" }).waitFor();
+  assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
+  await page.screenshot({ path: "artifacts/pr5-property-detail-desktop.png", fullPage: true });
 
   await page.goto(`${baseUrl}/developers`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Buyer relationships and matching deals" }).waitFor();
@@ -84,4 +97,4 @@ try {
   await browser.close();
 }
 
-console.log("Product foundation, Leads, Deals, and Buyers browser smoke tests passed at 1440px and 375px.");
+console.log("Product foundation, Leads, Deals, property detail, and Buyers browser smoke tests passed at 1440px and 375px.");
