@@ -15,6 +15,11 @@ import {
   offerVerdict,
   sellerConversationHref,
 } from "@/lib/deal-cockpit";
+import { explainDealScore } from "@/lib/deal-score";
+import {
+  formatClosedOutcomeLine,
+  formatResearchSpendLine,
+} from "@/lib/deal-unit-cost";
 import { evaluatePropertyPresentation } from "@/lib/property-presentation-policy";
 import { sellerNextAction } from "@/lib/seller-crm-domain";
 
@@ -45,8 +50,19 @@ export default async function DealDeskPage({
   const { propertyId } = await params;
   const deal = await getDeal(propertyId);
   if (!deal) notFound();
-  const { property, transaction, projection, gates, sellerEngagements, funnel } =
-    deal;
+  const {
+    property,
+    transaction,
+    projection,
+    gates,
+    sellerEngagements,
+    funnel,
+    priorityScore,
+    outcome,
+    unitCost,
+  } = deal;
+  const closedOutcomeLine = formatClosedOutcomeLine(outcome);
+  const researchSpendLine = formatResearchSpendLine(unitCost);
   const engagement = sellerEngagements[0];
   const lastConversation = engagement?.conversations[0];
   const verified = property.researchFindings.filter(
@@ -101,6 +117,11 @@ export default async function DealDeskPage({
     },
   );
   const evidenceBand = confidenceBand(confidence, verified.length);
+  const dealScore = explainDealScore({
+    history: priorityScore,
+    stage: funnel?.stage,
+    controlStatus: transaction?.controlStatus,
+  });
   const comps = evaluateComparableSales(
     {
       propertyType: property.propertyType,
@@ -137,6 +158,16 @@ export default async function DealDeskPage({
               {stageLabel}
             </span>
           </div>
+          {dealScore.label ? (
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-bold">{dealScore.label}</p>
+              {dealScore.explanation ? (
+                <p className="mt-1 text-sm text-slate-600">
+                  {dealScore.explanation}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <p className="mt-5 text-xl font-bold">{verdict}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Summary
@@ -160,6 +191,12 @@ export default async function DealDeskPage({
               }
             />
           </div>
+          {closedOutcomeLine ? (
+            <p className="mt-4 text-sm font-semibold text-slate-800">
+              {closedOutcomeLine}
+            </p>
+          ) : null}
+          <p className="mt-2 text-sm text-slate-600">{researchSpendLine}</p>
           <div className="mt-5 rounded-xl bg-blue-50 p-4">
             <p className="text-xs font-bold uppercase text-blue-700">
               Recommended next action
