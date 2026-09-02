@@ -134,7 +134,9 @@ export default async function SellerCrmPage({
       return false;
     return true;
   });
-  const selected = selectVisibleEngagement(visible, params.engagementId);
+  const selected = params.engagementId
+    ? selectVisibleEngagement(engagements, params.engagementId)
+    : selectVisibleEngagement(visible);
   const action = selected
     ? sellerNextAction({
         controlStatus: selected.transaction.controlStatus,
@@ -163,7 +165,7 @@ export default async function SellerCrmPage({
           </p>
           <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">Contacts & conversations</h1>
+              <h1 className="text-2xl font-bold">Contacts</h1>
               <p className="mt-1 text-sm text-slate-500">
                 Build seller and buyer relationships, follow the next step, and
                 keep every conversation attached to its deal.

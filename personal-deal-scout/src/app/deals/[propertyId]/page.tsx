@@ -7,10 +7,16 @@ import {
 } from "@/app/deal-desk-actions";
 import { DealAnalysisCalculator } from "@/app/deals/[propertyId]/deal-analysis-calculator";
 import { requireOwner } from "@/lib/auth";
-import { latestAcquisitionGates } from "@/lib/acquisition-gate-versioning";
 import { evaluateComparableSales } from "@/lib/comp-engine";
-import { getPrisma } from "@/lib/prisma";
+import { getDeal } from "@/lib/deal";
+import {
+  acquisitionStageLabel,
+  confidenceBand,
+  offerVerdict,
+  sellerConversationHref,
+} from "@/lib/deal-cockpit";
 import { evaluatePropertyPresentation } from "@/lib/property-presentation-policy";
+import { sellerNextAction } from "@/lib/seller-crm-domain";
 
 export const dynamic = "force-dynamic";
 const dollars = (cents?: bigint | null) =>
@@ -37,34 +43,12 @@ export default async function DealDeskPage({
 }) {
   await requireOwner();
   const { propertyId } = await params;
-  const property = await getPrisma().property.findUnique({
-    where: { id: propertyId },
-    include: {
-      researchFindings: { orderBy: { observedAt: "desc" } },
-      comparableSales: true,
-      discoveryReferences: { orderBy: { submittedAt: "desc" } },
-      matches: {
-        include: { developer: true },
-        orderBy: { score: "desc" },
-        take: 5,
-      },
-      transactions: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: {
-          documents: true,
-          approvals: true,
-          financialProjections: { orderBy: { version: "desc" }, take: 1 },
-          acquisitionFunnel: {
-            include: { gates: true, blockers: { where: { status: "OPEN" } } },
-          },
-        },
-      },
-    },
-  });
-  if (!property) notFound();
-  const transaction = property.transactions[0];
-  const projection = transaction?.financialProjections[0];
+  const deal = await getDeal(propertyId);
+  if (!deal) notFound();
+  const { property, transaction, projection, gates, sellerEngagements, funnel } =
+    deal;
+  const engagement = sellerEngagements[0];
+  const lastConversation = engagement?.conversations[0];
   const verified = property.researchFindings.filter(
     (finding) => finding.status === "VERIFIED",
   );
@@ -72,9 +56,17 @@ export default async function DealDeskPage({
     (finding) => finding.status === "CONFLICT",
   );
   const presentation = evaluatePropertyPresentation(transaction ?? null);
-  const gates = transaction?.acquisitionFunnel
-    ? latestAcquisitionGates(transaction.acquisitionFunnel.gates)
-    : [];
+  const sellerAction = engagement
+    ? sellerNextAction({
+        controlStatus: transaction?.controlStatus ?? "ON_HOLD",
+        consentStatus: engagement.consents[0]?.status,
+        conversationCount: engagement._count.conversations,
+        sellerFactCount: engagement._count.sellerFacts,
+        engagementStatus: engagement.status,
+        followUps: engagement.followUps,
+        latestOfferStatus: engagement.offerHistory[0]?.status,
+      })
+    : null;
   const nextAction =
     transaction?.controlStatus === "STOPPED"
       ? "Stopped by owner"
@@ -82,15 +74,33 @@ export default async function DealDeskPage({
         ? "Resolve conflicting evidence"
         : !transaction
           ? "Build seller relationship and verify deal terms"
-          : !presentation.allowed
-            ? "Complete contract and disposition controls"
-            : "Review approved buyer presentation";
+          : sellerAction?.[0] ??
+            (!presentation.allowed
+              ? "Complete contract and disposition controls"
+              : "Review approved buyer presentation");
   const confidence = verified.length
     ? Math.round(
         verified.reduce((sum, item) => sum + item.confidence, 0) /
           verified.length,
       )
     : null;
+  const verdict = offerVerdict({
+    conflictCount: conflicts.length,
+    sellerSafeMaximumCents: projection?.sellerSafeMaximumCents,
+    projectedSpreadCents: projection?.feeBaseCents,
+  });
+  const sellerHref = sellerConversationHref({
+    engagementId: engagement?.id,
+    address: property.address,
+  });
+  const topMatch = property.matches[0];
+  const stageLabel = acquisitionStageLabel(
+    funnel?.stage ?? property.acquisitionFunnels[0]?.stage,
+    {
+      matchCount: property.matches.length,
+    },
+  );
+  const evidenceBand = confidenceBand(confidence, verified.length);
   const comps = evaluateComparableSales(
     {
       propertyType: property.propertyType,
@@ -116,7 +126,7 @@ export default async function DealDeskPage({
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-                Deal Desk
+                Deal Box
               </p>
               <h1 className="mt-1 text-3xl font-bold">{property.address}</h1>
               <p className="mt-2 text-slate-600">
@@ -124,32 +134,30 @@ export default async function DealDeskPage({
               </p>
             </div>
             <span className="w-fit rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white">
-              {transaction?.acquisitionFunnel?.stage.replaceAll("_", " ") ??
-                "DISCOVERED"}
+              {stageLabel}
             </span>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <Summary
-              label="Known price"
-              value={price(property.estimatedValue)}
-            />
-            <Summary
-              label="Evidence confidence"
-              value={
-                confidence == null ? "Insufficient evidence" : `${confidence}%`
-              }
-            />
-            <Summary
-              label="Projected base spread"
-              value={dollars(projection?.feeBaseCents)}
-            />
+          <p className="mt-5 text-xl font-bold">{verdict}</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Summary
               label="Seller-safe maximum"
               value={dollars(projection?.sellerSafeMaximumCents)}
             />
             <Summary
-              label="Qualified matches"
-              value={String(property.matches.length)}
+              label="Projected spread"
+              value={dollars(projection?.feeBaseCents)}
+            />
+            <Summary
+              label="Evidence"
+              value={evidenceBand}
+            />
+            <Summary
+              label="Likely buyers"
+              value={
+                topMatch
+                  ? `${property.matches.length} · ${topMatch.developer.companyName}`
+                  : "None matched"
+              }
             />
           </div>
           <div className="mt-5 rounded-xl bg-blue-50 p-4">
@@ -158,6 +166,43 @@ export default async function DealDeskPage({
             </p>
             <p className="mt-1 font-bold">{nextAction}</p>
           </div>
+          <article className="mt-4 rounded-xl border border-slate-200 p-4">
+            <p className="text-xs font-bold uppercase text-slate-500">Seller</p>
+            <p className="mt-1 font-bold">
+              {engagement?.recipientLabel ||
+                property.contactName ||
+                property.ownerName ||
+                "Seller unknown"}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              {property.contactPhone
+                ? `Phone ${property.contactPhone}`
+                : "No phone on file"}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Last contact:{" "}
+              {lastConversation
+                ? lastConversation.occurredAt.toLocaleString()
+                : "None recorded"}
+            </p>
+            {engagement ? (
+              <Link
+                className="mt-3 inline-block text-sm font-bold text-blue-700"
+                href={sellerHref}
+              >
+                {nextAction.startsWith("Build seller relationship")
+                  ? "Open seller conversation"
+                  : `Seller next step: ${sellerAction?.[0] ?? "Open conversation"}`}
+              </Link>
+            ) : (
+              <p className="mt-3 text-sm text-slate-600">
+                No seller engagement on this deal.{" "}
+                <Link className="font-bold text-blue-700" href={sellerHref}>
+                  Open Contacts with this property
+                </Link>
+              </p>
+            )}
+          </article>
           <Link
             className="mt-4 inline-block rounded-xl border border-blue-700 px-4 py-2 text-sm font-bold text-blue-700"
             href={`/deals/${property.id}/package`}

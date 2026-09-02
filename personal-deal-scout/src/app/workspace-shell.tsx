@@ -1,68 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-
-const primaryNavigation = [
-  {
-    href: "/owner-queue",
-    label: "Today",
-    icon: "H",
-    active: ["owner-queue"],
-  },
-  {
-    href: "/properties",
-    label: "Properties",
-    icon: "O",
-    active: ["properties", "research", "operations", "county-coverage"],
-  },
-  {
-    href: "/pipeline",
-    label: "Deals",
-    icon: "D",
-    active: ["pipeline", "transactions", "contracts", "campaigns"],
-  },
-  {
-    href: "/seller-crm",
-    label: "People",
-    icon: "C",
-    active: ["seller-crm", "disposition", "developers", "buyer-evidence"],
-  },
-  {
-    href: "/executive",
-    label: "Reports",
-    icon: "$",
-    active: ["executive", "profitability", "profit-priority"],
-  },
-] as const;
-
-const sectionNavigation = {
-  "owner-queue": [
-    ["/owner-queue", "Needs your attention"],
-    ["/agents", "Agent activity"],
-  ],
-  properties: [
-    ["/properties", "Property list"],
-    ["/research", "Research map"],
-    ["/operations", "Research progress"],
-    ["/county-coverage", "Public-record sources"],
-  ],
-  pipeline: [
-    ["/pipeline", "Deal pipeline"],
-    ["/transactions", "Approvals"],
-    ["/contracts", "Contracts"],
-    ["/campaigns", "Outreach plans"],
-  ],
-  "seller-crm": [
-    ["/seller-crm", "Seller conversations"],
-    ["/developers", "Buyers and developers"],
-    ["/buyer-evidence", "Buyer verification"],
-    ["/disposition", "Disposition"],
-  ],
-  executive: [
-    ["/executive", "Business summary"],
-    ["/profitability", "Financial details"],
-    ["/profit-priority", "Ranking preferences"],
-  ],
-} as const;
+import { moreNavigation, primaryNavigation } from "@/lib/workspace-nav";
 
 type WorkspaceSection =
   | "owner-queue"
@@ -92,12 +30,6 @@ export function WorkspaceShell({
   active?: WorkspaceSection;
   children: ReactNode;
 }) {
-  const selectedPrimary = primaryNavigation.find((item) =>
-    (item.active as readonly string[]).includes(active),
-  );
-  const sectionLinks = selectedPrimary
-    ? sectionNavigation[selectedPrimary.active[0]]
-    : [];
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 lg:grid lg:grid-cols-[220px_1fr]">
       <a className="skip-link" href="#main-content">
@@ -157,26 +89,6 @@ export function WorkspaceShell({
           })}
         </nav>
 
-        {sectionLinks.length ? (
-          <nav
-            aria-label={`${selectedPrimary?.label} section`}
-            className="flex gap-2 overflow-x-auto border-t border-slate-100 px-3 py-3 lg:block lg:space-y-1 lg:overflow-visible"
-          >
-            <p className="hidden px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 lg:block">
-              {selectedPrimary?.label}
-            </p>
-            {sectionLinks.map(([href, label]) => (
-              <Link
-                className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold lg:block lg:text-sm ${href === `/${active}` ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-700 hover:bg-slate-100 lg:bg-transparent"}`}
-                href={href}
-                key={href}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-        ) : null}
-
         <details className="mx-3 mb-[max(1rem,env(safe-area-inset-bottom))] shrink-0 rounded-xl border border-slate-200 bg-white">
           <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-slate-700 marker:hidden">
             <span className="flex items-center justify-between gap-3">
@@ -187,18 +99,15 @@ export function WorkspaceShell({
             </span>
           </summary>
           <div className="overflow-x-hidden border-t border-slate-100 p-2">
-            <Link
-              className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              href="/agents"
-            >
-              Agent team
-            </Link>
-            <Link
-              className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              href="/settings"
-            >
-              Settings
-            </Link>
+            {moreNavigation.map(([href, label]) => (
+              <Link
+                className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                href={href}
+                key={href}
+              >
+                {label}
+              </Link>
+            ))}
           </div>
         </details>
       </aside>
