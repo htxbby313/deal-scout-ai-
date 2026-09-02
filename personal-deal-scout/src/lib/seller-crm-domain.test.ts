@@ -38,9 +38,17 @@ describe("seller CRM domain safeguards", () => {
 
   it("selects only visible engagements", () => {
     expect(selectVisibleEngagement([], "hidden")).toBeNull();
-    expect(selectVisibleEngagement([{ id: "visible" }], "hidden")).toEqual({
+    expect(selectVisibleEngagement([{ id: "visible" }], "hidden")).toBeNull();
+    expect(selectVisibleEngagement([{ id: "visible" }], "visible")).toEqual({
       id: "visible",
     });
+    expect(
+      selectVisibleEngagement(
+        [{ id: "other-open" }, { id: "requested" }],
+        "requested",
+      ),
+    ).toEqual({ id: "requested" });
+    expect(selectVisibleEngagement([{ id: "only" }])).toEqual({ id: "only" });
   });
 
   it("makes missing and explicit open views identical", () => {

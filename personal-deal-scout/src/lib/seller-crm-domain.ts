@@ -70,7 +70,10 @@ export function selectVisibleEngagement<T extends { id: string }>(
   visible: readonly T[],
   selectedId?: string,
 ) {
-  return visible.find((item) => item.id === selectedId) ?? visible[0] ?? null;
+  if (selectedId) {
+    return visible.find((item) => item.id === selectedId) ?? null;
+  }
+  return visible[0] ?? null;
 }
 
 export function firstActionableFollowUp<

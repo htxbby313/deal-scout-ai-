@@ -13,6 +13,7 @@ import {
   type EvidenceUpdateState,
   type ResearchRunState,
 } from "@/app/actions";
+import { acquisitionStageLabel } from "@/lib/deal-cockpit";
 import {
   developerMatchesAreVerified,
   formatSourceRecordDate,
@@ -764,21 +765,24 @@ export function PropertyBrowser({
           {filtered.length === 1 ? "" : "es"} · ranks reflect {rankCategory}
         </p>
       </div>
-      <div className="mt-5">
-        <PropertyMap
-          baseColor={mapColor}
-          onSelect={setSelectedId}
-          properties={regionFiltered}
-          rankCategory={rankCategory}
-        />
-      </div>
+      <details className="mt-5 rounded-2xl border bg-white p-4">
+        <summary className="cursor-pointer text-sm font-bold text-slate-700">
+          Research map
+        </summary>
+        <div className="mt-4">
+          <PropertyMap
+            baseColor={mapColor}
+            onSelect={setSelectedId}
+            properties={regionFiltered}
+            rankCategory={rankCategory}
+          />
+        </div>
+      </details>
       <div className="mt-5 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
         {filtered.slice(0, visibleLimit).map((property, index) => (
-          <button
-            className="overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          <article
+            className="overflow-hidden rounded-2xl border bg-white text-left shadow-sm"
             key={property.id}
-            onClick={() => setSelectedId(property.id)}
-            type="button"
           >
             <div className="relative grid min-h-40 place-items-center overflow-hidden bg-slate-100">
               <PropertyPhoto photos={property.media} eager={index < 3} />
@@ -823,10 +827,9 @@ export function PropertyBrowser({
               <div className="mt-3 rounded-xl border border-slate-200 p-3 text-xs">
                 <span className="text-slate-500">Deal stage</span>
                 <b className="mt-1 block">
-                  {(property.pipelineStage || "DISCOVERED").replaceAll(
-                    "_",
-                    " ",
-                  )}
+                  {acquisitionStageLabel(property.pipelineStage, {
+                    matchCount: property.matches.length,
+                  })}
                 </b>
                 <span className="mt-2 block text-slate-500">
                   Contact: {property.contactName ? "Name ✓" : "Name needed"} ·{" "}
@@ -834,11 +837,23 @@ export function PropertyBrowser({
                   {property.contactEmail ? " · Email ✓" : ""}
                 </span>
               </div>
-              <p className="mt-4 text-sm font-semibold text-blue-700">
-                Open dossier →
-              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Link
+                  className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white"
+                  href={`/deals/${property.id}`}
+                >
+                  Analyze
+                </Link>
+                <button
+                  className="text-sm font-semibold text-slate-600"
+                  onClick={() => setSelectedId(property.id)}
+                  type="button"
+                >
+                  Open dossier
+                </button>
+              </div>
             </div>
-          </button>
+          </article>
         ))}
       </div>
       {filtered.length > visibleLimit ? (

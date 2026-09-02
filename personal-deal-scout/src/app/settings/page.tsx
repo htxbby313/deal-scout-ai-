@@ -70,8 +70,9 @@ export default async function SettingsPage() {
           <p className="text-sm font-semibold text-blue-700">Owner</p>
           <h1 className="mt-1 text-3xl font-bold">Settings</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Daily work stays in the six main tabs. Open these tools only when
-            you need to change how Deal Scout operates.
+            Daily work stays in Home, Opportunities, Deals, Contacts, and
+            Reports. Open these tools only when you need to change how Deal
+            Scout operates.
           </p>
         </header>
         <section className="mt-6 rounded-2xl border bg-white p-5">

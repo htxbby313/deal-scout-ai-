@@ -7,6 +7,7 @@ import {
   type TransactionControlStatus,
 } from "@prisma/client";
 
+import { assertCanCreateDealTransaction } from "@/lib/deal";
 import { getPrisma } from "@/lib/prisma";
 import { evaluateTransactionGate } from "@/lib/transaction-policy";
 
@@ -43,6 +44,11 @@ export async function createControlledTransaction(input: {
   return db.$transaction(async (tx) => {
     const property = await tx.property.findUnique({ where: { id: input.propertyId }, select: { state: true } });
     if (!property) throw new Error("Property not found.");
+    const existing = await tx.dealTransaction.findMany({
+      where: { propertyId: input.propertyId },
+      select: { controlStatus: true, status: true },
+    });
+    assertCanCreateDealTransaction(existing);
     const transaction = await tx.dealTransaction.create({
       data: {
         propertyId: input.propertyId,

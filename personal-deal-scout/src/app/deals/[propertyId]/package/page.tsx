@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOwner } from "@/lib/auth";
 import { evaluateComparableSales } from "@/lib/comp-engine";
+import { getDeal } from "@/lib/deal";
 import { packageReadiness } from "@/lib/deal-package";
-import { getPrisma } from "@/lib/prisma";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
@@ -22,30 +22,9 @@ export default async function DealPackagePage({
 }) {
   await requireOwner();
   const { propertyId } = await params;
-  const property = await getPrisma().property.findUnique({
-    where: { id: propertyId },
-    include: {
-      researchFindings: { orderBy: { observedAt: "desc" } },
-      comparableSales: true,
-      media: true,
-      matches: {
-        include: { developer: true },
-        orderBy: { score: "desc" },
-        take: 5,
-      },
-      transactions: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: {
-          financialProjections: { orderBy: { version: "desc" }, take: 1 },
-          acquisitionFunnel: true,
-        },
-      },
-    },
-  });
-  if (!property) notFound();
-  const transaction = property.transactions[0];
-  const projection = transaction?.financialProjections[0];
+  const deal = await getDeal(propertyId);
+  if (!deal) notFound();
+  const { property, transaction, projection } = deal;
   const verified = property.researchFindings.filter(
     (item) => item.status === "VERIFIED",
   );

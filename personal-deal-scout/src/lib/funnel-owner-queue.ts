@@ -110,7 +110,7 @@ export async function readFunnelOwnerQueue() {
       urgent: item.expiresAt
         ? item.expiresAt.getTime() - Date.now() < 24 * 60 * 60_000
         : false,
-      href: "/pipeline",
+      href: `/deals/${item.funnel.propertyId}`,
     })),
     ...engagements.map((item) => ({
       id: item.id,
@@ -118,7 +118,7 @@ export async function readFunnelOwnerQueue() {
       label: `${item.channel} · ${item.transaction.property.address}`,
       createdAt: item.createdAt,
       urgent: false,
-      href: "/seller-crm",
+      href: `/seller-crm?engagementId=${item.id}`,
     })),
     ...developerDrafts.map((item) => ({
       id: item.id,
