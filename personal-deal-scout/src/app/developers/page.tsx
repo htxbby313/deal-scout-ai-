@@ -6,6 +6,7 @@ import {
 } from "@/app/actions";
 import { CsvImportForm } from "@/app/csv-import-form";
 import { WorkspaceShell } from "@/app/workspace-shell";
+import { PageHeader, PrimaryLink, SecondaryLink } from "@/app/ui-foundation";
 import { requireOwner } from "@/lib/auth";
 import {
   readDatabase,
@@ -166,54 +167,13 @@ export default async function DevelopersPage({
   return (
     <WorkspaceShell active="developers">
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
-        <nav aria-label="Contact type" className="mb-5 flex gap-2">
-          <Link
-            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-800"
-            href="/seller-crm"
-          >
-            Sellers
-          </Link>
-          <Link
-            aria-current="page"
-            className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white"
-            href="/developers"
-          >
-            Buyers & developers
-          </Link>
-        </nav>
-        <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-blue-700">Contacts</p>
-            <h1 className="mt-1 text-3xl font-bold">
-              Buyer & developer relationships
-            </h1>
-            <p className="mt-2 text-sm text-slate-600">
-              Build acquisition relationships from a contact name, business
-              email, and phone. Missing details become research or conversation
-              follow-ups instead of silently removing the company.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <a
-              className="rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold"
-              href="#import-buyers"
-            >
-              Import CSV
-            </a>
-            <a
-              className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white"
-              href="#add-buyer"
-            >
-              Add candidate
-            </a>
-          </div>
-        </header>
+        <PageHeader eyebrow="Buyers" title="Buyer relationships and matching deals" description="Keep cash buyers, landlords, flippers, builders, developers, funds, and agents in one workspace with their criteria and verified purchase history." actions={<><SecondaryLink href="#import-buyers">Import CSV</SecondaryLink><PrimaryLink href="#add-buyer">Add a buyer</PrimaryLink></>} />
         <nav className="mt-6 flex gap-2">
           <Link
             className={`rounded-full px-4 py-2 text-sm font-bold ${view === "qualified" ? "bg-slate-950 text-white" : "bg-white ring-1 ring-slate-200"}`}
             href="/developers?view=qualified"
           >
-            Relationship ready · {qualifiedCount}
+            Contact ready · {qualifiedCount}
           </Link>
           <Link
             className={`rounded-full px-4 py-2 text-sm font-bold ${view === "research" ? "bg-amber-600 text-white" : "bg-white ring-1 ring-slate-200"}`}
@@ -417,7 +377,7 @@ export default async function DevelopersPage({
                     </ul>
                   </article>
                   <article className="rounded-xl border p-4">
-                    <b>Best-fit opportunities · {matches.length} of 3</b>
+                    <b>Matching active deals · {matches.length}</b>
                     <div className="mt-3 space-y-2">
                       {matches.slice(0, 3).map(({ property, match }) => (
                         <div
@@ -433,13 +393,19 @@ export default async function DevelopersPage({
                       ))}
                       {!matches.length ? (
                         <p className="text-sm text-slate-500">
-                          No supported buy-box match yet. Research the market
-                          criteria or start a relationship conversation to
-                          confirm it.
+                          No supported match yet. Add or verify the buyer&apos;s criteria to improve deal matching.
                         </p>
                       ) : null}
                     </div>
                   </article>
+                </div>
+              </section>
+              <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                <h3 className="font-bold">Next action</h3>
+                <p className="mt-1 text-sm text-slate-600">Review matching properties or contact this buyer using the verified route already on file.</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <PrimaryLink href="/disposition">Find matching deals</PrimaryLink>
+                  <SecondaryLink href="/seller-crm">Open conversations</SecondaryLink>
                 </div>
               </section>
               <section className="rounded-2xl border bg-white p-6 shadow-sm">
@@ -488,13 +454,13 @@ export default async function DevelopersPage({
             open
           >
             <summary className="cursor-pointer font-bold">
-              Import developers into research
+              Import buyers from CSV
             </summary>
             <div className="mt-4">
               <CsvImportForm
                 action={importDevelopersCsvAction}
-                buttonLabel="Import developers"
-                helpText="Every import is queued for automatic public-source research. Qualification still requires source-backed project history plus a usable contact route."
+                buttonLabel="Import buyers"
+                helpText="Every buyer is queued for public-source research. Contact-ready status still requires a usable contact route and source-backed purchase history."
               />
             </div>
           </details>
@@ -503,7 +469,7 @@ export default async function DevelopersPage({
             id="add-buyer"
           >
             <summary className="cursor-pointer font-bold">
-              Add one research candidate
+              Add one buyer
             </summary>
             <form
               action={createDeveloperAction}
@@ -523,7 +489,7 @@ export default async function DevelopersPage({
               <Field name="propertyTypes" placeholder="Asset focus" />
               <Field name="notes" placeholder="Acquisition criteria" />
               <button className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2">
-                Add and start research
+                Add buyer and start research
               </button>
             </form>
           </details>

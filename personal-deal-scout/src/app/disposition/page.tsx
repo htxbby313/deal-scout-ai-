@@ -2,8 +2,9 @@ import Link from "next/link";
 import { generateDeveloperPricingRequestAction } from "@/app/actions";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
-import { readDatabase, scoreDeveloperMatches } from "@/lib/database";
+import { calculateMatches, readDatabase } from "@/lib/database";
 import { getPrisma } from "@/lib/prisma";
+import { PageHeader } from "@/app/ui-foundation";
 
 export const dynamic = "force-dynamic";
 const money = (value?: number) =>
@@ -42,14 +43,14 @@ export default async function DispositionPage({
       property.opportunityStatus !== "REJECTED" &&
       Boolean(property.sourceUrl || property.verificationSourceUrl),
   );
-  const scored = await Promise.all(
-    actionable.map(async (property) => ({
+  const scored = actionable.map((property) => ({
+    property,
+    matches: calculateMatches(
       property,
-      matches: (await scoreDeveloperMatches(property.id, false)).filter(
-        (match) => qualifiedIds.has(match.developerId),
-      ),
-    })),
-  );
+      db.developers,
+      db.developerProjects,
+    ).filter((match) => qualifiedIds.has(match.developerId)),
+  }));
   scored.sort((a, b) =>
     params.sort === "price"
       ? (b.property.estimatedValue ?? 0) - (a.property.estimatedValue ?? 0)
@@ -113,19 +114,8 @@ export default async function DispositionPage({
   return (
     <WorkspaceShell active="disposition">
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
-        <header className="border-b pb-6">
-          <p className="text-sm font-semibold text-blue-700">
-            Focused disposition engine
-          </p>
-          <h1 className="mt-1 text-3xl font-bold">
-            Property → developer prospect → conversation draft
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Source-backed properties can be paired with any contactable
-            developer prospect. Qualification and buy-box details can be
-            completed through the relationship conversation. Draft creation
-            never sends a message.
-          </p>
+        <PageHeader eyebrow="Buyers" title="Match active deals with the right buyers" description="Compare verified buyer criteria with active properties, then prepare a pricing conversation for your review. Creating a draft never sends a message." />
+        <div className="mt-4">
           <form className="mt-4 flex gap-2">
             <select
               className="rounded-lg border bg-white px-3 py-2 text-sm"
@@ -141,14 +131,14 @@ export default async function DispositionPage({
               Sort
             </button>
           </form>
-        </header>
+        </div>
         <section className="mt-6 grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">Sourced properties</p>
             <p className="mt-2 text-3xl font-bold">{actionable.length}</p>
           </article>
           <article className="rounded-2xl border bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Contactable developers</p>
+            <p className="text-sm text-slate-500">Contactable buyers</p>
             <p className="mt-2 text-3xl font-bold">{qualifiedIds.size}</p>
           </article>
           <article className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -268,7 +258,7 @@ export default async function DispositionPage({
                 </dl>
               </article>
               <article className="rounded-2xl border bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-bold">Developer prospects</h2>
+                <h2 className="text-xl font-bold">Matching buyers</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Scores use recorded geography, known project history, capacity
                   when available, and public contact routes. Missing buy-box
@@ -320,7 +310,7 @@ export default async function DispositionPage({
                             value={developer.id}
                           />
                           <button className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white">
-                            Create draft for manual review
+                            Prepare pricing draft
                           </button>
                         </form>
                       </section>
@@ -328,8 +318,8 @@ export default async function DispositionPage({
                   })}
                   {!selected.matches.length ? (
                     <p className="rounded-xl border border-dashed p-6 text-center text-sm text-slate-500">
-                      No contactable developer prospect exists for this property
-                      yet. Developer research will keep looking for a public
+                      No contactable buyer exists for this property yet. Buyer
+                      research will keep looking for a public
                       website, email, phone number, or contact page.
                     </p>
                   ) : null}

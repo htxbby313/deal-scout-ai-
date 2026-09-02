@@ -60,15 +60,28 @@ try {
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
   await page.screenshot({ path: "artifacts/pr3-deals-desktop.png", fullPage: true });
 
+  await page.goto(`${baseUrl}/developers`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Buyer relationships and matching deals" }).waitFor();
+  await page.getByRole("link", { name: "Add a buyer" }).waitFor();
+  assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
+  await page.screenshot({ path: "artifacts/pr4-buyers-desktop.png", fullPage: true });
+
+  await page.goto(`${baseUrl}/disposition`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Match active deals with the right buyers" }).waitFor();
+  const dispositionOverlay = page.locator("[data-nextjs-dialog]");
+  if (await dispositionOverlay.count()) {
+    throw new Error(`Disposition error overlay: ${(await dispositionOverlay.textContent())?.slice(0, 1000)}`);
+  }
+
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByRole("heading", { name: "Move the right deals toward closing" }).waitFor();
+  await page.goto(`${baseUrl}/developers`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.getByRole("heading", { name: "Buyer relationships and matching deals" }).waitFor();
   assert.equal(await primary.getByRole("link").count(), 5);
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
-  await page.screenshot({ path: "artifacts/pr3-deals-mobile.png", fullPage: true });
+  await page.screenshot({ path: "artifacts/pr4-buyers-mobile.png", fullPage: true });
   await context.close();
 } finally {
   await browser.close();
 }
 
-console.log("Product foundation, Leads, and Deals browser smoke tests passed at 1440px and 375px.");
+console.log("Product foundation, Leads, Deals, and Buyers browser smoke tests passed at 1440px and 375px.");
