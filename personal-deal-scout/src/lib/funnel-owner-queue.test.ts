@@ -10,4 +10,13 @@ describe("funnel owner queue", () => {
     ]);
     expect(items.map((item) => item.id)).toEqual(["urgent", "old", "new"]);
   });
+
+  it("ranks non-urgent property work from most likely to transact to least", () => {
+    const items = sortOwnerQueue([
+      { id: "least", kind: "FUNNEL_BLOCKER", label: "least", createdAt: new Date("2026-08-01"), urgent: false, transactionLikelihoodScore: 15, href: "/pipeline" },
+      { id: "most", kind: "SELLER_ENGAGEMENT", label: "most", createdAt: new Date("2026-08-19"), urgent: false, transactionLikelihoodScore: 88, href: "/seller-crm" },
+      { id: "middle", kind: "AGENT_TASK", label: "middle", createdAt: new Date("2026-08-10"), urgent: false, transactionLikelihoodScore: 54, href: "/agents" },
+    ]);
+    expect(items.map((item) => item.id)).toEqual(["most", "middle", "least"]);
+  });
 });

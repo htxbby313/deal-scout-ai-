@@ -14,6 +14,7 @@ export type OwnerQueueItem = {
   detail?: string;
   createdAt: Date;
   urgent: boolean;
+  transactionLikelihoodScore?: number;
   href: string;
 };
 
@@ -21,6 +22,8 @@ export function sortOwnerQueue(items: OwnerQueueItem[]) {
   return [...items].sort(
     (a, b) =>
       Number(b.urgent) - Number(a.urgent) ||
+      (b.transactionLikelihoodScore ?? 0) -
+        (a.transactionLikelihoodScore ?? 0) ||
       a.createdAt.getTime() - b.createdAt.getTime(),
   );
 }
@@ -39,26 +42,76 @@ export async function readFunnelOwnerQueue() {
       where: { status: "WAITING_FOR_APPROVAL", ownerApprovalRequired: true },
       include: {
         assignedAgent: true,
-        transaction: { include: { property: true } },
+        transaction: {
+          include: {
+            property: true,
+            acquisitionFunnel: {
+              include: {
+                priorityScores: {
+                  orderBy: { calculatedAt: "desc" },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: { updatedAt: "asc" },
       take: 100,
     }),
     db.transactionApproval.findMany({
       where: { status: "PENDING" },
-      include: { transaction: { include: { property: true } } },
+      include: {
+        transaction: {
+          include: {
+            property: true,
+            acquisitionFunnel: {
+              include: {
+                priorityScores: {
+                  orderBy: { calculatedAt: "desc" },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { requestedAt: "asc" },
       take: 100,
     }),
     db.acquisitionFunnelBlocker.findMany({
       where: { status: "OPEN" },
-      include: { funnel: { include: { property: true } } },
+      include: {
+        funnel: {
+          include: {
+            property: true,
+            priorityScores: {
+              orderBy: { calculatedAt: "desc" },
+              take: 1,
+            },
+          },
+        },
+      },
       orderBy: { openedAt: "asc" },
       take: 100,
     }),
     db.sellerEngagement.findMany({
       where: { status: "READY_FOR_OWNER_REVIEW" },
-      include: { transaction: { include: { property: true } } },
+      include: {
+        transaction: {
+          include: {
+            property: true,
+            acquisitionFunnel: {
+              include: {
+                priorityScores: {
+                  orderBy: { calculatedAt: "desc" },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { updatedAt: "asc" },
       take: 100,
     }),
@@ -90,6 +143,9 @@ export async function readFunnelOwnerQueue() {
       detail: `${item.assignedAgent.name}${item.transaction?.property.address ? ` · ${item.transaction.property.address}` : ""} · ${item.evidenceCount} evidence item${item.evidenceCount === 1 ? "" : "s"}`,
       createdAt: item.updatedAt,
       urgent: item.priority === "URGENT",
+      transactionLikelihoodScore:
+        item.transaction?.acquisitionFunnel?.priorityScores[0]
+          ?.probabilityScore ?? 0,
       href: `/agents#task-${item.id}`,
     })),
     ...approvals.map((item) => ({
@@ -100,6 +156,9 @@ export async function readFunnelOwnerQueue() {
       urgent: item.expiresAt
         ? item.expiresAt.getTime() - Date.now() < 24 * 60 * 60_000
         : false,
+      transactionLikelihoodScore:
+        item.transaction.acquisitionFunnel?.priorityScores[0]
+          ?.probabilityScore ?? 0,
       href: `/transactions?id=${item.transactionId}`,
     })),
     ...blockers.map((item) => ({
@@ -110,6 +169,8 @@ export async function readFunnelOwnerQueue() {
       urgent: item.expiresAt
         ? item.expiresAt.getTime() - Date.now() < 24 * 60 * 60_000
         : false,
+      transactionLikelihoodScore:
+        item.funnel.priorityScores[0]?.probabilityScore ?? 0,
       href: "/pipeline",
     })),
     ...engagements.map((item) => ({
@@ -118,6 +179,9 @@ export async function readFunnelOwnerQueue() {
       label: `${item.channel} · ${item.transaction.property.address}`,
       createdAt: item.createdAt,
       urgent: false,
+      transactionLikelihoodScore:
+        item.transaction.acquisitionFunnel?.priorityScores[0]
+          ?.probabilityScore ?? 0,
       href: "/seller-crm",
     })),
     ...developerDrafts.map((item) => ({
