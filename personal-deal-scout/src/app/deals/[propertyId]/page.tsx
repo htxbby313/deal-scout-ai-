@@ -43,7 +43,7 @@ export default async function DealDeskPage({
     where: { id: propertyId },
     include: {
       researchFindings: { orderBy: { observedAt: "desc" } },
-      media: { orderBy: { position: "asc" }, take: 8 },
+      media: { orderBy: { position: "asc" }, take: 5 },
       comparableSales: true,
       discoveryReferences: { orderBy: { submittedAt: "desc" } },
       matches: {

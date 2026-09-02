@@ -459,7 +459,7 @@ export async function readDatabase(): Promise<Database> {
         orderBy: { createdAt: "desc" },
         include: {
           researchFindings: { orderBy: { topic: "asc" } },
-          media: { orderBy: { position: "asc" } },
+          media: { orderBy: { position: "asc" }, take: 5 },
           researchRuns: { orderBy: { startedAt: "desc" }, take: 1 },
         },
       }),

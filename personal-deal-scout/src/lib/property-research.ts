@@ -28,6 +28,7 @@ import {
 } from "@/lib/firecrawl-property-research";
 
 export const PROPERTY_RESEARCH_VERSION = 6;
+const MAX_PROPERTY_IMAGES = 5;
 
 const TOPICS = [
   ["LISTING", "Current listing or opportunity source"],
@@ -192,7 +193,7 @@ function listingImageUrls(html: string, baseUrl: string, address: string) {
     .toLowerCase()
     .split(/\s+/)
     .filter((term) => term.length > 2 && !/^(street|road|avenue|drive|lane|court|boulevard|highway)$/.test(term) && !/^\d+$/.test(term));
-  const MAX_IMAGES = 12;
+  const MAX_IMAGES = MAX_PROPERTY_IMAGES;
   let structuredNodes = 0;
   let structuredScripts = 0;
   const add = (raw?: string) => {
@@ -1077,7 +1078,8 @@ export async function researchProperty(
     await Promise.all(findingUpserts);
 
     // Batch upsert all media items
-    const mediaUpserts = media.map((item, position) =>
+    const retainedMedia = media.slice(0, MAX_PROPERTY_IMAGES);
+    const mediaUpserts = retainedMedia.map((item, position) =>
       tx.propertyMedia.upsert({
         where: { propertyId_url: { propertyId, url: item.url } },
         update: {
@@ -1099,6 +1101,19 @@ export async function researchProperty(
       }),
     );
     await Promise.all(mediaUpserts);
+
+    const storedMedia = await tx.propertyMedia.findMany({
+      where: { propertyId },
+      orderBy: [{ position: "asc" }, { discoveredAt: "asc" }],
+      select: { id: true },
+    });
+    const excessMediaIds = storedMedia
+      .slice(MAX_PROPERTY_IMAGES)
+      .map((item) => item.id);
+    if (excessMediaIds.length)
+      await tx.propertyMedia.deleteMany({
+        where: { id: { in: excessMediaIds } },
+      });
 
     const verifiedCount = [...findings.values()].filter(
       (item) => item.status === "VERIFIED",
@@ -1146,7 +1161,7 @@ export async function researchProperty(
     manualNeeded: [...findings.values()].filter((item) =>
       ["CONFLICT", "NEEDS_MANUAL_VERIFICATION"].includes(item.status),
     ).length,
-    mediaFound: media.length,
+    mediaFound: Math.min(media.length, MAX_PROPERTY_IMAGES),
   };
 }
 

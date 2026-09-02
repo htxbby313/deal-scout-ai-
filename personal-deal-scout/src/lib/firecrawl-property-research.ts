@@ -143,7 +143,7 @@ export async function scrapePropertySourceWithFirecrawl(
     sourceUrl,
     images: stableUnique(response.data.images || [])
       .filter(isSafePublicEvidenceUrl)
-      .slice(0, 12),
+      .slice(0, 5),
     links: stableUnique(response.data.links || [])
       .filter(isSafePublicEvidenceUrl)
       .slice(0, 100),

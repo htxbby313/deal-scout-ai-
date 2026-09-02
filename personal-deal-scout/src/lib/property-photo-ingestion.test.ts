@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ media: vi.fn(), finding: vi.fn(), html: "" }));
+const mocks = vi.hoisted(() => ({ media: vi.fn(), mediaFindMany: vi.fn().mockResolvedValue([]), mediaDeleteMany: vi.fn(), finding: vi.fn(), html: "" }));
 vi.mock("@/lib/prisma", () => ({ getPrisma: () => {
   const tx = {
-    propertyMedia: { upsert: mocks.media },
+    propertyMedia: { upsert: mocks.media, findMany: mocks.mediaFindMany, deleteMany: mocks.mediaDeleteMany },
     propertyResearchFinding: { upsert: mocks.finding },
     propertyResearchRun: { update: vi.fn() },
     auditLog: { create: vi.fn() },
