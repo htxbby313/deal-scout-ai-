@@ -7,6 +7,7 @@ import {
 } from "@/app/deal-desk-actions";
 import { DealAnalysisCalculator } from "@/app/deals/[propertyId]/deal-analysis-calculator";
 import { PropertyPhoto } from "@/app/properties/property-photo";
+import { DealLocationMapShell } from "@/app/deals/[propertyId]/deal-location-map-shell";
 import { requireOwner } from "@/lib/auth";
 import { latestAcquisitionGates } from "@/lib/acquisition-gate-versioning";
 import { evaluateComparableSales } from "@/lib/comp-engine";
@@ -42,7 +43,7 @@ export default async function DealDeskPage({
     where: { id: propertyId },
     include: {
       researchFindings: { orderBy: { observedAt: "desc" } },
-      media: { orderBy: { position: "asc" }, take: 5 },
+      media: { orderBy: { position: "asc" }, take: 8 },
       comparableSales: true,
       discoveryReferences: { orderBy: { submittedAt: "desc" } },
       matches: {
@@ -116,13 +117,9 @@ export default async function DealDeskPage({
         </Link>
         <section aria-label="Property photos" className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
           {property.media.length ? (
-            <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2">
-              <div className="sm:col-span-2 lg:row-span-2">
-                <PropertyPhoto className="h-72 lg:h-[420px]" eager photos={[property.media[0]]} />
-              </div>
-              {property.media.slice(1, 5).map((item) => (
-                <PropertyPhoto className="h-40 lg:h-[208px]" key={item.id} photos={[item]} />
-              ))}
+            <div className="relative">
+              <PropertyPhoto className="h-72 lg:h-[430px]" eager photos={[property.media[0]]} />
+              <span className="absolute bottom-4 right-4 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold shadow-sm">1 of {property.media.length} sourced photo{property.media.length === 1 ? "" : "s"}</span>
             </div>
           ) : (
             <PropertyPhoto className="h-64 lg:h-80" photos={[]} />
@@ -154,29 +151,9 @@ export default async function DealDeskPage({
                 "DISCOVERED"}
             </span>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <Summary
-              label="Known price"
-              value={price(property.estimatedValue)}
-            />
-            <Summary
-              label="Evidence confidence"
-              value={
-                confidence == null ? "Insufficient evidence" : `${confidence}%`
-              }
-            />
-            <Summary
-              label="Projected base spread"
-              value={dollars(projection?.feeBaseCents)}
-            />
-            <Summary
-              label="Seller-safe maximum"
-              value={dollars(projection?.sellerSafeMaximumCents)}
-            />
-            <Summary
-              label="Qualified matches"
-              value={String(property.matches.length)}
-            />
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <section className="rounded-2xl border bg-slate-50 p-5" aria-labelledby="seller-property-summary"><h2 className="text-lg font-bold" id="seller-property-summary">Price and seller information</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><Summary label="Known price" value={price(property.estimatedValue)} /><Summary label="Seller" value={property.contactName || property.ownerName || "Unknown"} /><Summary label="Seller phone" value={property.contactPhone || "Missing"} /><Summary label="Evidence confidence" value={confidence == null ? "Insufficient evidence" : `${confidence}%`} /></div></section>
+            <section className="rounded-2xl border bg-blue-50 p-5" aria-labelledby="buyer-profit-summary"><h2 className="text-lg font-bold" id="buyer-profit-summary">Buyer and projected profit</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><Summary label="Projected base spread" value={dollars(projection?.feeBaseCents)} /><Summary label="Buyer price range" value={projection ? `${dollars(projection.buyerPriceLowCents)} – ${dollars(projection.buyerPriceHighCents)}` : "Insufficient verified data"} /><Summary label="Seller-safe maximum" value={dollars(projection?.sellerSafeMaximumCents)} /><Summary label="Qualified matches" value={String(property.matches.length)} /></div></section>
           </div>
           <div className="mt-5 rounded-xl bg-blue-50 p-4">
             <p className="text-xs font-bold uppercase text-blue-700">
@@ -191,6 +168,10 @@ export default async function DealDeskPage({
             Generate Deal Package
           </Link>
         </header>
+        <section className="mt-5 grid gap-5 lg:grid-cols-2" aria-label="Deal location and additional photos">
+          <article className="map-card rounded-2xl border bg-white shadow-sm"><div className="border-b p-5"><h2 className="text-xl font-bold">Property location</h2><p className="mt-1 text-sm text-slate-500">The map stays contained inside this deal card.</p></div>{property.latitude != null && property.longitude != null ? <div className="map-viewport h-[430px]"><DealLocationMapShell property={{ id: property.id, address: property.address, city: property.city, state: property.state, zipCode: property.zipCode, latitude: property.latitude, longitude: property.longitude, estimatedValue: property.estimatedValue ?? undefined }} /></div> : <div className="grid h-[280px] place-items-center bg-slate-50 p-6 text-center text-sm text-slate-500">No verified coordinates are available yet.</div>}</article>
+          <article className="overflow-hidden rounded-2xl border bg-white shadow-sm"><div className="border-b p-5"><h2 className="text-xl font-bold">Additional property photos</h2><p className="mt-1 text-sm text-slate-500">Source imagery for internal deal review.</p></div>{property.media.length > 1 ? <div className="grid grid-cols-2 gap-1 p-1 sm:grid-cols-3">{property.media.slice(1).map((item) => <PropertyPhoto className="h-36 lg:h-[210px]" key={item.id} photos={[item]} />)}</div> : <div className="grid h-[280px] place-items-center bg-slate-50 p-6 text-center text-sm text-slate-500">No additional sourced photos are available.</div>}</article>
+        </section>
         <nav
           aria-label="Deal Desk sections"
           className="mt-5 flex gap-2 overflow-x-auto pb-2"

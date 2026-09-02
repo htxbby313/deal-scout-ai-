@@ -74,7 +74,7 @@ export function WorkspaceShell({ active = "properties", children }: { active?: W
         <details className="mx-3 mb-[max(.75rem,env(safe-area-inset-bottom))] shrink-0 rounded-xl border border-slate-200 bg-white">
           <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-slate-700 marker:hidden"><span className="flex items-center justify-between gap-3"><span>More</span><span aria-hidden="true" className="text-slate-400">⌄</span></span></summary>
           <div className="grid grid-cols-2 border-t border-slate-100 p-2 lg:block">
-            {[["/demo", "Safe demo"], ["/settings", "Settings"], ["/agents", "Automations"], ["/research", "Data & sources"], ["/contracts", "Contracts"], ["/operations", "Diagnostics"]].map(([href, label]) => <Link className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" href={href} key={href}>{label}</Link>)}
+            {[["/settings", "Settings"], ["/agents", "Automations"], ["/research", "Data & sources"], ["/contracts", "Contracts"], ["/operations", "Diagnostics"]].map(([href, label]) => <Link className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" href={href} key={href}>{label}</Link>)}
           </div>
         </details>
       </aside>

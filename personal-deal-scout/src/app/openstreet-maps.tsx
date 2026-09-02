@@ -19,12 +19,12 @@ function FitPoints({ points }: { points: Array<[number, number]> }) {
 
 const money = (value?: number) => value ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value) : "Value unknown";
 
-export function OpenStreetPropertyMap({ properties, onSelect, baseColor, rankCategory }: { properties: MapProperty[]; onSelect: (id: string) => void; baseColor: string; rankCategory: string }) {
+export function OpenStreetPropertyMap({ properties, onSelect, baseColor, rankCategory }: { properties: MapProperty[]; onSelect?: (id: string) => void; baseColor: string; rankCategory: string }) {
   const points = properties.map((property) => [property.latitude!, property.longitude!] as [number, number]);
   return <MapContainer bounds={US_BOUNDS} className="h-[430px] w-full" maxBounds={US_BOUNDS} minZoom={3} scrollWheelZoom>
     <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
     <FitPoints points={points} />
-    {properties.map((property, index) => <CircleMarker center={[property.latitude!, property.longitude!]} fillColor={rankColor(baseColor, index, properties.length)} fillOpacity={1} key={property.id} pathOptions={{ color: "#0f172a", weight: 2 }} radius={9}><Popup><b>#{index + 1} in {rankCategory}</b><br />{property.address}<br />{property.city}, {property.state} {property.zipCode}<br />{money(property.estimatedValue)}<br /><button className="mt-2 font-bold text-blue-700" onClick={() => onSelect(property.id)}>Open property</button></Popup></CircleMarker>)}
+    {properties.map((property, index) => <CircleMarker center={[property.latitude!, property.longitude!]} fillColor={rankColor(baseColor, index, properties.length)} fillOpacity={1} key={property.id} pathOptions={{ color: "#0f172a", weight: 2 }} radius={9}><Popup><b>#{index + 1} in {rankCategory}</b><br />{property.address}<br />{property.city}, {property.state} {property.zipCode}<br />{money(property.estimatedValue)}{onSelect ? <><br /><button className="mt-2 font-bold text-blue-700" onClick={() => onSelect(property.id)}>Open property</button></> : null}</Popup></CircleMarker>)}
   </MapContainer>;
 }
 

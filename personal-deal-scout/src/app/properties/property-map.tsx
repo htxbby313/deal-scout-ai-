@@ -44,7 +44,7 @@ export default function PropertyMap({
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+    <div className="map-card rounded-2xl border bg-white shadow-sm">
       <div className="border-b p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -59,7 +59,7 @@ export default function PropertyMap({
           </span>
         </div>
       </div>
-      <div aria-label="Interactive map of sourced properties">
+      <div aria-label="Interactive map of sourced properties" className="map-viewport h-[430px]">
         <OpenStreetPropertyMap
           baseColor={baseColor}
           onSelect={onSelect}

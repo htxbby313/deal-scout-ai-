@@ -15,7 +15,7 @@ import {
   organizeOperationalMetrics,
   parseOperationalReportFilters,
 } from "@/lib/operational-report-presentation";
-import { EmptyState, PageHeader, SecondaryLink } from "@/app/ui-foundation";
+import { EmptyState, PageHeader } from "@/app/ui-foundation";
 
 export const dynamic = "force-dynamic";
 const field = "rounded-lg border px-3 py-2 text-sm";
@@ -144,7 +144,7 @@ export default async function ExecutivePage({
   return (
     <WorkspaceShell active="executive">
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6">
-        <PageHeader eyebrow="Reports" title="Know what is working and where deals are getting stuck" description="See potential profit, closed results, conversion, source performance, and fallout—using only recorded Deal Scout activity." actions={<><SecondaryLink href="/demo">Open safe demo</SecondaryLink><Link className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white" href={`/api/exports/executive${query ? `?${query}` : ""}`}>Download report</Link></>} />
+        <PageHeader eyebrow="Reports" title="Know what is working and where deals are getting stuck" description="See potential profit, closed results, conversion, source performance, and fallout—using only recorded Deal Scout activity." actions={<Link className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white" href={`/api/exports/executive${query ? `?${query}` : ""}`}>Download report</Link>} />
         <div className="mt-4">
             <div
               aria-label="Active report scope"

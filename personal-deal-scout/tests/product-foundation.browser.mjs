@@ -52,6 +52,17 @@ try {
   await page.getByRole("button", { name: /^All leads/ }).waitFor();
   await page.getByRole("button", { name: /^Contact ready/ }).waitFor();
   await page.getByRole("button", { name: /^Needs action/ }).waitFor();
+  await page.getByRole("button", { name: "Show map" }).click();
+  const mapCard = page.locator(".map-card").first();
+  const mapViewport = mapCard.locator(".map-viewport");
+  await mapViewport.waitFor();
+  const [cardBox, viewportBox] = await Promise.all([mapCard.boundingBox(), mapViewport.boundingBox()]);
+  assert.ok(cardBox && viewportBox);
+  assert.ok(viewportBox.x >= cardBox.x && viewportBox.y >= cardBox.y);
+  assert.ok(viewportBox.x + viewportBox.width <= cardBox.x + cardBox.width + 1);
+  assert.ok(viewportBox.y + viewportBox.height <= cardBox.y + cardBox.height + 1);
+  await page.screenshot({ path: "artifacts/pr7-contained-map-desktop.png", fullPage: true });
+  await page.getByRole("button", { name: "Hide map" }).click();
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
   await page.screenshot({ path: "artifacts/pr2-leads-desktop.png", fullPage: true });
 
@@ -70,8 +81,13 @@ try {
   await firstDeal.click();
   await page.getByText("Deal Desk", { exact: true }).waitFor();
   await page.getByRole("region", { name: "Property photos" }).waitFor();
+  await page.getByRole("region", { name: "Price and seller information" }).waitFor();
+  await page.getByRole("region", { name: "Buyer and projected profit" }).waitFor();
+  await page.getByRole("region", { name: "Deal location and additional photos" }).waitFor();
+  const dealUrl = page.url();
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
   await page.screenshot({ path: "artifacts/pr5-property-detail-desktop.png", fullPage: true });
+  await page.screenshot({ path: "artifacts/pr8-deal-layout-desktop.png", fullPage: true });
 
   await page.goto(`${baseUrl}/developers`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Buyer relationships and matching deals" }).waitFor();
@@ -92,19 +108,9 @@ try {
   await page.getByRole("heading", { name: "Best markets and lead sources" }).waitFor();
   assert.ok((await page.getByRole("region", { name: "At a glance" }).locator("[data-metric-key]").count()) <= 6);
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
+  const removedDemo = await page.request.get(`${baseUrl}/demo`);
+  assert.equal(removedDemo.status(), 404);
   await page.screenshot({ path: "artifacts/pr6-reports-desktop.png", fullPage: true });
-
-  await page.goto(`${baseUrl}/demo`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByText("Fictional, read-only, and isolated from your records").waitFor();
-  await page.getByRole("link", { name: "Exit demo" }).waitFor();
-  await page.getByRole("heading", { name: "See the complete Deal Scout workflow" }).waitFor();
-  await page.getByRole("button", { name: "Add fictional lead" }).click();
-  await page.getByRole("status").getByText("2147 Oakview Drive").waitFor();
-  await page.getByRole("button", { name: "Record demo follow-up" }).click();
-  await page.getByRole("button", { name: "Move to Contacting" }).click();
-  await page.getByText("Demo deal moved to Contacting.").waitFor();
-  assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
-  await page.screenshot({ path: "artifacts/pr6-demo-desktop.png", fullPage: true });
 
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.goto(`${baseUrl}/executive`, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -112,11 +118,26 @@ try {
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
 
   await page.setViewportSize({ width: 768, height: 900 });
-  await page.goto(`${baseUrl}/demo`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByRole("link", { name: "Exit demo" }).waitFor();
+  await page.goto(`${baseUrl}/executive`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.getByRole("heading", { name: "Lead-to-close progress" }).waitFor();
   assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
 
   await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`${baseUrl}/properties`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.getByRole("button", { name: "Show map" }).click();
+  await page.locator(".map-viewport").waitFor();
+  const mobileCardBox = await page.locator(".map-card").first().boundingBox();
+  const mobileMapBox = await page.locator(".map-viewport").first().boundingBox();
+  assert.ok(mobileCardBox && mobileMapBox);
+  assert.ok(mobileMapBox.x + mobileMapBox.width <= mobileCardBox.x + mobileCardBox.width + 1);
+  assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
+  await page.screenshot({ path: "artifacts/pr7-contained-map-mobile.png", fullPage: true });
+  await page.goto(dealUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.getByRole("region", { name: "Price and seller information" }).waitFor();
+  await page.getByRole("region", { name: "Buyer and projected profit" }).waitFor();
+  await page.getByRole("region", { name: "Deal location and additional photos" }).waitFor();
+  assert.equal(await page.locator("[data-nextjs-dialog]").count(), 0);
+  await page.screenshot({ path: "artifacts/pr8-deal-layout-mobile.png", fullPage: true });
   await page.goto(`${baseUrl}/developers`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.getByRole("heading", { name: "Buyer relationships and matching deals" }).waitFor();
   assert.equal(await primary.getByRole("link").count(), 5);
@@ -125,12 +146,9 @@ try {
   await page.goto(`${baseUrl}/executive`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.getByRole("heading", { name: "Know what is working and where deals are getting stuck" }).waitFor();
   await page.screenshot({ path: "artifacts/pr6-reports-mobile.png", fullPage: true });
-  await page.goto(`${baseUrl}/demo`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByRole("link", { name: "Exit demo" }).waitFor();
-  await page.screenshot({ path: "artifacts/pr6-demo-mobile.png", fullPage: true });
   await context.close();
 } finally {
   await browser.close();
 }
 
-console.log("Primary workflows, Reports, and isolated demo browser smoke tests passed at 375px, 768px, 1024px, and 1440px.");
+console.log("Primary workflows, contained maps, deal layout, and Reports browser smoke tests passed at 375px, 768px, 1024px, and 1440px.");

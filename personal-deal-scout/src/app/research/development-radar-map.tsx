@@ -117,9 +117,9 @@ export default function DevelopmentRadarMap({ signals, listings, rankCategory }:
     return () => { disposed = true; listeners.forEach((listener) => listener.remove()); markers.forEach((marker) => marker.setMap(null)); };
   }, [apiKey, baseColor, mappedListings, rankCategory, signalByFips, signals, stateRanks]);
 
-  return <section className="mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm">
+  return <section className="map-card mt-6 rounded-2xl border bg-white shadow-sm">
     <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><h2 className="text-xl font-bold">United States development and listing map</h2><p className="mt-1 text-sm text-slate-500">Official Census county and state boundaries correspond to the ranked radar. Exact listing markers show saved address, county, and neighborhood data.</p></div></div>
-    {apiKey ? <div aria-label="Google map of development signals and listings" className="h-[560px] w-full" ref={mapNode} /> : <div aria-label="OpenStreetMap of development signals and listings"><OpenStreetDevelopmentMap baseColor={baseColor} boundaries={fallbackBoundaries} listings={mappedListings} rankCategory={rankCategory} signals={signals} /></div>}
+    {apiKey ? <div aria-label="Google map of development signals and listings" className="map-viewport h-[560px]" ref={mapNode} /> : <div aria-label="OpenStreetMap of development signals and listings" className="map-viewport h-[560px]"><OpenStreetDevelopmentMap baseColor={baseColor} boundaries={fallbackBoundaries} listings={mappedListings} rankCategory={rankCategory} signals={signals} /></div>}
     <div className="flex flex-wrap gap-3 border-t p-4 text-xs"><span className="font-bold">{signals.length} ranked counties</span><span>·</span><span className="font-bold">{stateRanks.size} highlighted states</span><span>·</span><span className="font-bold">{mappedListings.length} exact listings appear as you zoom in</span>{mapError ? <span className="font-semibold text-red-700">· {mapError}</span> : null}</div>
   </section>;
 }

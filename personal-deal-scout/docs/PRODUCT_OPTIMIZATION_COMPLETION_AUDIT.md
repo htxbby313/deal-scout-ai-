@@ -13,25 +13,9 @@ Branch: `codex/product-foundation-navigation`
 - Buyers combines criteria, contact readiness, purchase evidence, matching properties, and disposition actions.
 - Reports answers potential profit, closed profit, lead progression, source/market performance, and fallout questions with six headline metrics or fewer.
 - Advanced reporting contains definitions, sample sizes, detailed segmentation, forecasting diagnostics, and model-review controls.
-- Safe Demo is owner-authenticated, visibly fictional, read-only with respect to the server, and isolated from production records. Its interactive changes live only in browser state.
+- Research, scoring, matching, and operational workflow details remain in backend and advanced surfaces rather than appearing as a user-facing walkthrough.
 - Property images preserve stable dimensions, fall back cleanly, retain source attribution, and do not bypass external-sharing rights controls.
 - Focus styles, skip navigation, reduced-motion handling, explicit labels, status text, and responsive layouts are present.
-
-## Acceptance walkthrough coverage
-
-The isolated demo exercises:
-
-1. Understand Today and its next action.
-2. Add a fictional property using its address.
-3. Find the newly added fictional lead.
-4. Understand why the lead is worth reviewing.
-5. Review seller context and record a fictional follow-up.
-6. Review ARV, repairs, MAO, and assignment fee.
-7. Move the fictional deal to Contacting.
-8. Review matching fictional buyers.
-9. Review projected and closed profit separately.
-
-No demo action reads or mutates production business records.
 
 ## Verification evidence
 
@@ -39,7 +23,7 @@ No demo action reads or mutates production business records.
 - Lint: passed with zero reported errors.
 - Production build: passed, including TypeScript and route generation.
 - Production browser smoke: passed at 375px, 768px, 1024px, and 1440px.
-- Browser coverage includes authentication, five-area navigation, Today, lead intake controls, Deals board/list and search, property detail, Buyers, disposition, Reports, and the interactive isolated demo.
+- Browser coverage includes authentication, five-area navigation, Today, lead intake controls, Deals board/list and search, contained maps, property detail, Buyers, disposition, and Reports.
 - Material screenshots are stored under `artifacts/` for desktop and mobile review.
 
 ## Delivery boundary
