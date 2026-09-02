@@ -15,6 +15,7 @@ import {
   organizeOperationalMetrics,
   parseOperationalReportFilters,
 } from "@/lib/operational-report-presentation";
+import { EmptyState, PageHeader, SecondaryLink } from "@/app/ui-foundation";
 
 export const dynamic = "force-dynamic";
 const field = "rounded-lg border px-3 py-2 text-sm";
@@ -98,13 +99,11 @@ export default async function ExecutivePage({
   const sections = organizeOperationalMetrics(report.metrics);
   const headlineKeys = new Set([
     "projected_pipeline",
-    "weighted_pipeline",
-    "contracted_pipeline",
     "realized_profit",
     "properties_discovered",
-    "outreach_ready",
     "deals_closed",
-    "manual_verification_backlog",
+    "seller_contract_conversion_rate",
+    "deals_lost",
   ]);
   const headlineMetrics = report.metrics.filter((metric) =>
     headlineKeys.has(metric.key),
@@ -128,22 +127,28 @@ export default async function ExecutivePage({
       value ? [[key, value]] : [],
     ),
   ).toString();
+  const stageKeys = [
+    ["properties_discovered", "Leads found"],
+    ["properties_researched", "Researched"],
+    ["sellers_reached", "Sellers reached"],
+    ["offers_prepared", "Offers prepared"],
+    ["contracts_signed", "Under contract"],
+    ["deals_closed", "Closed"],
+  ] as const;
+  const stageMetrics = stageKeys.map(([key, label]) => ({
+    label,
+    metric: report.metrics.find((metric) => metric.key === key),
+  }));
+  const stageMaximum = Math.max(1, ...stageMetrics.map(({ metric }) => Number(metric?.value ?? 0)));
+  const businessSegments = Object.entries(report.profitSegments).filter(([dimension]) => ["market", "leadSource"].includes(dimension));
   return (
     <WorkspaceShell active="executive">
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6">
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
-          <div>
-            <p className="text-sm font-semibold text-blue-700">
-              Business results
-            </p>
-            <h1 className="mt-1 text-3xl font-bold">Profit & reports</h1>
-            <p className="mt-2 text-sm text-slate-600">
-              Start with money and deal progress. Open the detailed sections
-              only when you need them.
-            </p>
+        <PageHeader eyebrow="Reports" title="Know what is working and where deals are getting stuck" description="See potential profit, closed results, conversion, source performance, and fallout—using only recorded Deal Scout activity." actions={<><SecondaryLink href="/demo">Open safe demo</SecondaryLink><Link className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white" href={`/api/exports/executive${query ? `?${query}` : ""}`}>Download report</Link></>} />
+        <div className="mt-4">
             <div
               aria-label="Active report scope"
-              className="mt-3 flex flex-wrap gap-2"
+              className="flex flex-wrap gap-2"
             >
               {scope.map((part) => (
                 <span
@@ -154,14 +159,7 @@ export default async function ExecutivePage({
                 </span>
               ))}
             </div>
-          </div>
-          <Link
-            className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white"
-            href={`/api/exports/executive${query ? `?${query}` : ""}`}
-          >
-            Download report
-          </Link>
-        </header>
+        </div>
         <details
           className="mt-6 rounded-2xl border bg-white p-4"
           open={filtersActive}
@@ -205,8 +203,8 @@ export default async function ExecutivePage({
             ) : null}
           </form>
         </details>
-        <section className="mt-6">
-          <h2 className="text-xl font-bold">At a glance</h2>
+        <section aria-labelledby="report-headlines" className="mt-6">
+          <h2 className="text-xl font-bold" id="report-headlines">At a glance</h2>
           <p className="mt-1 text-sm text-slate-500">
             Money, active opportunity progress, and the current research
             backlog.
@@ -222,14 +220,32 @@ export default async function ExecutivePage({
             ))}
           </div>
         </section>
+        <section className="mt-6 grid gap-5 xl:grid-cols-[1fr_1.15fr]">
+          <article className="rounded-2xl border bg-white p-5">
+            <h2 className="text-xl font-bold">Lead-to-close progress</h2>
+            <p className="mt-1 text-sm text-slate-500">Recorded counts at the major acquisition milestones.</p>
+            <div className="mt-5 space-y-4">
+              {stageMetrics.map(({ label, metric }) => (
+                <div key={label}>
+                  <div className="flex justify-between gap-3 text-sm"><span>{label}</span><b>{formatOperationalValue(metric?.value ?? 0, metric?.unit ?? "count")}</b></div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-700" style={{ width: `${Math.max(2, (Number(metric?.value ?? 0) / stageMaximum) * 100)}%` }} /></div>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="rounded-2xl border bg-white p-5">
+            <h2 className="text-xl font-bold">Best markets and lead sources</h2>
+            <p className="mt-1 text-sm text-slate-500">Projected and closed profit remain separate. Unspecified means the source was not recorded.</p>
+            {businessSegments.some(([, rows]) => rows.length) ? <div className="mt-4 grid gap-4 sm:grid-cols-2">{businessSegments.map(([dimension, rows]) => <div className="overflow-hidden rounded-xl border" key={dimension}><h3 className="bg-slate-50 px-3 py-2 text-sm font-bold">{dimension === "leadSource" ? "Lead sources" : "Markets"}</h3><div className="divide-y">{rows.slice(0, 5).map((row) => <div className="grid grid-cols-[1fr_auto] gap-3 px-3 py-3 text-sm" key={row.key}><div><b>{row.key === "UNSPECIFIED" ? "Not recorded" : row.key}</b><p className="text-xs text-slate-500">{row.dealCount} deal{row.dealCount === 1 ? "" : "s"}</p></div><div className="text-right"><b>{formatOperationalValue(row.projectedCents, "cents")}</b><p className="text-xs text-emerald-700">{formatOperationalValue(row.realizedCents, "cents")} closed</p></div></div>)}</div></div>)}</div> : <div className="mt-4"><EmptyState title="No source performance yet" description="Lead-source and market results will appear after deals have recorded projections or closed profit." /></div>}
+          </article>
+        </section>
         <details className="mt-6 rounded-2xl border bg-white p-5">
           <summary className="cursor-pointer text-lg font-bold">
-            All operational metrics ·{" "}
+            Advanced reporting ·{" "}
             {report.metrics.length - headlineMetrics.length}
           </summary>
           <p className="mt-1 text-sm text-slate-500">
-            Open definitions, ratios, costs, conversion, timing, and
-            diagnostics.
+            Metric definitions, sample sizes, costs, timing, forecasting, and diagnostics.
           </p>
           {detailSections.map((section) => (
             <section className="mt-6" key={section.title}>
@@ -268,7 +284,7 @@ export default async function ExecutivePage({
         </section>
         <details className="mt-6 rounded-2xl border bg-white p-5">
           <summary className="cursor-pointer font-bold">
-            Profit by market, buyer, and source
+            Full profit segmentation
           </summary>
           <p className="mt-2 text-sm text-slate-500">
             Projected and closed profit remain separate.

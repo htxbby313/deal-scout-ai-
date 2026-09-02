@@ -30,8 +30,8 @@ export default function RootLayout({
       <head><script dangerouslySetInnerHTML={{ __html: `try{const c=localStorage.getItem("deal-scout-theme-color-v1")||localStorage.getItem("deal-scout-map-rank-color");if(/^#[0-9a-f]{6}$/i.test(c||"")){localStorage.setItem("deal-scout-theme-color-v1",c);document.documentElement.dataset.themeColor=c;document.documentElement.style.setProperty("--accent",c)}}catch{}` }} /></head>
       <body className="min-h-full flex flex-col">
         {children}
-        <SpeedInsights />
-        <Analytics />
+        {process.env.VERCEL ? <SpeedInsights /> : null}
+        {process.env.VERCEL ? <Analytics /> : null}
       </body>
     </html>
   );
