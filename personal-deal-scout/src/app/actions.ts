@@ -259,8 +259,8 @@ export async function runResearchBacklogAction(
   try {
     const queued = await enqueueResearchBacklog();
     const [properties, developers] = await Promise.all([
-      runAutomaticPropertyResearchBatch(2),
-      runAutomaticDeveloperResearchBatch(5),
+      runAutomaticPropertyResearchBatch(25),
+      runAutomaticDeveloperResearchBatch(25),
     ]);
     revalidatePath("/operations");
     revalidatePath("/properties");
