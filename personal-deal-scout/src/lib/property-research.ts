@@ -20,6 +20,11 @@ import {
 import { reserveEnformionLookup } from "@/lib/enformion-budget";
 import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
 import { researchPriorityScore } from "@/lib/domain";
+import {
+  firecrawlConfigured,
+  firecrawlMaxRequestsPerRun,
+  scrapePropertySourceWithFirecrawl,
+} from "@/lib/firecrawl-property-research";
 
 export const PROPERTY_RESEARCH_VERSION = 5;
 
@@ -61,6 +66,7 @@ type DiscoveredMedia = {
   sourceUrl: string;
   sourceName: string;
   altText: string;
+  evidenceStatus: "VERIFIED" | "NEEDS_MANUAL_VERIFICATION";
 };
 
 export function hasSufficientResearchEvidence(
@@ -626,9 +632,11 @@ export async function researchProperty(
     phone: string;
     sourceUrl: string;
     sourceName: string;
+    evidenceStatus: "VERIFIED" | "NEEDS_MANUAL_VERIFICATION";
   }> = [];
   let geocode: Awaited<ReturnType<typeof censusGeocode>> = null;
   let sourcesChecked = 0;
+  let firecrawlRequests = 0;
 
   if (
     property.sourceName === HUD_REO_SOURCE &&
@@ -699,10 +707,16 @@ export async function researchProperty(
             sourceUrl: finalUrl,
             sourceName,
             altText: `${property.address} verified-source image ${position + 1}`,
+            evidenceStatus: "VERIFIED",
           });
         }
         for (const phone of phoneNumbers(html))
-          discoveredPhones.push({ phone, sourceUrl: finalUrl, sourceName });
+          discoveredPhones.push({
+            phone,
+            sourceUrl: finalUrl,
+            sourceName,
+            evidenceStatus: "VERIFIED",
+          });
       } else
         errors.push(
           `${sourceUrl}: source responded but did not match the property address.`,
@@ -711,6 +725,65 @@ export async function researchProperty(
       errors.push(
         `${sourceUrl}: ${error instanceof Error ? error.message : "source failed"}`,
       );
+      if (
+        firecrawlConfigured() &&
+        firecrawlRequests < firecrawlMaxRequestsPerRun()
+      ) {
+        firecrawlRequests += 1;
+        sourcesChecked += 1;
+        try {
+          const scraped = await runWithResearchDeadline(
+            Math.min(listingDeadline, Date.now() + 15_000),
+            () => scrapePropertySourceWithFirecrawl(sourceUrl),
+          );
+          if (!pageMatchesProperty(scraped.markdown, property)) {
+            errors.push(
+              `${sourceUrl}: Firecrawl returned content that did not match the property address.`,
+            );
+            continue;
+          }
+          const sourceName = new URL(scraped.sourceUrl).hostname.replace(
+            /^www\./,
+            "",
+          );
+          findings.set("LISTING", {
+            topic: "LISTING",
+            label: "Current listing or opportunity source",
+            value:
+              scraped.title ||
+              "Saved source page matched the property address through backend retrieval",
+            status: "NEEDS_MANUAL_VERIFICATION",
+            sourceName,
+            sourceUrl: scraped.sourceUrl,
+            confidence: 60,
+            notes: scraped.receipt
+              ? `Firecrawl scrape receipt: ${scraped.receipt}. Extracted evidence is not independently verified.`
+              : "Firecrawl-extracted evidence is not independently verified.",
+          });
+          for (const [position, url] of scraped.images.entries()) {
+            if (seenMedia.has(url)) continue;
+            seenMedia.add(url);
+            media.push({
+              url,
+              sourceUrl: scraped.sourceUrl,
+              sourceName,
+              altText: `${property.address} source image ${position + 1}`,
+              evidenceStatus: "NEEDS_MANUAL_VERIFICATION",
+            });
+          }
+          for (const phone of phoneNumbers(scraped.markdown))
+            discoveredPhones.push({
+              phone,
+              sourceUrl: scraped.sourceUrl,
+              sourceName,
+              evidenceStatus: "NEEDS_MANUAL_VERIFICATION",
+            });
+        } catch (firecrawlError) {
+          errors.push(
+            `${sourceUrl}: Firecrawl fallback ${firecrawlError instanceof Error ? firecrawlError.message : "failed"}`,
+          );
+        }
+      }
     }
   }
 
@@ -856,16 +929,23 @@ export async function researchProperty(
     }
   }
 
-  if (media.length)
+  if (media.length) {
+    const allMediaVerified = media.every(
+      (item) => item.evidenceStatus === "VERIFIED",
+    );
     findings.set("PHOTOS", {
       topic: "PHOTOS",
       label: "Property photos",
-      value: `${media.length} verified-source image${media.length === 1 ? "" : "s"} found`,
-      status: "VERIFIED",
+      value: `${media.length} source image${media.length === 1 ? "" : "s"} found`,
+      status: allMediaVerified ? "VERIFIED" : "NEEDS_MANUAL_VERIFICATION",
       sourceName: media[0].sourceName,
       sourceUrl: media[0].sourceUrl,
-      confidence: 80,
+      confidence: allMediaVerified ? 80 : 60,
+      notes: allMediaVerified
+        ? undefined
+        : "At least one image was recovered through Firecrawl and requires corroboration or owner review.",
     });
+  }
   if (property.estimatedValue && property.verificationSourceUrl)
     findings.set("PRICE", {
       topic: "PRICE",
@@ -876,7 +956,12 @@ export async function researchProperty(
       sourceUrl: property.verificationSourceUrl,
       confidence: 85,
     });
-  const foundPhone = property.contactPhone ? null : discoveredPhones[0];
+  const foundPhone = property.contactPhone
+    ? null
+    : discoveredPhones.find((phone) => phone.evidenceStatus === "VERIFIED") ||
+      discoveredPhones[0];
+  const verifiedFoundPhone =
+    foundPhone?.evidenceStatus === "VERIFIED" ? foundPhone : null;
   const contactPhone = property.contactPhone || foundPhone?.phone;
   if (contactPhone && (property.verificationSourceUrl || foundPhone))
     findings.set("CONTACT", {
@@ -885,11 +970,19 @@ export async function researchProperty(
       value: [property.contactName, contactPhone, property.contactEmail]
         .filter(Boolean)
         .join(" · "),
-      status: "VERIFIED",
+      status:
+        foundPhone?.evidenceStatus === "NEEDS_MANUAL_VERIFICATION"
+          ? "NEEDS_MANUAL_VERIFICATION"
+          : "VERIFIED",
       sourceName: foundPhone?.sourceName || "Verified source",
       sourceUrl:
         foundPhone?.sourceUrl || property.verificationSourceUrl || undefined,
-      confidence: 80,
+      confidence:
+        foundPhone?.evidenceStatus === "NEEDS_MANUAL_VERIFICATION" ? 60 : 80,
+      notes:
+        foundPhone?.evidenceStatus === "NEEDS_MANUAL_VERIFICATION"
+          ? "Contact data recovered through Firecrawl requires corroboration or owner review."
+          : undefined,
     });
 
   for (const [topic, label] of TOPICS) {
@@ -916,13 +1009,13 @@ export async function researchProperty(
 
   // FIX #5: Batch database operations instead of sequential upserts
   await db.$transaction(async (tx) => {
-    if (foundPhone || geocode || enformionOwner)
+    if (verifiedFoundPhone || geocode || enformionOwner)
       await tx.property.update({
         where: { id: propertyId },
         data: {
           ownerName: enformionOwner || undefined,
-          contactPhone: contactPhone || undefined,
-          contactUrl: foundPhone?.sourceUrl || undefined,
+          contactPhone: property.contactPhone || verifiedFoundPhone?.phone,
+          contactUrl: verifiedFoundPhone?.sourceUrl || undefined,
           latitude: geocode?.latitude || undefined,
           longitude: geocode?.longitude || undefined,
           neighborhood: geocodedNeighborhood || undefined,
@@ -951,7 +1044,15 @@ export async function researchProperty(
           position,
           discoveredAt: new Date(),
         },
-        create: { propertyId, ...item, position, discoveredAt: new Date() },
+        create: {
+          propertyId,
+          url: item.url,
+          sourceUrl: item.sourceUrl,
+          sourceName: item.sourceName,
+          altText: item.altText,
+          position,
+          discoveredAt: new Date(),
+        },
       }),
     );
     await Promise.all(mediaUpserts);
