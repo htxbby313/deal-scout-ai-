@@ -5,6 +5,7 @@ import { fetchValidatedJson, stableUnique } from "@/lib/research-runtime";
 import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
 
 const FIRECRAWL_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape";
+const FIRECRAWL_SEARCH_URL = "https://api.firecrawl.dev/v2/search";
 
 const firecrawlScrapeSchema = z.object({
   success: z.boolean(),
@@ -26,6 +27,18 @@ const firecrawlScrapeSchema = z.object({
     })
     .passthrough()
     .optional(),
+  error: z.string().optional(),
+});
+
+const firecrawlSearchSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    web: z.array(z.object({
+      url: z.string(),
+      title: z.string().optional(),
+      description: z.string().optional(),
+    })).optional(),
+  }).optional(),
   error: z.string().optional(),
 });
 
@@ -51,6 +64,31 @@ export function firecrawlMaxRequestsPerRun() {
     10,
   );
   return Number.isInteger(value) ? Math.max(0, Math.min(value, 6)) : 2;
+}
+
+export async function searchPropertySourcesWithFirecrawl(query: string) {
+  if (!firecrawlConfigured())
+    throw new Error("Firecrawl property research is not configured.");
+  const key = process.env.FIRECRAWL_API_KEY?.trim();
+  if (!key) throw new Error("Firecrawl property research is not configured.");
+  const response = await fetchValidatedJson(FIRECRAWL_SEARCH_URL, firecrawlSearchSchema, {
+    method: "POST",
+    attempts: 3,
+    timeoutMs: 15_000,
+    maxBytes: 1_000_000,
+    minimumHostIntervalMs: 250,
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ query, limit: 5, sources: ["web"] }),
+  });
+  if (!response.success)
+    throw new Error(response.error || "Firecrawl property search failed.");
+  return (response.data?.web || [])
+    .filter((result) => isSafePublicEvidenceUrl(result.url))
+    .slice(0, 5);
 }
 
 export async function scrapePropertySourceWithFirecrawl(
@@ -115,5 +153,7 @@ export async function scrapePropertySourceWithFirecrawl(
 
 export const __firecrawlPropertyResearchTestables = {
   FIRECRAWL_SCRAPE_URL,
+  FIRECRAWL_SEARCH_URL,
   firecrawlScrapeSchema,
+  firecrawlSearchSchema,
 };

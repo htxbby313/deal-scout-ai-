@@ -4,13 +4,17 @@ import { useState } from "react";
 import Image from "next/image";
 import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
 
-type Photo = { url: string; altText: string; rightsStatus?: string };
+type Photo = {
+  url: string;
+  altText: string;
+  rightsStatus?: string;
+  sourceName?: string;
+  sourceUrl?: string;
+};
 
-// Display does not require send approval. Distribution rights stay in the existing gate.
 export function PropertyPhoto({ photos, eager = false, className = "h-40" }: { photos: Photo[]; eager?: boolean; className?: string }) {
   const [failed, setFailed] = useState<string[]>([]);
   const photo = photos.find((item) => isSafePublicEvidenceUrl(item.url)
-    && !["REJECTED", "RESTRICTED", "LINK_ONLY"].includes(item.rightsStatus || "")
     && !failed.includes(item.url));
   return (
     <div className={`relative grid w-full place-items-center overflow-hidden bg-slate-100 ${className}`}>
@@ -32,6 +36,16 @@ export function PropertyPhoto({ photos, eager = false, className = "h-40" }: { p
           {failed.length ? "Source image unavailable. Open the source link for details." : "No source photo available yet"}
         </span>
       )}
+      {photo?.sourceUrl && isSafePublicEvidenceUrl(photo.sourceUrl) ? (
+        <a
+          className="absolute bottom-0 left-0 right-0 z-10 bg-black/70 px-3 py-1.5 text-[11px] font-medium text-white underline-offset-2 hover:underline"
+          href={photo.sourceUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Photo source: {photo.sourceName || new URL(photo.sourceUrl).hostname}
+        </a>
+      ) : null}
     </div>
   );
 }

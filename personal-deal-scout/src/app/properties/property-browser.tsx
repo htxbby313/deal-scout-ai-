@@ -8,16 +8,11 @@ import {
   addPropertyMediaAction,
   researchPropertyAction,
   retirePropertyAction,
-  reviewPropertyMediaAction,
   updatePropertyEvidenceAction,
   type EvidenceUpdateState,
   type ResearchRunState,
 } from "@/app/actions";
-import {
-  developerMatchesAreVerified,
-  formatSourceRecordDate,
-  propertyReadiness,
-} from "@/lib/domain";
+import { formatSourceRecordDate, propertyReadiness } from "@/lib/domain";
 import { useThemeColor } from "@/lib/theme-color";
 import { evaluateLuxuryRedevelopmentFit } from "@/lib/luxury-redevelopment";
 import { humanLabel } from "@/lib/presentation";
@@ -118,9 +113,6 @@ function ResearchPanel({ property }: { property: PropertyView }) {
     status: "idle",
     message: "",
   } satisfies ResearchRunState);
-  const manual = property.researchFindings.filter(
-    (finding) => finding.status !== "VERIFIED",
-  ).length;
   return (
     <section className="mt-7 border-t pt-6">
       <div className="flex items-start justify-between gap-4">
@@ -154,13 +146,8 @@ function ResearchPanel({ property }: { property: PropertyView }) {
       ) : null}
       {property.researchRuns[0] ? (
         <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-          Latest run:{" "}
-          {property.researchRuns[0].status === "COMPLETE"
-            ? "usable research"
-            : "more evidence needed"}{" "}
-          · {property.researchRuns[0].findingsFound} verified ·{" "}
-          {property.researchRuns[0].manualNeeded} additional details unavailable
-          · {property.researchRuns[0].sourcesChecked} sources checked
+          Latest research · {property.researchRuns[0].sourcesChecked} sources
+          checked · {property.researchRuns[0].findingsFound} details found
         </p>
       ) : (
         <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
@@ -174,11 +161,7 @@ function ResearchPanel({ property }: { property: PropertyView }) {
             key={finding.id}
           >
             <p className="text-[11px] font-bold uppercase tracking-wide">
-              {finding.status === "VERIFIED"
-                ? "Verified"
-                : finding.status === "CONFLICT"
-                  ? "Conflicting evidence"
-                  : "Not available yet"}
+              {finding.status === "CONFLICT" ? "Conflicting sources" : "Research result"}
             </p>
             <b className="mt-1 block text-sm">{finding.label}</b>
             {finding.value ? (
@@ -197,12 +180,6 @@ function ResearchPanel({ property }: { property: PropertyView }) {
           </article>
         ))}
       </div>
-      {manual ? (
-        <p className="mt-3 text-xs text-slate-600">
-          {manual} additional research topic{manual === 1 ? " is" : "s are"}{" "}
-          still being pursued. This alone does not disqualify the opportunity.
-        </p>
-      ) : null}
     </section>
   );
 }
@@ -212,8 +189,8 @@ function PhotoPanel({ property }: { property: PropertyView }) {
     <section className="mt-7 border-t pt-6">
       <h3 className="font-bold">Property photos</h3>
       <p className="mt-1 text-xs leading-5 text-slate-500">
-        Available source photos appear here automatically. Sharing with buyers
-        has a separate rights review.
+        Available source photos appear here automatically with their original
+        source linked below each image.
       </p>
       {property.media.length ? (
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -232,52 +209,6 @@ function PhotoPanel({ property }: { property: PropertyView }) {
                 >
                   Source: {item.sourceName}
                 </a>
-                <form action={reviewPropertyMediaAction} className="mt-3">
-                  <input name="propertyId" type="hidden" value={property.id} />
-                  <input name="mediaId" type="hidden" value={item.id} />
-                  <input name="approved" type="hidden" value="true" />
-                  <p className="mb-2 text-[11px] font-semibold text-slate-600">
-                    Rights: {item.rightsStatus.replaceAll("_", " ")} ·{" "}
-                    {item.sendApproved
-                      ? "External use approved"
-                      : "External use blocked"}
-                  </p>
-                  <select
-                    className="mb-2 w-full rounded-lg border px-2 py-2 text-xs"
-                    defaultValue={item.rightsStatus || "UNKNOWN"}
-                    name="rightsStatus"
-                  >
-                    {[
-                      "UNKNOWN",
-                      "OWNED",
-                      "LICENSED",
-                      "PERMISSION_DOCUMENTED",
-                      "INTERNAL_ONLY",
-                      "EXTERNAL_APPROVED",
-                      "LINK_ONLY",
-                      "RESTRICTED",
-                      "REJECTED",
-                    ].map((status) => (
-                      <option key={status} value={status}>
-                        {status.replaceAll("_", " ")}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="mb-2 w-full rounded-lg border px-2 py-2 text-xs"
-                    defaultValue={item.rightsEvidenceUrl}
-                    name="rightsEvidenceUrl"
-                    placeholder="Rights evidence URL when required"
-                    type="url"
-                  />
-                  <button
-                    className={`w-full rounded-lg px-2 py-2 text-xs font-bold ${item.sendApproved ? "bg-emerald-700 text-white" : "bg-amber-100 text-amber-900"}`}
-                  >
-                    {item.sendApproved
-                      ? "Update rights decision"
-                      : "Save rights decision"}
-                  </button>
-                </form>
               </div>
             </article>
           ))}
@@ -320,7 +251,7 @@ function PhotoPanel({ property }: { property: PropertyView }) {
             placeholder="Caption or view"
           />
           <button className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">
-            Save unapproved photo
+            Save photo
           </button>
         </form>
       </details>
@@ -735,9 +666,8 @@ export function PropertyBrowser({
                   </p>
                 </div>
                 <span className="h-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-800">
-                  {developerMatchesAreVerified(property)
-                    ? `${property.matches.length} verified matches`
-                    : "Matches locked"}
+                  {property.matches.length} buyer match
+                  {property.matches.length === 1 ? "" : "es"}
                 </span>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
@@ -753,7 +683,7 @@ export function PropertyBrowser({
                         (item) => item.status === "VERIFIED",
                       ).length
                     }
-                    /12 verified
+                    /12 topics found
                   </b>
                 </span>
               </div>
@@ -912,8 +842,7 @@ export function PropertyBrowser({
               <section className="mt-7">
                 <h3 className="font-bold">Developer matches</h3>
                 <div className="mt-3 space-y-3">
-                  {developerMatchesAreVerified(selected)
-                    ? selected.matches.map((match) => (
+                  {selected.matches.map((match) => (
                     <article
                       className="rounded-xl border p-4"
                       key={match.developerId}
@@ -926,18 +855,10 @@ export function PropertyBrowser({
                         {match.reasons.join(" ")}
                       </p>
                     </article>
-                      ))
-                    : null}
-                  {!developerMatchesAreVerified(selected) ? (
-                    <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-                      Preliminary developer candidates are hidden until the
-                      property has confirmed availability, a current price,
-                      verified contact evidence, and dated source records.
-                      Existing routing scores are not proof of buyer interest.
-                    </p>
-                  ) : !selected.matches.length ? (
+                      ))}
+                  {!selected.matches.length ? (
                     <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-                      No developer passed the current qualification and market-fit rules.
+                      No buyer matches are available yet.
                     </p>
                   ) : null}
                 </div>

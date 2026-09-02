@@ -125,7 +125,7 @@ export default async function DealDeskPage({
             <PropertyPhoto className="h-64 lg:h-80" photos={[]} />
           )}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-xs text-slate-600">
-            <span>{property.media.length ? `${property.media.length} sourced photo${property.media.length === 1 ? "" : "s"} · internal workspace display` : "No verified source photo available"}</span>
+            <span>{property.media.length ? `${property.media.length} property photo${property.media.length === 1 ? "" : "s"}` : "No property photo available"}</span>
             {property.media[0] ? <a className="font-bold text-blue-700 underline" href={property.media[0].sourceUrl} rel="noreferrer" target="_blank">Open photo source</a> : null}
           </div>
         </section>

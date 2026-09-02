@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   firecrawlConfigured,
   firecrawlMaxRequestsPerRun,
+  searchPropertySourcesWithFirecrawl,
   scrapePropertySourceWithFirecrawl,
 } from "@/lib/firecrawl-property-research";
 import { __researchRuntimeTestables } from "@/lib/research-runtime";
@@ -79,5 +80,25 @@ describe("Firecrawl property research", () => {
     expect(new Headers(request?.headers).get("authorization")).toBe(
       "Bearer test-server-key",
     );
+  });
+
+  it("searches for safe public property source pages", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            web: [
+              { url: "https://example.com/property", title: "Property" },
+              { url: "http://127.0.0.1/private", title: "Private" },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await expect(searchPropertySourcesWithFirecrawl("2147 Oakview Drive")).resolves.toEqual([
+      { url: "https://example.com/property", title: "Property" },
+    ]);
   });
 });
