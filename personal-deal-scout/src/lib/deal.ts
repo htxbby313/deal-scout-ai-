@@ -7,6 +7,12 @@ import type {
 } from "@prisma/client";
 
 import { latestAcquisitionGates } from "@/lib/acquisition-gate-versioning";
+import {
+  assembleDealUnitCost,
+  ENFORMION_LOOKUP_RESERVED_TYPE,
+  ENFORMION_RESERVATION_SCAN_CAP,
+  type DealUnitCost,
+} from "@/lib/deal-unit-cost";
 import { getPrisma } from "@/lib/prisma";
 
 /**
@@ -54,10 +60,12 @@ const dealPropertyInclude = {
         },
       },
       financialProjections: { orderBy: { version: "desc" as const }, take: 1 },
+      outcomes: { orderBy: { version: "desc" as const }, take: 1 },
       acquisitionFunnel: {
         include: {
           gates: true,
           blockers: { where: { status: "OPEN" as const } },
+          priorityScores: { orderBy: { version: "desc" as const }, take: 1 },
         },
       },
     },
@@ -69,14 +77,18 @@ type LoadedProperty = Prisma.PropertyGetPayload<{
 }>;
 type LoadedTransaction = LoadedProperty["transactions"][number];
 type LoadedFunnel = NonNullable<LoadedTransaction["acquisitionFunnel"]>;
+type LoadedPriorityScore = LoadedFunnel["priorityScores"][number];
 
 export type DealAggregate = {
   property: Omit<LoadedProperty, "transactions">;
   transaction: LoadedTransaction | null;
   funnel: LoadedFunnel | null;
+  priorityScore: LoadedPriorityScore | null;
   gates: LoadedFunnel["gates"];
   blockers: LoadedFunnel["blockers"];
   projection: LoadedTransaction["financialProjections"][number] | null;
+  outcome: LoadedTransaction["outcomes"][number] | null;
+  unitCost: DealUnitCost;
   comps: LoadedProperty["comparableSales"];
   matches: LoadedProperty["matches"];
   researchFindings: LoadedProperty["researchFindings"];
@@ -126,11 +138,25 @@ export function assertCanCreateDealTransaction(
 }
 
 export async function getDeal(propertyId: string): Promise<DealAggregate | null> {
-  const record = await getPrisma().property.findUnique({
+  const db = getPrisma();
+  const record = await db.property.findUnique({
     where: { id: propertyId },
     include: dealPropertyInclude,
   });
   if (!record) return null;
+
+  const [taskCost, reservationRows] = await Promise.all([
+    db.agentTask.aggregate({
+      where: { propertyId },
+      _sum: { estimatedCostCents: true },
+    }),
+    db.auditLog.findMany({
+      where: { type: ENFORMION_LOOKUP_RESERVED_TYPE },
+      select: { details: true },
+      orderBy: { createdAt: "desc" },
+      take: ENFORMION_RESERVATION_SCAN_CAP,
+    }),
+  ]);
 
   const { transactions, ...property } = record;
   const transaction = selectCanonicalTransaction(transactions);
@@ -138,15 +164,25 @@ export async function getDeal(propertyId: string): Promise<DealAggregate | null>
   const gates = funnel ? latestAcquisitionGates(funnel.gates) : [];
   const blockers = funnel?.blockers ?? [];
   const projection = transaction?.financialProjections[0] ?? null;
+  const outcome = transaction?.outcomes[0] ?? null;
   const sellerEngagements = transaction?.sellerEngagements ?? [];
+  const priorityScore = funnel?.priorityScores[0] ?? null;
+  const unitCost = assembleDealUnitCost({
+    agentTaskCostCents: taskCost._sum.estimatedCostCents,
+    reservationRows,
+    propertyId,
+  });
 
   return {
     property,
     transaction,
     funnel,
+    priorityScore,
     gates,
     blockers,
     projection,
+    outcome,
+    unitCost,
     comps: property.comparableSales,
     matches: property.matches,
     researchFindings: property.researchFindings,

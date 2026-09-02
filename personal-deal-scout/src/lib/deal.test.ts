@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   property: { findUnique: vi.fn() },
+  agentTask: { aggregate: vi.fn() },
+  auditLog: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ getPrisma: () => db }));
 
@@ -89,6 +91,10 @@ describe("one-active-transaction guard", () => {
 describe("getDeal aggregate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.agentTask.aggregate.mockResolvedValue({
+      _sum: { estimatedCostCents: null },
+    });
+    db.auditLog.findMany.mockResolvedValue([]);
   });
 
   it("returns a property-shaped Deal with a null transaction when none exist", async () => {
@@ -108,9 +114,12 @@ describe("getDeal aggregate", () => {
       property: { id: "prop-1", address: "1200 Main Street" },
       transaction: null,
       funnel: null,
+      priorityScore: null,
       gates: [],
       blockers: [],
       projection: null,
+      outcome: null,
+      unitCost: { agentTaskCostCents: BigInt(0), enformionReservations: 0 },
       comps: [],
       matches: [],
       researchFindings: [],
@@ -137,6 +146,7 @@ describe("getDeal aggregate", () => {
           controlStatus: "STOPPED",
           createdAt: created("2026-09-02T00:00:00Z"),
           financialProjections: [],
+          outcomes: [],
           sellerEngagements: [],
           acquisitionFunnel: null,
           documents: [],
@@ -147,6 +157,15 @@ describe("getDeal aggregate", () => {
           controlStatus: "ACTIVE",
           createdAt: created("2026-08-01T00:00:00Z"),
           financialProjections: [{ id: "proj-9", version: 9 }],
+          outcomes: [
+            {
+              id: "out-2",
+              version: 2,
+              status: "CLOSED_ASSIGNED",
+              assignmentFee: 1_500_000,
+              cycleDays: 21,
+            },
+          ],
           sellerEngagements: [{ id: "eng-1" }],
           documents: [],
           approvals: [],
@@ -158,6 +177,15 @@ describe("getDeal aggregate", () => {
               { type: "BUYER_COVERAGE", version: 1, status: "SATISFIED" },
             ],
             blockers: [{ id: "b1", status: "OPEN" }],
+            priorityScores: [
+              {
+                id: "pps-2",
+                version: 2,
+                totalScore: 72,
+                reasons: ["evidence_ready", "buyer_coverage"],
+                blockers: [],
+              },
+            ],
           },
         },
       ],
@@ -165,7 +193,21 @@ describe("getDeal aggregate", () => {
     const deal = await getDeal("prop-2");
     expect(deal?.transaction?.id).toBe("tx-live");
     expect(deal?.funnel?.id).toBe("funnel-1");
+    expect(deal?.priorityScore).toEqual({
+      id: "pps-2",
+      version: 2,
+      totalScore: 72,
+      reasons: ["evidence_ready", "buyer_coverage"],
+      blockers: [],
+    });
     expect(deal?.projection).toEqual({ id: "proj-9", version: 9 });
+    expect(deal?.outcome).toEqual({
+      id: "out-2",
+      version: 2,
+      status: "CLOSED_ASSIGNED",
+      assignmentFee: 1_500_000,
+      cycleDays: 21,
+    });
     expect(deal?.sellerEngagements).toEqual([{ id: "eng-1" }]);
     expect(deal?.blockers).toEqual([{ id: "b1", status: "OPEN" }]);
     expect(deal?.gates.map((gate) => `${gate.type}:${gate.version}`)).toEqual([
@@ -181,5 +223,75 @@ describe("getDeal aggregate", () => {
   it("returns null when the property does not exist", async () => {
     db.property.findUnique.mockResolvedValue(null);
     await expect(getDeal("missing")).resolves.toBeNull();
+  });
+
+  it("exposes a null priorityScore when the canonical funnel has no history", async () => {
+    db.property.findUnique.mockResolvedValue({
+      id: "prop-3",
+      address: "10 Pine Street",
+      researchFindings: [],
+      comparableSales: [],
+      discoveryReferences: [],
+      media: [],
+      acquisitionFunnels: [],
+      matches: [],
+      transactions: [
+        {
+          id: "tx-3",
+          controlStatus: "ACTIVE",
+          createdAt: created("2026-09-01T00:00:00Z"),
+          financialProjections: [],
+          sellerEngagements: [],
+          outcomes: [],
+          documents: [],
+          approvals: [],
+          acquisitionFunnel: {
+            id: "funnel-3",
+            gates: [],
+            blockers: [],
+            priorityScores: [],
+          },
+        },
+      ],
+    });
+    const deal = await getDeal("prop-3");
+    expect(deal?.funnel?.id).toBe("funnel-3");
+    expect(deal?.priorityScore).toBeNull();
+  });
+
+  it("attaches unit cost from agent-task sum and bounded Enformion reservation rows", async () => {
+    db.property.findUnique.mockResolvedValue({
+      id: "prop-cost",
+      researchFindings: [],
+      comparableSales: [],
+      discoveryReferences: [],
+      media: [],
+      acquisitionFunnels: [],
+      matches: [],
+      transactions: [],
+    });
+    db.agentTask.aggregate.mockResolvedValue({
+      _sum: { estimatedCostCents: BigInt(450) },
+    });
+    db.auditLog.findMany.mockResolvedValue([
+      { details: { propertyId: "prop-cost" } },
+      { details: { propertyId: "other" } },
+      { details: { propertyId: "prop-cost" } },
+    ]);
+    const deal = await getDeal("prop-cost");
+    expect(deal?.unitCost).toEqual({
+      agentTaskCostCents: BigInt(450),
+      enformionReservations: 2,
+    });
+    expect(db.auditLog.findMany).toHaveBeenCalledWith({
+      where: { type: "research.enformion_lookup_reserved" },
+      select: { details: true },
+      orderBy: { createdAt: "desc" },
+      take: 5_000,
+    });
+    expect(db.agentTask.aggregate).toHaveBeenCalledWith({
+      where: { propertyId: "prop-cost" },
+      _sum: { estimatedCostCents: true },
+    });
   });
 });
