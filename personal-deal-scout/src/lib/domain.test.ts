@@ -321,6 +321,120 @@ describe("production foundation business rules", () => {
     );
   });
 
+  it("ranks verified purchase history above stated-notes market fit", () => {
+    const property = {
+      id: "p1",
+      address: "10 Main",
+      city: "Houston",
+      state: "TX",
+      zipCode: "77002",
+      ownerName: "Owner",
+      estimatedValue: 250000,
+      opportunityStatus: "GOVERNMENT_SALE",
+      confidence: 90,
+      researchFindings: [],
+      media: [],
+      researchRuns: [],
+      createdAt: "",
+      updatedAt: "",
+    } satisfies PropertyRecord;
+    const base = {
+      phone: "713-555-0101",
+      targetZipCodes: ["Unknown"],
+      active: true,
+      qualificationStatus: "QUALIFIED" as const,
+      researchRuns: [],
+      createdAt: "",
+      updatedAt: "",
+    };
+    const matches = __testables.calculateMatches(
+      property,
+      [
+        {
+          ...base,
+          id: "notes-only",
+          companyName: "Notes Buyer",
+          notes:
+            "Acquisition criteria: Development opportunities in Houston\nProperty types: Land",
+        },
+        {
+          ...base,
+          id: "verified-history",
+          companyName: "Verified Buyer",
+        },
+      ],
+      [
+        {
+          id: "purchase-verified",
+          developerId: "verified-history",
+          address: "1 Prior St",
+          city: "Houston",
+          state: "TX",
+          zipCode: "77002",
+          originalPurchasePrice: 980000,
+          sourceUrl: "https://example.gov/deed",
+          verifiedAt: "2026-08-15",
+          confidence: 90,
+          createdAt: "",
+          updatedAt: "",
+        },
+      ],
+    );
+    expect(matches.map((match) => match.developerId)).toEqual([
+      "verified-history",
+      "notes-only",
+    ]);
+    expect(matches[0]!.score).toBeGreaterThan(matches[1]!.score);
+  });
+
+  it("keeps RESEARCH_NEEDED developers without verified projects out of the Deal Box working set", () => {
+    const property = {
+      id: "p1",
+      address: "10 Main",
+      city: "Houston",
+      state: "TX",
+      zipCode: "77002",
+      ownerName: "Owner",
+      estimatedValue: 250000,
+      opportunityStatus: "GOVERNMENT_SALE",
+      confidence: 90,
+      researchFindings: [],
+      media: [],
+      researchRuns: [],
+      createdAt: "",
+      updatedAt: "",
+    } satisfies PropertyRecord;
+    const matches = __testables.calculateMatches(
+      property,
+      [
+        {
+          id: "research",
+          companyName: "Research Co",
+          phone: "713-555-0101",
+          targetZipCodes: ["77002"],
+          active: true,
+          qualificationStatus: "RESEARCH_NEEDED",
+          researchRuns: [],
+          createdAt: "",
+          updatedAt: "",
+        },
+        {
+          id: "qualified",
+          companyName: "Qualified Co",
+          phone: "713-555-0102",
+          targetZipCodes: ["77002"],
+          active: true,
+          qualificationStatus: "QUALIFIED",
+          researchRuns: [],
+          createdAt: "",
+          updatedAt: "",
+        },
+      ],
+      [],
+    );
+    expect(matches.map((match) => match.developerId)).toEqual(["qualified"]);
+  });
+
   it("uses contactability for relationship qualification while purchase history remains matching evidence", () => {
     const developer = {
       phone: "713-555-0100",

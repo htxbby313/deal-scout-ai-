@@ -14,6 +14,7 @@ import { canSendOutbound, propertyReadiness } from "@/lib/domain";
 import { evaluateLegacyOutboundBoundary } from "@/lib/legacy-outbound-boundary";
 import { logOperation } from "@/lib/operational-logging";
 import { developerRelationshipQualification } from "@/lib/developer-qualification";
+import { isDealBoxWorkingSetDeveloper } from "@/lib/deal-buyer-match";
 import { evaluatePropertyPresentation } from "@/lib/property-presentation-policy";
 import { routeForeclosure } from "@/lib/foreclosure-routing";
 
@@ -925,12 +926,23 @@ function calculateAllMatches(
         score += statedMarketFit.score;
         reasons.push(statedMarketFit.reason);
       }
+      const zipCount = history.filter(
+        (p) => p.zipCode === property.zipCode,
+      ).length;
+      if (zipCount) {
+        score += Math.min(28, 20 + (zipCount - 1) * 4);
+        reasons.push(
+          `Has ${zipCount} verified purchase(s) in the same ZIP.`,
+        );
+      }
       const cityCount = history.filter(
-        (p) => p.city.toLowerCase() === property.city.toLowerCase(),
+        (p) =>
+          p.city.toLowerCase() === property.city.toLowerCase() &&
+          p.state === property.state,
       ).length;
       if (cityCount) {
-        score += Math.min(20, cityCount * 8);
-        reasons.push(`Has ${cityCount} known project(s) in the same city.`);
+        score += Math.min(40, 24 + (cityCount - 1) * 8);
+        reasons.push(`Has ${cityCount} verified project(s) in the same city.`);
       }
       if (
         developer.maximumPurchasePrice &&
@@ -971,7 +983,24 @@ export function calculateMatches(
   developers: DeveloperRecord[],
   projects: DeveloperProjectRecord[],
 ) {
-  return calculateAllMatches(property, developers, projects).slice(0, 5);
+  return calculateAllMatches(property, developers, projects)
+    .filter((match) => {
+      const developer = developers.find(
+        (candidate) => candidate.id === match.developerId,
+      );
+      if (!developer) return false;
+      const verifiedCount = projects.filter(
+        (project) =>
+          project.developerId === developer.id &&
+          project.verifiedAt &&
+          project.sourceUrl,
+      ).length;
+      return isDealBoxWorkingSetDeveloper(
+        developer.qualificationStatus,
+        verifiedCount,
+      );
+    })
+    .slice(0, 5);
 }
 
 export function calculateDeveloperPropertyMatches(
@@ -1034,21 +1063,21 @@ function statedDeveloperMarketFit(
   if (cityMatched)
     return {
       matched: true,
-      score: typeMatched ? 20 : 16,
+      score: typeMatched ? 10 : 8,
       reason:
         "The imported acquisition criteria names this city; confirm the buy box in conversation.",
     };
   if (stateMatched)
     return {
       matched: true,
-      score: typeMatched ? 15 : 11,
+      score: typeMatched ? 6 : 4,
       reason:
         "The imported acquisition criteria names this state; confirm the buy box in conversation.",
     };
   if (nationwide)
     return {
       matched: true,
-      score: typeMatched ? 8 : 4,
+      score: typeMatched ? 4 : 2,
       reason:
         "The imported criteria states broad U.S. coverage; local appetite still needs confirmation.",
     };

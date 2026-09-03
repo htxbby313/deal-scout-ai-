@@ -15,6 +15,10 @@ import {
   offerVerdict,
   sellerConversationHref,
 } from "@/lib/deal-cockpit";
+import {
+  presentDealBoxBuyerMatch,
+  selectDealBoxBuyerMatches,
+} from "@/lib/deal-buyer-match";
 import { explainDealScore } from "@/lib/deal-score";
 import {
   formatClosedOutcomeLine,
@@ -109,11 +113,12 @@ export default async function DealDeskPage({
     engagementId: engagement?.id,
     address: property.address,
   });
-  const topMatch = property.matches[0];
+  const buyerMatches = selectDealBoxBuyerMatches(property.matches);
+  const topMatch = buyerMatches[0];
   const stageLabel = acquisitionStageLabel(
     funnel?.stage ?? property.acquisitionFunnels[0]?.stage,
     {
-      matchCount: property.matches.length,
+      matchCount: buyerMatches.length,
     },
   );
   const evidenceBand = confidenceBand(confidence, verified.length);
@@ -186,7 +191,7 @@ export default async function DealDeskPage({
               label="Likely buyers"
               value={
                 topMatch
-                  ? `${property.matches.length} · ${topMatch.developer.companyName}`
+                  ? `${buyerMatches.length} · ${topMatch.developer.companyName}`
                   : "None matched"
               }
             />
@@ -488,22 +493,45 @@ export default async function DealDeskPage({
               property-presentation controls above are satisfied.
             </p>
             <div className="mt-4 grid gap-3">
-              {property.matches.map(({ developer, score, reasons }, index) => (
-                <article className="rounded-xl border p-4" key={developer.id}>
-                  <div className="flex justify-between gap-3">
-                    <b>
-                      #{index + 1} {developer.companyName}
-                    </b>
-                    <span className="text-sm font-bold text-blue-700">
-                      {score}/100
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-600">
-                    {reasons.join(" ")}
-                  </p>
-                </article>
-              ))}
-              {!property.matches.length ? (
+              {buyerMatches.map(({ developer, score, reasons }, index) => {
+                const card = presentDealBoxBuyerMatch({
+                  score,
+                  reasons,
+                  developer,
+                  property,
+                  presentationAllowed: presentation.allowed,
+                });
+                return (
+                  <article className="rounded-xl border p-4" key={developer.id}>
+                    <div className="flex justify-between gap-3">
+                      <b>
+                        #{index + 1} {card.companyName}
+                      </b>
+                      <span className="text-sm font-bold text-blue-700">
+                        {card.score}/100
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-700">
+                      {card.explanation}
+                    </p>
+                    {card.comparableLine ? (
+                      <p className="mt-2 text-xs text-slate-600">
+                        Comparable purchase: {card.comparableLine}
+                      </p>
+                    ) : null}
+                    <p className="mt-2 text-xs font-semibold text-slate-500">
+                      {card.contactReadiness}
+                    </p>
+                    {card.internalOnly ? (
+                      <p className="mt-2 text-xs text-amber-800">
+                        Internal match — do not present until contract controls
+                        allow.
+                      </p>
+                    ) : null}
+                  </article>
+                );
+              })}
+              {!buyerMatches.length ? (
                 <Empty text="No developer currently satisfies the recorded buy box." />
               ) : null}
             </div>
