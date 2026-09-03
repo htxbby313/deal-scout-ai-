@@ -2614,3 +2614,24 @@ model WeightChangeProposal {
   reviewedAt       DateTime?
   reviewReason     String?
 }
+
+model BuyOperatorPreference {
+  id              String   @id @default(cuid())
+  ownerId         String   @default("owner")
+  name            String
+  active          Boolean  @default(true)
+  naturalLanguage String?
+  states          String[]
+  cities          String[]
+  counties        String[]
+  zipCodes        String[]
+  propertyTypes   String[]
+  minPriceCents   BigInt?
+  maxPriceCents   BigInt?
+  minSpreadCents  BigInt?
+  maxRepairCents  BigInt?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ownerId, active])
+}

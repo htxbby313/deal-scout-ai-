@@ -1,4 +1,5 @@
 import "server-only";
+import { BUY_BOX_BLOCKER_CODE } from "@/lib/buy-box";
 import { getPrisma } from "@/lib/prisma";
 
 export type OwnerQueueItem = {
@@ -105,7 +106,10 @@ export async function readFunnelOwnerQueue() {
     ...blockers.map((item) => ({
       id: item.id,
       kind: "FUNNEL_BLOCKER" as const,
-      label: `${item.code} · ${item.funnel.property.address}`,
+      label:
+        item.code === BUY_BOX_BLOCKER_CODE
+          ? `Buy Box match · ${item.funnel.property.address}`
+          : `${item.code} · ${item.funnel.property.address}`,
       createdAt: item.openedAt,
       urgent: item.expiresAt
         ? item.expiresAt.getTime() - Date.now() < 24 * 60 * 60_000
