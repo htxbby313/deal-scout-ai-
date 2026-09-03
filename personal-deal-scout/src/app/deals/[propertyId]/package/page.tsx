@@ -9,6 +9,8 @@ import {
 } from "@/lib/deal-assumptions";
 import { getDeal } from "@/lib/deal";
 import { packageReadiness } from "@/lib/deal-package";
+import { ownerPackageByline } from "@/lib/owner-profile";
+import { getOwnerProfile } from "@/lib/owner-profile-store";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +29,10 @@ export default async function DealPackagePage({
 }) {
   await requireOwner();
   const { propertyId } = await params;
-  const deal = await getDeal(propertyId);
+  const [deal, profile] = await Promise.all([
+    getDeal(propertyId),
+    getOwnerProfile(),
+  ]);
   if (!deal) notFound();
   const { property, transaction, projection } = deal;
   const verified = property.researchFindings.filter(
@@ -96,8 +101,15 @@ export default async function DealPackagePage({
       </div>
       <header className="mt-8 border-b pb-6">
         <p className="text-sm font-bold text-blue-700">
-          Coleman & Co. Holdings LLC
+          {ownerPackageByline(profile)}
         </p>
+        {profile.phone || profile.email || profile.markets.length ? (
+          <p className="mt-1 text-xs text-slate-500">
+            {[profile.phone, profile.email, profile.markets.join(", ")]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : null}
         <h1 className="mt-2 text-4xl font-bold">Deal Package</h1>
         <p className="mt-2 text-xl">
           {property.address}, {property.city}, {property.state}{" "}

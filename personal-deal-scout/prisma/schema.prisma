@@ -677,6 +677,11 @@ model SystemSetting {
   id               String     @id @default("singleton")
   mode             SystemMode @default(RESEARCH)
   migrationVersion Int        @default(1)
+  ownerDisplayName String?
+  companyName      String?
+  ownerPhone       String?
+  ownerEmail       String?
+  markets          String[]
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 }
