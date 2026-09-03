@@ -10,6 +10,7 @@ import { DealBoxSellerPanel } from "@/app/deals/[propertyId]/deal-box-seller";
 import { requireOwner } from "@/lib/auth";
 import { evaluateComparableSales } from "@/lib/comp-engine";
 import { analyzeDealStrategy, computeWholesaleMao } from "@/lib/deal-analysis";
+import { buildDealAnalysisBrief } from "@/lib/deal-analysis-brief";
 import {
   estimateRehabFromAssumptions,
   parseDealAssumptions,
@@ -203,6 +204,22 @@ export default async function DealDeskPage({
       })
     : null;
   const documents = transaction?.documents ?? [];
+  const analysisBrief = buildDealAnalysisBrief({
+    verdict,
+    dealScoreExplanation: dealScore.explanation,
+    arvCents,
+    repairCents,
+    maoCents: mao.maoCents,
+    maoFormula: mao.formula,
+    spreadCents: projection?.feeBaseCents,
+    strategy: dealAssumptions?.strategy ?? null,
+    strategyProfitCents: strategyOutcome?.baseCents ?? null,
+    topBuyerName: topBuyerCard?.companyName ?? null,
+    topBuyerInternal: topBuyerCard?.internalOnly ?? false,
+    nextAction,
+    conflictCount: conflicts.length,
+    repairsAreEstimate: repairCents != null,
+  });
   return (
     <WorkspaceShell active="pipeline">
       <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
@@ -402,6 +419,39 @@ export default async function DealDeskPage({
                 ],
               ]}
             />
+            <details className="mt-4 rounded-xl border p-4">
+              <summary className="cursor-pointer font-bold">
+                Why Scout likes it
+              </summary>
+              <dl className="mt-3 grid gap-3 text-sm">
+                <div>
+                  <dt className="text-xs text-slate-500">Why</dt>
+                  <dd className="mt-1 font-semibold">{analysisBrief.why}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Potential profit</dt>
+                  <dd className="mt-1 font-semibold">{analysisBrief.profit}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Risks</dt>
+                  <dd className="mt-1 font-semibold">{analysisBrief.risks}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Recommended strategy</dt>
+                  <dd className="mt-1 font-semibold">{analysisBrief.strategy}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Next action</dt>
+                  <dd className="mt-1 font-semibold">{analysisBrief.nextAction}</dd>
+                </div>
+              </dl>
+              <p className="mt-3 text-xs text-slate-500">Assumptions</p>
+              <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                {analysisBrief.assumptions.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </details>
           </Panel>
           <Panel title="Control status">
             <Rows
