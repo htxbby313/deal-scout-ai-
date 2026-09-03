@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOwner } from "@/lib/auth";
 import { evaluateComparableSales } from "@/lib/comp-engine";
+import { analyzeDealStrategy } from "@/lib/deal-analysis";
+import {
+  estimateRehabFromAssumptions,
+  parseDealAssumptions,
+} from "@/lib/deal-assumptions";
 import { getDeal } from "@/lib/deal";
 import { packageReadiness } from "@/lib/deal-package";
 import { PrintButton } from "./print-button";
@@ -44,6 +49,32 @@ export default async function DealPackagePage({
       bathrooms: item.bathrooms ? Number(item.bathrooms) : null,
     })),
   );
+  const dealAssumptions = parseDealAssumptions(
+    transaction?.dealAssumptions ?? null,
+  );
+  const rehabEstimate = dealAssumptions
+    ? estimateRehabFromAssumptions(dealAssumptions)
+    : null;
+  const strategyOutcome = dealAssumptions
+    ? analyzeDealStrategy({
+        strategy: dealAssumptions.strategy,
+        acquisitionCents: dealAssumptions.acquisitionCents
+          ? BigInt(dealAssumptions.acquisitionCents)
+          : (projection?.sellerContractPriceCents ?? BigInt(0)),
+        verifiedExitLowCents:
+          comps.valueLowCents ?? projection?.buyerPriceLowCents ?? null,
+        verifiedExitBaseCents:
+          comps.valueBaseCents ?? projection?.buyerPriceBaseCents ?? null,
+        verifiedExitHighCents:
+          comps.valueHighCents ?? projection?.buyerPriceHighCents ?? null,
+        rehabCents: rehabEstimate?.totalCents,
+        transactionCostsCents: BigInt(dealAssumptions.transactionCostsCents),
+        financingCostsCents: BigInt(dealAssumptions.financingCostsCents),
+        holdingCostsCents: BigInt(dealAssumptions.holdingCostsCents),
+        monthlyRentCents: BigInt(dealAssumptions.monthlyRentCents),
+        monthlyExpensesCents: BigInt(dealAssumptions.monthlyExpensesCents),
+      })
+    : null;
   const readiness = packageReadiness({
     propertySourceUrl: property.sourceUrl,
     verifiedFindingCount: verified.length,
@@ -162,6 +193,32 @@ export default async function DealPackagePage({
           Projected figures are not guaranteed or realized revenue. Realized
           profit requires closing documentation.
         </p>
+      </Section>
+      <Section title="Rehab & strategy (Estimate)">
+        {dealAssumptions ? (
+          <>
+            <Grid
+              rows={[
+                ["Strategy", dealAssumptions.strategy],
+                ["Rehab level", dealAssumptions.rehabMode],
+                ["Rehab total", money(rehabEstimate?.totalCents)],
+                [
+                  "Strategy profit (base case)",
+                  money(strategyOutcome?.baseCents),
+                ],
+              ]}
+            />
+            <p className="mt-3 text-xs">
+              Estimate, not contractor bid. This figure is separate from the
+              seller-safe maximum and assignment projected spread above and
+              never changes that math.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm">
+            No rehab/strategy assumptions saved for this Deal yet.
+          </p>
+        )}
       </Section>
       <Section title="Buyer/developer fit">
         {property.matches.map((match, index) => (

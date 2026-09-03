@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { saveDealAssumptionsAction } from "@/app/deal-analysis-actions";
 import {
   analyzeDealStrategy,
   estimateRehab,
@@ -7,6 +8,7 @@ import {
   type DealStrategy,
   type RehabMode,
 } from "@/lib/deal-analysis";
+import type { DealAssumptionsRecord } from "@/lib/deal-assumptions";
 
 const cents = (value: string) =>
   BigInt(Math.max(0, Math.round((Number(value) || 0) * 100)));
@@ -18,32 +20,78 @@ const money = (value: bigint | null) =>
         currency: "USD",
         maximumFractionDigits: 0,
       }).format(value / BigInt(100));
+/** JSON-persisted cents string ("12345") -> dollar input value ("123.45"). */
+const dollarsFromCentsString = (value: string | null | undefined) =>
+  value ? String(Number(value) / 100) : "";
 export function DealAnalysisCalculator({
+  propertyId,
   verifiedExitLowCents,
   verifiedExitBaseCents,
   verifiedExitHighCents,
   defaultAcquisitionCents,
+  initialAssumptions,
 }: {
+  propertyId: string;
   verifiedExitLowCents: string | null;
   verifiedExitBaseCents: string | null;
   verifiedExitHighCents: string | null;
   defaultAcquisitionCents: string | null;
+  initialAssumptions: DealAssumptionsRecord | null;
 }) {
-  const [strategy, setStrategy] = useState<DealStrategy>("WHOLESALE");
-  const [mode, setMode] = useState<RehabMode>("COSMETIC");
-  const [rate, setRate] = useState("25");
-  const [custom, setCustom] = useState<Record<string, string>>({});
-  const [squareFeet, setSquareFeet] = useState("");
-  const [acquisition, setAcquisition] = useState(
-    defaultAcquisitionCents
-      ? String(Number(defaultAcquisitionCents) / 100)
+  const [strategy, setStrategy] = useState<DealStrategy>(
+    initialAssumptions?.strategy ?? "WHOLESALE",
+  );
+  const [mode, setMode] = useState<RehabMode>(
+    initialAssumptions?.rehabMode ?? "COSMETIC",
+  );
+  const [rate, setRate] = useState(
+    initialAssumptions
+      ? dollarsFromCentsString(initialAssumptions.ratePerSquareFootCents) ||
+          "25"
+      : "25",
+  );
+  const [custom, setCustom] = useState<Record<string, string>>(
+    initialAssumptions?.customCents
+      ? Object.fromEntries(
+          Object.entries(initialAssumptions.customCents).map(
+            ([category, centsValue]) => [
+              category,
+              dollarsFromCentsString(centsValue),
+            ],
+          ),
+        )
+      : {},
+  );
+  const [squareFeet, setSquareFeet] = useState(
+    initialAssumptions?.squareFeet != null
+      ? String(initialAssumptions.squareFeet)
       : "",
   );
-  const [transactionCosts, setTransactionCosts] = useState("");
-  const [financingCosts, setFinancingCosts] = useState("");
-  const [holdingCosts, setHoldingCosts] = useState("");
-  const [monthlyRent, setMonthlyRent] = useState("");
-  const [monthlyExpenses, setMonthlyExpenses] = useState("");
+  const [acquisition, setAcquisition] = useState(
+    initialAssumptions?.acquisitionCents
+      ? dollarsFromCentsString(initialAssumptions.acquisitionCents)
+      : defaultAcquisitionCents
+        ? String(Number(defaultAcquisitionCents) / 100)
+        : "",
+  );
+  const [transactionCosts, setTransactionCosts] = useState(
+    dollarsFromCentsString(initialAssumptions?.transactionCostsCents),
+  );
+  const [financingCosts, setFinancingCosts] = useState(
+    dollarsFromCentsString(initialAssumptions?.financingCostsCents),
+  );
+  const [holdingCosts, setHoldingCosts] = useState(
+    dollarsFromCentsString(initialAssumptions?.holdingCostsCents),
+  );
+  const [monthlyRent, setMonthlyRent] = useState(
+    dollarsFromCentsString(initialAssumptions?.monthlyRentCents),
+  );
+  const [monthlyExpenses, setMonthlyExpenses] = useState(
+    dollarsFromCentsString(initialAssumptions?.monthlyExpensesCents),
+  );
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const rehab = useMemo(
     () =>
       estimateRehab({
@@ -94,6 +142,32 @@ export function DealAnalysisCalculator({
       monthlyExpenses,
     ],
   );
+  const handleSave = async () => {
+    setSaveState("saving");
+    try {
+      const formData = new FormData();
+      formData.set("propertyId", propertyId);
+      formData.set("strategy", strategy);
+      formData.set("rehabMode", mode);
+      formData.set("squareFeet", squareFeet);
+      formData.set("ratePerSquareFootCents", rate);
+      formData.set("acquisitionCents", acquisition);
+      formData.set("transactionCostsCents", transactionCosts);
+      formData.set("financingCostsCents", financingCosts);
+      formData.set("holdingCostsCents", holdingCosts);
+      formData.set("monthlyRentCents", monthlyRent);
+      formData.set("monthlyExpensesCents", monthlyExpenses);
+      if (mode === "CUSTOM") {
+        for (const category of REHAB_CATEGORIES) {
+          formData.set(`custom_${category}`, custom[category] || "0");
+        }
+      }
+      await saveDealAssumptionsAction(formData);
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  };
   return (
     <div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -188,8 +262,30 @@ export function DealAnalysisCalculator({
       </p>
       <p className="mt-1 text-xs text-slate-500">
         {rehab.disclaimer} {result.explanation.join(" ")} Results are
-        projections, not guaranteed revenue.
+        projections, not guaranteed revenue. Rehab is an estimate, not a
+        contractor bid, and never changes the seller-safe maximum or
+        assignment projected spread above.
       </p>
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          disabled={saveState === "saving"}
+          onClick={handleSave}
+          type="button"
+        >
+          {saveState === "saving" ? "Saving…" : "Save rehab & strategy"}
+        </button>
+        {saveState === "saved" ? (
+          <span className="text-sm font-semibold text-emerald-700">
+            Saved to this Deal. It will still be here next time you open it.
+          </span>
+        ) : null}
+        {saveState === "error" ? (
+          <span className="text-sm font-semibold text-red-700">
+            Could not save. Try again.
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
