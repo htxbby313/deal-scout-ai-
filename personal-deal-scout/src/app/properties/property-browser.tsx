@@ -19,6 +19,7 @@ import {
   formatSourceRecordDate,
   propertyReadiness,
 } from "@/lib/domain";
+import { listingFactLines, listingFacts } from "@/lib/listing-facts";
 import { useThemeColor } from "@/lib/theme-color";
 import { evaluateLuxuryRedevelopmentFit } from "@/lib/luxury-redevelopment";
 
@@ -823,6 +824,21 @@ export function PropertyBrowser({
                     /12 verified
                   </b>
                 </span>
+                {listingFactLines(
+                  listingFacts({
+                    yearBuilt: property.yearBuilt,
+                    lotSize: property.lotSize,
+                    sourceRecordDate: property.sourceRecordDate,
+                    researchFindings: property.researchFindings,
+                  }),
+                )
+                  .slice(0, 2)
+                  .map((fact) => (
+                    <span className="rounded-lg bg-slate-50 p-2" key={fact.label}>
+                      <span className="block text-slate-500">{fact.label}</span>
+                      <b>{fact.value}</b>
+                    </span>
+                  ))}
               </div>
               <div className="mt-3 rounded-xl border border-slate-200 p-3 text-xs">
                 <span className="text-slate-500">Deal stage</span>
