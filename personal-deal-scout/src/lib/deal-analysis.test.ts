@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { analyzeDealStrategy, estimateRehab } from "./deal-analysis";
+import {
+  analyzeDealStrategy,
+  computeWholesaleMao,
+  estimateRehab,
+} from "./deal-analysis";
 
 describe("deal strategy and rehab analysis", () => {
   it("labels automated rehabilitation figures as estimates", () => {
@@ -38,5 +42,24 @@ describe("deal strategy and rehab analysis", () => {
       baseCents: BigInt(10_000_000),
       guaranteed: false,
     });
+  });
+  it("computes MAO from ARV, repairs, and assignment fee without using seller-safe max", () => {
+    expect(
+      computeWholesaleMao({
+        arvCents: BigInt(200_000_00),
+        repairCents: BigInt(20_000_00),
+        assignmentFeeCents: BigInt(15_000_00),
+      }),
+    ).toMatchObject({
+      maoCents: BigInt(105_000_00),
+      investorBps: 7000,
+      status: "READY",
+    });
+    expect(
+      computeWholesaleMao({
+        arvCents: null,
+        repairCents: BigInt(1),
+      }).status,
+    ).toBe("INSUFFICIENT_ARV");
   });
 });

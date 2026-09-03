@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
+import {
+  acquisitionStageLabel,
+  isLostOrNurtureStage,
+} from "@/lib/deal-cockpit";
 import { readOperatingLayer } from "@/lib/operating-layer";
 import { PipelineForms } from "@/app/pipeline/pipeline-forms";
 
@@ -29,6 +33,12 @@ export default async function PipelinePage({
   await requireOwner();
   const params = await searchParams;
   const data = await readOperatingLayer(params);
+  const activeFunnels = data.funnels.filter(
+    (funnel) => !isLostOrNurtureStage(funnel.stage),
+  );
+  const lostFunnels = data.funnels.filter((funnel) =>
+    isLostOrNurtureStage(funnel.stage),
+  );
   return (
     <WorkspaceShell active="pipeline">
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
@@ -48,7 +58,9 @@ export default async function PipelinePage({
           >
             <option value="">All stages</option>
             {stages.map((stage) => (
-              <option key={stage}>{stage}</option>
+              <option key={stage} value={stage}>
+                {acquisitionStageLabel(stage)}
+              </option>
             ))}
           </select>
           <select
@@ -86,11 +98,11 @@ export default async function PipelinePage({
         <section className="mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="border-b p-5">
             <h2 className="text-xl font-bold">
-              Opportunities · {data.funnels.length}
+              Opportunities · {activeFunnels.length}
             </h2>
           </div>
           <div className="divide-y">
-            {data.funnels.map((funnel) => (
+            {activeFunnels.map((funnel) => (
               <article
                 className="grid gap-3 p-5 md:grid-cols-[1.4fr_1fr_1fr_1fr]"
                 key={funnel.id}
@@ -101,7 +113,7 @@ export default async function PipelinePage({
                 </div>
                 <div>
                   <span className="text-xs text-slate-500">Stage</span>
-                  <b className="block">{funnel.stage.replaceAll("_", " ")}</b>
+                  <b className="block">{acquisitionStageLabel(funnel.stage)}</b>
                 </div>
                 <div>
                   <span className="text-xs text-slate-500">Buyer matches</span>
@@ -139,13 +151,40 @@ export default async function PipelinePage({
                 </div>
               </article>
             ))}
-            {!data.funnels.length ? (
+            {!activeFunnels.length ? (
               <p className="p-8 text-center text-slate-500">
                 No opportunities match these filters.
               </p>
             ) : null}
           </div>
         </section>
+        {lostFunnels.length ? (
+          <details className="mt-6 rounded-2xl border bg-white p-5">
+            <summary className="cursor-pointer text-lg font-bold">
+              Lost / Nurture · {lostFunnels.length}
+            </summary>
+            <div className="mt-3 divide-y">
+              {lostFunnels.map((funnel) => (
+                <article className="py-3" key={funnel.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <b>{funnel.property}</b>
+                      <p className="text-xs text-slate-500">
+                        {acquisitionStageLabel(funnel.stage)}
+                      </p>
+                    </div>
+                    <Link
+                      className="text-sm font-bold text-blue-700"
+                      href={`/deals/${funnel.propertyId}`}
+                    >
+                      Open Deal Box
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </details>
+        ) : null}
         <details className="mt-6 rounded-2xl border bg-white p-5">
           <summary className="cursor-pointer text-lg font-bold">
             Buyer demand, campaigns & readiness

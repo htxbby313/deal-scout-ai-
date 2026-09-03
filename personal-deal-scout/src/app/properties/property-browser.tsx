@@ -827,9 +827,7 @@ export function PropertyBrowser({
               <div className="mt-3 rounded-xl border border-slate-200 p-3 text-xs">
                 <span className="text-slate-500">Deal stage</span>
                 <b className="mt-1 block">
-                  {acquisitionStageLabel(property.pipelineStage, {
-                    matchCount: property.matches.length,
-                  })}
+                  {acquisitionStageLabel(property.pipelineStage)}
                 </b>
                 <span className="mt-2 block text-slate-500">
                   Contact: {property.contactName ? "Name ✓" : "Name needed"} ·{" "}

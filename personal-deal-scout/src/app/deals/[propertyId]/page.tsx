@@ -9,7 +9,7 @@ import { DealAnalysisCalculator } from "@/app/deals/[propertyId]/deal-analysis-c
 import { DealBoxSellerPanel } from "@/app/deals/[propertyId]/deal-box-seller";
 import { requireOwner } from "@/lib/auth";
 import { evaluateComparableSales } from "@/lib/comp-engine";
-import { analyzeDealStrategy } from "@/lib/deal-analysis";
+import { analyzeDealStrategy, computeWholesaleMao } from "@/lib/deal-analysis";
 import {
   estimateRehabFromAssumptions,
   parseDealAssumptions,
@@ -18,6 +18,8 @@ import { getDeal } from "@/lib/deal";
 import {
   acquisitionStageLabel,
   confidenceBand,
+  dealBoxPrimaryCta,
+  dealBoxThumbnailUrl,
   defaultDealSellerRecipient,
   offerVerdict,
 } from "@/lib/deal-cockpit";
@@ -118,9 +120,6 @@ export default async function DealDeskPage({
   const topMatch = buyerMatches[0];
   const stageLabel = acquisitionStageLabel(
     funnel?.stage ?? property.acquisitionFunnels[0]?.stage,
-    {
-      matchCount: buyerMatches.length,
-    },
   );
   const evidenceBand = confidenceBand(confidence, verified.length);
   const dealScore = explainDealScore({
@@ -171,6 +170,36 @@ export default async function DealDeskPage({
     : strategyOutcome?.baseCents == null
       ? "Insufficient verified data"
       : `${dollars(strategyOutcome.baseCents)} (${dealAssumptions.strategy.toLowerCase()})`;
+  const arvCents = comps.valueBaseCents ?? projection?.buyerPriceBaseCents ?? null;
+  const arvConfidence =
+    comps.valueBaseCents != null
+      ? `${comps.selected.length} comps · ${comps.confidence.replaceAll("_", " ").toLowerCase()}`
+      : projection?.buyerPriceBaseCents != null
+        ? "Buyer price base — assumption until comps verify"
+        : "Insufficient verified data";
+  const repairCents = rehabEstimate?.totalCents ?? null;
+  const mao = computeWholesaleMao({
+    arvCents,
+    repairCents,
+    assignmentFeeCents: dealAssumptions
+      ? BigInt(dealAssumptions.assignmentFeeCents)
+      : BigInt(0),
+  });
+  const thumbnailUrl = dealBoxThumbnailUrl(property.media);
+  const primaryCta = dealBoxPrimaryCta({
+    stage: funnel?.stage ?? property.acquisitionFunnels[0]?.stage,
+    propertyId: property.id,
+  });
+  const topBuyerCard = topMatch
+    ? presentDealBoxBuyerMatch({
+        score: topMatch.score,
+        reasons: topMatch.reasons,
+        developer: topMatch.developer,
+        property,
+        presentationAllowed: presentation.allowed,
+      })
+    : null;
+  const documents = transaction?.documents ?? [];
   return (
     <WorkspaceShell active="pipeline">
       <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
@@ -182,14 +211,24 @@ export default async function DealDeskPage({
         </Link>
         <header className="mt-4 rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-                Deal Box
-              </p>
-              <h1 className="mt-1 text-3xl font-bold">{property.address}</h1>
-              <p className="mt-2 text-slate-600">
-                {property.city}, {property.state} {property.zipCode}
-              </p>
+            <div className="flex gap-4">
+              {thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt=""
+                  className="h-20 w-20 shrink-0 rounded-xl object-cover"
+                  src={thumbnailUrl}
+                />
+              ) : null}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                  Deal Box
+                </p>
+                <h1 className="mt-1 text-3xl font-bold">{property.address}</h1>
+                <p className="mt-2 text-slate-600">
+                  {property.city}, {property.state} {property.zipCode}
+                </p>
+              </div>
             </div>
             <span className="w-fit rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white">
               {stageLabel}
@@ -207,50 +246,78 @@ export default async function DealDeskPage({
           ) : null}
           <p className="mt-5 text-xl font-bold">{verdict}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Summary label="ARV" value={dollars(arvCents)} hint={arvConfidence} />
             <Summary
-              label="Seller-safe maximum"
-              value={dollars(projection?.sellerSafeMaximumCents)}
+              label="Repairs"
+              value={repairCents == null ? "Not set" : dollars(repairCents)}
+              hint={
+                repairCents == null
+                  ? "Set rehab assumptions in Numbers"
+                  : "Estimate, not contractor bid"
+              }
+            />
+            <Summary
+              label="MAO"
+              value={dollars(mao.maoCents)}
+              hint={
+                repairCents == null
+                  ? `${mao.formula}. Repairs treated as $0 until set. Not seller-safe maximum.`
+                  : `${mao.formula}. Not seller-safe maximum.`
+              }
             />
             <Summary
               label="Projected spread"
               value={dollars(projection?.feeBaseCents)}
+              hint="Assignment projection — not MAO"
             />
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Summary
-              label="Evidence"
-              value={evidenceBand}
+              label="Seller-safe maximum"
+              value={dollars(projection?.sellerSafeMaximumCents)}
+              hint="Cap, not the offer formula"
             />
+            <Summary label="Evidence" value={evidenceBand} />
             <Summary
-              label="Likely buyers"
+              label="Top buyer"
               value={
-                topMatch
-                  ? `${buyerMatches.length} · ${topMatch.developer.companyName}`
+                topBuyerCard
+                  ? topBuyerCard.internalOnly
+                    ? `${topBuyerCard.companyName} · internal`
+                    : topBuyerCard.companyName
                   : "None matched"
               }
+              hint={
+                topBuyerCard?.internalOnly
+                  ? "Do not present until contract controls allow"
+                  : topBuyerCard?.explanation
+              }
             />
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Summary
-              label="Strategy profit (Estimate)"
+              label="Strategy profit"
               value={strategyProfitLine}
+              hint="Estimate from saved assumptions"
             />
           </div>
-          {dealAssumptions ? (
-            <p className="mt-2 text-xs text-slate-500">
-              Estimate, not contractor bid. Does not change seller-safe
-              maximum or assignment projected spread above.
-            </p>
-          ) : null}
           {closedOutcomeLine ? (
             <p className="mt-4 text-sm font-semibold text-slate-800">
               {closedOutcomeLine}
             </p>
           ) : null}
           <p className="mt-2 text-sm text-slate-600">{researchSpendLine}</p>
-          <div className="mt-5 rounded-xl bg-blue-50 p-4">
-            <p className="text-xs font-bold uppercase text-blue-700">
-              Recommended next action
-            </p>
-            <p className="mt-1 font-bold">{nextAction}</p>
+          <div className="mt-5 flex flex-col gap-3 rounded-xl bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase text-blue-700">
+                Recommended next action
+              </p>
+              <p className="mt-1 font-bold">{nextAction}</p>
+            </div>
+            <a
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+              href={primaryCta.href}
+            >
+              {primaryCta.label}
+            </a>
           </div>
           <DealBoxSellerPanel
             address={property.address}
@@ -313,6 +380,17 @@ export default async function DealDeskPage({
                 ["Status", property.opportunityStatus.replaceAll("_", " ")],
                 ["Verified findings", String(verified.length)],
                 ["Open conflicts", String(conflicts.length)],
+                [
+                  "Documents",
+                  documents.length
+                    ? documents
+                        .map(
+                          (document) =>
+                            `${document.title} (${document.status.replaceAll("_", " ")})`,
+                        )
+                        .join("; ")
+                    : "None on this deal",
+                ],
               ]}
             />
           </Panel>
@@ -667,11 +745,20 @@ export default async function DealDeskPage({
   );
 }
 
-function Summary({ label, value }: { label: string; value: string }) {
+function Summary({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string | null;
+}) {
   return (
     <div className="rounded-xl bg-slate-50 p-4">
       <p className="text-xs font-semibold text-slate-500">{label}</p>
       <p className="mt-1 font-bold">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </div>
   );
 }

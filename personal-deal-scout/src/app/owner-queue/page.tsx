@@ -25,22 +25,25 @@ export default async function OwnerQueuePage() {
       DEVELOPER_DRAFT: "Developer draft",
       CONTRACT_TEMPLATE: "Contract review",
     })[kind] ?? kind.replaceAll("_", " ");
-  const attention = items.length
-    ? `${items.length} item${items.length === 1 ? "" : "s"} need a decision.`
+  const attention = firstItem
+    ? `Work on ${firstItem.label} today.`
     : "You’re caught up. Research continues in the background.";
+  const rest = items.slice(1, 9);
   return (
     <WorkspaceShell active="owner-queue">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         <header className="border-b pb-6">
           <p className="text-sm font-semibold text-blue-700">Home</p>
-          <h1 className="mt-1 text-3xl font-bold">What needs attention</h1>
+          <h1 className="mt-1 text-3xl font-bold">
+            What should I work on today?
+          </h1>
           <p className="mt-2 text-sm text-slate-600">{attention}</p>
           {firstItem ? (
             <Link
               className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
               href={firstItem.href}
             >
-              {ownerQueueCtaLabel(firstItem.kind)}
+              Continue working
             </Link>
           ) : (
             <Link
@@ -53,10 +56,10 @@ export default async function OwnerQueuePage() {
         </header>
         <section className="mt-6 overflow-hidden rounded-2xl border bg-white">
           <div className="border-b p-5">
-            <h2 className="text-xl font-bold">Needs you</h2>
+            <h2 className="text-xl font-bold">Also on deck</h2>
           </div>
           <div className="divide-y">
-            {items.map((item) => (
+            {rest.map((item) => (
               <article className="p-5" key={`${item.kind}-${item.id}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -92,9 +95,11 @@ export default async function OwnerQueuePage() {
                 )}
               </article>
             ))}
-            {!items.length ? (
+            {!rest.length ? (
               <div className="p-10 text-center">
-                <p className="text-lg font-bold">You’re caught up</p>
+                <p className="text-lg font-bold">
+                  {firstItem ? "Nothing else on deck" : "You’re caught up"}
+                </p>
                 <p className="mt-1 text-sm text-slate-500">
                   Research and agent work will continue automatically.
                 </p>
