@@ -120,13 +120,22 @@ describe("deal cockpit copy", () => {
     expect(dealBoxPrimaryCta({ stage: "DISCOVERED", propertyId: "p1" }).label).toBe(
       "Qualify",
     );
-    expect(dealBoxPrimaryCta({ stage: "OFFER_READY", propertyId: "p1" })).toEqual({
+    expect(
+      dealBoxPrimaryCta({
+        stage: "OFFER_READY",
+        propertyId: "p1",
+        transactionId: "t1",
+      }),
+    ).toEqual({
       label: "Make Offer",
-      href: "#numbers",
+      href: "/transactions?transaction=t1",
     });
     expect(
-      dealBoxPrimaryCta({ stage: "CONTRACTED", propertyId: "p1" }).label,
-    ).toBe("Send Contract");
+      dealBoxPrimaryCta({ stage: "CONTRACTED", propertyId: "p1" }),
+    ).toEqual({
+      label: "Send Contract",
+      href: "/transactions",
+    });
   });
 
   it("only uses listing photos with displayable rights as the Deal Box thumbnail", () => {

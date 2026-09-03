@@ -29,16 +29,17 @@ export function isLostOrNurtureStage(stage?: string | null) {
 export function dealBoxPrimaryCta(input: {
   stage?: string | null;
   propertyId: string;
+  transactionId?: string | null;
 }) {
   const stage = input.stage ?? "DISCOVERED";
+  const transactionHref = input.transactionId
+    ? `/transactions?transaction=${encodeURIComponent(input.transactionId)}`
+    : "/transactions";
   if (stage === "OFFER_READY") {
-    return { label: "Make Offer", href: `#numbers` };
+    return { label: "Make Offer", href: transactionHref };
   }
   if (stage === "CONTRACTED") {
-    return {
-      label: "Send Contract",
-      href: `/deals/${input.propertyId}/package`,
-    };
+    return { label: "Send Contract", href: transactionHref };
   }
   if (stage === "DISPOSITION_READY") {
     return { label: "Match Buyers", href: `#buyers` };
