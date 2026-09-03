@@ -4,13 +4,14 @@ import { useState } from "react";
 import Image from "next/image";
 import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
 
-type Photo = { url: string; altText: string; rightsStatus?: string };
+type Photo = { url: string; altText: string; rightsStatus?: string; kind?: string };
 
 // Display does not require send approval. Distribution rights stay in the existing gate.
 export function PropertyPhoto({ photos, eager = false }: { photos: Photo[]; eager?: boolean }) {
   const [failed, setFailed] = useState<string[]>([]);
-  const photo = photos.find((item) => isSafePublicEvidenceUrl(item.url)
-    && !["REJECTED", "RESTRICTED", "LINK_ONLY"].includes(item.rightsStatus || "")
+  const photo = photos.find((item) => item.kind !== "MAP"
+    && isSafePublicEvidenceUrl(item.url)
+    && !["REJECTED", "RESTRICTED", "LINK_ONLY", "INTERNAL_ONLY"].includes(item.rightsStatus || "")
     && !failed.includes(item.url));
   return (
     <div className="relative grid h-40 w-full place-items-center overflow-hidden bg-slate-100">

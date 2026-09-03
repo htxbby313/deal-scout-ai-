@@ -52,11 +52,29 @@ function date(value: Date | string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+const REQUIRED_TRANSACTION_STATUS: Partial<
+  Record<AcquisitionStageName, readonly string[]>
+> = {
+  CONTRACTED: [
+    "UNDER_CONTRACT",
+    "BUYER_MATCHING",
+    "ASSIGNMENT_PENDING",
+    "CLOSING_PENDING",
+  ],
+  DISPOSITION_READY: [
+    "BUYER_MATCHING",
+    "ASSIGNMENT_PENDING",
+    "CLOSING_PENDING",
+  ],
+  CLOSED: ["COMPLETED"],
+};
+
 export function evaluateStageTransition(input: {
   currentStage: AcquisitionStageName;
   nextStage: AcquisitionStageName;
   gates: readonly GateSnapshot[];
   transactionControlStatus: "ACTIVE" | "ON_HOLD" | "STOPPED";
+  transactionStatus?: string | null;
   now: Date;
 }) {
   const blockers: string[] = [];
@@ -64,6 +82,12 @@ export function evaluateStageTransition(input: {
     blockers.push(
       `transaction_${input.transactionControlStatus.toLowerCase()}`,
     );
+  const requiredStatuses = REQUIRED_TRANSACTION_STATUS[input.nextStage];
+  if (
+    requiredStatuses &&
+    !requiredStatuses.includes(input.transactionStatus ?? "")
+  )
+    blockers.push("transaction_status_not_contracted");
   const currentIndex = ACQUISITION_STAGE_ORDER.indexOf(
     input.currentStage as (typeof ACQUISITION_STAGE_ORDER)[number],
   );
