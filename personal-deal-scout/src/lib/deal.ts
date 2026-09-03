@@ -40,7 +40,20 @@ const dealPropertyInclude = {
   media: true,
   acquisitionFunnels: { orderBy: { updatedAt: "desc" as const }, take: 1 },
   matches: {
-    include: { developer: true },
+    include: {
+      developer: {
+        include: {
+          projects: {
+            where: {
+              verifiedAt: { not: null },
+              sourceUrl: { not: null },
+            },
+            orderBy: { verifiedAt: "desc" as const },
+            take: 10,
+          },
+        },
+      },
+    },
     orderBy: { score: "desc" as const },
     take: 5,
   },
