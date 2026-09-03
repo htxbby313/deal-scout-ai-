@@ -93,3 +93,22 @@ export function evaluatePropertyPresentation(
     blockers.push("assignment_marketing_approval_missing");
   return { allowed: blockers.length === 0, blockers };
 }
+
+const GATE_COPY: Record<string, string> = {
+  contractual_interest_missing: "No contract on this deal yet",
+  transaction_not_active: "Transaction is not active",
+  transaction_status_not_contracted: "Not under contract",
+  counsel_approval_missing: "Counsel has not approved",
+  compliance_verification_missing: "Compliance has not verified",
+  property_not_contracted: "Pipeline is not at Contract / Disposition",
+  contract_gate_missing: "Contract gate is not satisfied",
+  disposition_gate_missing: "Disposition gate is not satisfied",
+  executed_purchase_agreement_missing: "Executed purchase agreement is missing",
+  assignment_marketing_approval_missing: "Assignment marketing is not approved",
+};
+
+export function presentationGateLine(blockers: readonly string[]) {
+  if (!blockers.length) return "Shoppable — contract controls allow buyer presentation.";
+  const first = GATE_COPY[blockers[0]] ?? blockers[0].replaceAll("_", " ");
+  return `Not shoppable — ${first}.`;
+}

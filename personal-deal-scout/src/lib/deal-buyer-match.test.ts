@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  contactReadinessLabel,
   explainBuyerMatch,
   isDealBoxWorkingSetDeveloper,
   pickComparableVerifiedProject,
@@ -114,7 +113,10 @@ describe("deal buyer match presentation", () => {
     expect(card.explanation.split(".").filter(Boolean)).toHaveLength(1);
     expect(card.comparableLine).toContain("Houston");
     expect(card.comparableLine).toContain("$980,000");
-    expect(card.contactReadiness).toBe(contactReadinessLabel("PRIORITY"));
+    expect(card.contactReadiness).toBe(
+      "Internal only — do not call or send this deal",
+    );
     expect(card.internalOnly).toBe(true);
+    expect(card.shoppableLabel).toBe("Not shoppable");
   });
 });

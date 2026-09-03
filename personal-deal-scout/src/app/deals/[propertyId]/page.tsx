@@ -32,7 +32,10 @@ import {
   formatClosedOutcomeLine,
   formatResearchSpendLine,
 } from "@/lib/deal-unit-cost";
-import { evaluatePropertyPresentation } from "@/lib/property-presentation-policy";
+import {
+  evaluatePropertyPresentation,
+  presentationGateLine,
+} from "@/lib/property-presentation-policy";
 import { sellerNextAction } from "@/lib/seller-crm-domain";
 
 export const dynamic = "force-dynamic";
@@ -288,9 +291,15 @@ export default async function DealDeskPage({
                   : "None matched"
               }
               hint={
-                topBuyerCard?.internalOnly
-                  ? "Do not present until contract controls allow"
-                  : topBuyerCard?.explanation
+                topBuyerCard
+                  ? `${presentationGateLine(presentation.blockers)}${
+                      topBuyerCard.internalOnly
+                        ? ""
+                        : ` ${topBuyerCard.explanation}`
+                    }`
+                  : presentation.allowed
+                    ? undefined
+                    : presentationGateLine(presentation.blockers)
               }
             />
             <Summary
@@ -597,9 +606,14 @@ export default async function DealDeskPage({
         </section>
         <section className="mt-5" id="buyers">
           <Panel title="Buyer Match">
-            <p className="text-sm text-slate-600">
-              Up to five genuine buy-box matches. Matching is internal until the
-              property-presentation controls above are satisfied.
+            <p
+              className={
+                presentation.allowed
+                  ? "text-sm text-slate-600"
+                  : "rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900"
+              }
+            >
+              {presentationGateLine(presentation.blockers)}
             </p>
             <div className="mt-4 grid gap-3">
               {buyerMatches.map(({ developer, score, reasons }, index) => {
@@ -617,7 +631,7 @@ export default async function DealDeskPage({
                         #{index + 1} {card.companyName}
                       </b>
                       <span className="text-sm font-bold text-blue-700">
-                        {card.score}/100
+                        {card.shoppableLabel} · {card.score}/100
                       </span>
                     </div>
                     <p className="mt-2 text-sm text-slate-700">
@@ -632,9 +646,9 @@ export default async function DealDeskPage({
                       {card.contactReadiness}
                     </p>
                     {card.internalOnly ? (
-                      <p className="mt-2 text-xs text-amber-800">
-                        Internal match — do not present until contract controls
-                        allow.
+                      <p className="mt-2 text-xs font-bold text-amber-800">
+                        {presentationGateLine(presentation.blockers)} Do not
+                        call or send this deal.
                       </p>
                     ) : null}
                   </article>
