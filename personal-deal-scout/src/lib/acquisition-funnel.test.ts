@@ -47,6 +47,43 @@ describe("acquisition funnel policy", () => {
     ]);
   });
 
+  it("does not let funnel CONTRACTED outrun DealTransaction status", () => {
+    const blocked = evaluateStageTransition({
+      currentStage: "OFFER_READY",
+      nextStage: "CONTRACTED",
+      gates: [
+        {
+          type: "CONTRACT",
+          version: 1,
+          status: "SATISFIED",
+          expiresAt: "2026-09-01",
+        },
+      ],
+      transactionControlStatus: "ACTIVE",
+      transactionStatus: "DRAFT",
+      now,
+    });
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.blockers).toContain("transaction_status_not_contracted");
+    expect(
+      evaluateStageTransition({
+        currentStage: "OFFER_READY",
+        nextStage: "CONTRACTED",
+        gates: [
+          {
+            type: "CONTRACT",
+            version: 1,
+            status: "SATISFIED",
+            expiresAt: "2026-09-01",
+          },
+        ],
+        transactionControlStatus: "ACTIVE",
+        transactionStatus: "UNDER_CONTRACT",
+        now,
+      }).allowed,
+    ).toBe(true);
+  });
+
   it("explains demand, capacity, and reliability matching from versioned evidence", () => {
     const result = evaluateBuyerDemand({
       demand: {

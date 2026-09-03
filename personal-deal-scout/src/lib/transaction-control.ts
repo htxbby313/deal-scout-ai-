@@ -104,6 +104,76 @@ export async function setOwnerControl(input: {
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
+export async function recordTransactionLegalReview(input: {
+  transactionId: string;
+  kind: "COUNSEL" | "COMPLIANCE";
+  actor: string;
+  reason: string;
+}) {
+  if (!input.reason.trim()) throw new Error("A legal-review reason is required.");
+  return getPrisma().$transaction(async (tx) => {
+    const current = await tx.dealTransaction.findUnique({
+      where: { id: input.transactionId },
+    });
+    if (!current) throw new Error("Transaction not found.");
+    if (current.controlStatus === "STOPPED")
+      throw new Error("A stopped transaction cannot receive legal review.");
+    const data =
+      input.kind === "COUNSEL"
+        ? { counselApprovedAt: new Date() }
+        : { complianceVerifiedAt: new Date() };
+    const transaction = await tx.dealTransaction.update({
+      where: { id: input.transactionId },
+      data,
+    });
+    await appendAuditEvent(
+      tx,
+      transaction.id,
+      `transaction.legal.${input.kind.toLowerCase()}`,
+      input.actor,
+      `${input.kind === "COUNSEL" ? "Counsel" : "Compliance"} recorded.`,
+      { reason: input.reason.trim() },
+    );
+    return transaction;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function executeTransactionDocument(input: {
+  documentId: string;
+  actor: string;
+  contentHash: string;
+}) {
+  if (!input.contentHash.trim())
+    throw new Error("An artifact hash is required to mark a document executed.");
+  return getPrisma().$transaction(async (tx) => {
+    const document = await tx.transactionDocument.findUnique({
+      where: { id: input.documentId },
+      include: { transaction: true },
+    });
+    if (!document) throw new Error("Document not found.");
+    if (document.transaction.controlStatus === "STOPPED")
+      throw new Error("Documents on a stopped transaction cannot be executed.");
+    const updated = await tx.transactionDocument.update({
+      where: { id: input.documentId },
+      data: {
+        status: "EXECUTED",
+        executedAt: new Date(),
+        contentHash: input.contentHash.trim(),
+        counselApproved: true,
+      },
+    });
+    await appendAuditEvent(
+      tx,
+      document.transactionId,
+      "transaction.document.executed",
+      input.actor,
+      `Executed ${document.type} document version ${document.version}.`,
+      { documentId: document.id },
+    );
+    return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function requestTransactionApproval(input: {
   transactionId: string;
   type: TransactionApprovalType;

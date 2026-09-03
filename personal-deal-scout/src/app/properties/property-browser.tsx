@@ -75,6 +75,7 @@ export type PropertyView = {
     sourceName: string;
     caption?: string;
     altText: string;
+    kind?: string;
     sendApproved: boolean;
     rightsStatus: string;
     rightsEvidenceUrl?: string;
@@ -223,9 +224,9 @@ function PhotoPanel({ property }: { property: PropertyView }) {
         Available source photos appear here automatically. Sharing with buyers
         has a separate rights review.
       </p>
-      {property.media.length ? (
+      {property.media.filter((item) => item.kind !== "MAP").length ? (
         <div className="mt-4 grid grid-cols-2 gap-3">
-          {property.media.map((item) => (
+          {property.media.filter((item) => item.kind !== "MAP").map((item) => (
             <article
               className="overflow-hidden rounded-xl border"
               key={item.id}

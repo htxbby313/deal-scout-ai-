@@ -3,6 +3,7 @@ import { generateDeveloperPricingRequestAction } from "@/app/actions";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
 import { readDatabase, scoreDeveloperMatches } from "@/lib/database";
+import { evaluatePropertyPresentation } from "@/lib/property-presentation-policy";
 import { getPrisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +38,33 @@ export default async function DispositionPage({
       )
       .map((developer) => developer.id),
   );
-  const actionable = db.properties.filter(
+  const candidates = db.properties.filter(
     (property) =>
       property.opportunityStatus !== "REJECTED" &&
       Boolean(property.sourceUrl || property.verificationSourceUrl),
+  );
+  const transactions = await getPrisma().dealTransaction.findMany({
+    where: {
+      propertyId: { in: candidates.map((property) => property.id) },
+      controlStatus: { not: "STOPPED" },
+    },
+    include: {
+      documents: true,
+      approvals: true,
+      acquisitionFunnel: { include: { gates: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  const presentationByProperty = new Map(
+    candidates.map((property) => {
+      const transaction = transactions.find(
+        (item) => item.propertyId === property.id,
+      );
+      return [property.id, evaluatePropertyPresentation(transaction ?? null)];
+    }),
+  );
+  const actionable = candidates.filter(
+    (property) => presentationByProperty.get(property.id)?.allowed,
   );
   const scored = await Promise.all(
     actionable.map(async (property) => ({

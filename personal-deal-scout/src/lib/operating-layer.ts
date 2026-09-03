@@ -625,6 +625,7 @@ export async function advanceAcquisitionStage(input: {
               gates: currentGates,
               transactionControlStatus:
                 funnel.transaction?.controlStatus ?? "ON_HOLD",
+              transactionStatus: funnel.transaction?.status ?? null,
               now: new Date(),
             });
         if (!decision.allowed)
