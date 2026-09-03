@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { US_STATE_CODES } from "@/lib/map-ranking";
 import { OpenStreetPropertyMap } from "@/app/openstreet-maps";
+import { GooglePropertyMap } from "@/app/properties/google-property-map";
 
 export type MapProperty = {
   id: string;
@@ -60,12 +61,23 @@ export default function PropertyMap({
         </div>
       </div>
       <div aria-label="Interactive map of sourced properties">
-        <OpenStreetPropertyMap
-          baseColor={baseColor}
-          onSelect={onSelect}
-          properties={mapped}
-          rankCategory={rankCategory}
-        />
+        {process.env.NEXT_PUBLIC_GOOGLE_MAPS_ENABLED === "true" &&
+        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
+          <GooglePropertyMap
+            apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+            baseColor={baseColor}
+            onSelect={onSelect}
+            properties={mapped}
+            rankCategory={rankCategory}
+          />
+        ) : (
+          <OpenStreetPropertyMap
+            baseColor={baseColor}
+            onSelect={onSelect}
+            properties={mapped}
+            rankCategory={rankCategory}
+          />
+        )}
       </div>
       {!mapped.length ? (
         <p className="border-t bg-amber-50 p-3 text-xs font-semibold text-amber-900">
