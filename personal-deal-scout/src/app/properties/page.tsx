@@ -7,7 +7,9 @@ import {
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { SubmitButton } from "@/app/submit-button";
 import { registerZillowReferenceAction } from "@/app/deal-desk-actions";
+import { BuyBoxPanel } from "@/app/properties/buy-box-panel";
 import { requireOwner } from "@/lib/auth";
+import { listBuyBoxes } from "@/lib/buy-box-service";
 import { calculateMatches, readDatabase } from "@/lib/database";
 import { getPrisma } from "@/lib/prisma";
 
@@ -48,7 +50,7 @@ function Field({
 export default async function PropertiesPage() {
   await requireOwner();
   const db = await readDatabase();
-  const [countyEvidence, funnels] = await Promise.all([
+  const [countyEvidence, funnels, buyBoxes] = await Promise.all([
     getPrisma().countyFactObservation.findMany({
       where: { propertyId: { not: null } },
       include: {
@@ -61,6 +63,7 @@ export default async function PropertiesPage() {
     getPrisma().acquisitionFunnel.findMany({
       select: { propertyId: true, stage: true },
     }),
+    listBuyBoxes(),
   ]);
   const stageByProperty = new Map(
     funnels.map((funnel) => [funnel.propertyId, funnel.stage]),
@@ -96,6 +99,7 @@ export default async function PropertiesPage() {
         <div className="mt-6">
           <PropertyBrowser properties={properties} />
         </div>
+        <BuyBoxPanel boxes={buyBoxes} />
         <details className="mt-6 rounded-2xl border bg-white p-5" id="add-or-import">
           <summary className="cursor-pointer font-bold">Add or import</summary>
           <div className="mt-4 grid gap-6 xl:grid-cols-2">
