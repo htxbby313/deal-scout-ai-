@@ -65,7 +65,7 @@ const dealPropertyInclude = {
       sellerEngagements: {
         orderBy: { updatedAt: "desc" as const },
         include: {
-          conversations: { orderBy: { occurredAt: "desc" as const }, take: 1 },
+          conversations: { orderBy: { occurredAt: "desc" as const }, take: 8 },
           followUps: true,
           consents: { orderBy: { createdAt: "desc" as const }, take: 1 },
           offerHistory: { orderBy: { createdAt: "desc" as const }, take: 1 },

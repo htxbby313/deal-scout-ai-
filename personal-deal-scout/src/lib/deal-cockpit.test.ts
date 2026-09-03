@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   acquisitionStageLabel,
   confidenceBand,
+  DEAL_BOX_NO_CONVERSATION,
+  DEAL_BOX_RECORD_EVIDENCE_COPY,
+  DEAL_BOX_START_PURPOSE,
+  defaultDealSellerRecipient,
   offerVerdict,
   ownerQueueCtaLabel,
   sellerConversationHref,
+  sellerFactsHref,
 } from "@/lib/deal-cockpit";
 
 describe("deal cockpit copy", () => {
@@ -67,6 +72,40 @@ describe("deal cockpit copy", () => {
     );
     expect(sellerConversationHref({ address: "123 Main St" })).toBe(
       "/seller-crm?q=123%20Main%20St",
+    );
+    expect(sellerFactsHref("eng_1")).toBe(
+      "/seller-crm?engagementId=eng_1#seller-intake",
+    );
+  });
+
+  it("defaults Deal Box seller recipient and evidence copy without a Contacts hop", () => {
+    expect(
+      defaultDealSellerRecipient({
+        contactPhone: " 3055550100 ",
+        contactEmail: "owner@example.com",
+        ownerName: "Pat Owner",
+      }),
+    ).toBe("3055550100");
+    expect(
+      defaultDealSellerRecipient({
+        contactPhone: null,
+        contactEmail: "owner@example.com",
+        ownerName: "Pat Owner",
+      }),
+    ).toBe("owner@example.com");
+    expect(
+      defaultDealSellerRecipient({
+        contactPhone: " ",
+        contactEmail: null,
+        ownerName: "Pat Owner",
+      }),
+    ).toBe("Pat Owner");
+    expect(DEAL_BOX_START_PURPOSE).toBe("Seller relationship for this deal");
+    expect(DEAL_BOX_NO_CONVERSATION).toBe(
+      "No conversation recorded on this deal.",
+    );
+    expect(DEAL_BOX_RECORD_EVIDENCE_COPY).toBe(
+      "Saves evidence; does not send.",
     );
   });
 });

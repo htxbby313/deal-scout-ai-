@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 import { requireOwner } from "@/lib/auth";
 import { parseMoneyToCents } from "@/lib/financial-truth";
+import { getPrisma } from "@/lib/prisma";
 import {
   createSellerEngagementDraft,
   reviewSellerEngagementDraft,
@@ -26,6 +27,7 @@ import {
   sellerDispositionReasons,
   sellerRepresentationStatuses,
 } from "@/lib/seller-crm-domain";
+import { createControlledTransaction } from "@/lib/transaction-control";
 const text = (data: FormData, key: string) =>
   String(data.get(key) ?? "").trim();
 const date = (data: FormData, key: string) => {
@@ -46,32 +48,100 @@ const channel = (data: FormData, key: string) =>
     engagementChannels,
     "Channel",
   ) as EngagementChannel;
+
+async function revalidateSellerSurfaces(input: {
+  propertyId?: string;
+  engagementId?: string;
+  transactionId?: string;
+}) {
+  revalidatePath("/seller-crm");
+  const known = input.propertyId?.trim();
+  if (known) {
+    revalidatePath(`/deals/${known}`);
+    return;
+  }
+  const db = getPrisma();
+  if (input.engagementId?.trim()) {
+    const row = await db.sellerEngagement.findUnique({
+      where: { id: input.engagementId.trim() },
+      select: { transaction: { select: { propertyId: true } } },
+    });
+    if (row?.transaction.propertyId) {
+      revalidatePath(`/deals/${row.transaction.propertyId}`);
+    }
+    return;
+  }
+  if (input.transactionId?.trim()) {
+    const row = await db.dealTransaction.findUnique({
+      where: { id: input.transactionId.trim() },
+      select: { propertyId: true },
+    });
+    if (row?.propertyId) {
+      revalidatePath(`/deals/${row.propertyId}`);
+    }
+  }
+}
+
 export async function createSellerEngagementAction(data: FormData) {
   await requireOwner();
+  const transactionId = text(data, "transactionId");
   await createSellerEngagementDraft({
-    transactionId: text(data, "transactionId"),
+    transactionId,
     channel: channel(data, "channel"),
     recipient: text(data, "recipient"),
     recipientLabel: text(data, "recipientLabel"),
     purpose: text(data, "purpose"),
     actor: "owner",
   });
-  revalidatePath("/seller-crm");
+  await revalidateSellerSurfaces({
+    propertyId: text(data, "propertyId"),
+    transactionId,
+  });
 }
+
+export async function startSellerThreadOnDealAction(data: FormData) {
+  await requireOwner();
+  const propertyId = text(data, "propertyId");
+  if (!propertyId) throw new Error("propertyId is required.");
+  let transactionId = text(data, "transactionId");
+  if (!transactionId) {
+    const transaction = await createControlledTransaction({
+      propertyId,
+      actor: "owner",
+    });
+    transactionId = transaction.id;
+  }
+  await createSellerEngagementDraft({
+    transactionId,
+    channel: channel(data, "channel"),
+    recipient: text(data, "recipient"),
+    recipientLabel: text(data, "recipientLabel"),
+    purpose: text(data, "purpose") || "Seller relationship for this deal",
+    actor: "owner",
+  });
+  revalidatePath("/seller-crm");
+  revalidatePath(`/deals/${propertyId}`);
+}
+
 export async function reviewSellerEngagementAction(data: FormData) {
   await requireOwner();
+  const engagementId = text(data, "engagementId");
   await reviewSellerEngagementDraft({
-    engagementId: text(data, "engagementId"),
+    engagementId,
     approved: text(data, "decision") === "approve",
     actor: "owner",
   });
   revalidatePath("/owner-queue");
-  revalidatePath("/seller-crm");
+  await revalidateSellerSurfaces({
+    propertyId: text(data, "propertyId"),
+    engagementId,
+  });
 }
 export async function recordSellerConversationAction(data: FormData) {
   await requireOwner();
+  const engagementId = text(data, "engagementId");
   await recordSellerConversation({
-    engagementId: text(data, "engagementId"),
+    engagementId,
     occurredAt: date(data, "occurredAt"),
     sourceType: text(data, "sourceType"),
     sourceUrl: text(data, "sourceUrl") || undefined,
@@ -81,7 +151,10 @@ export async function recordSellerConversationAction(data: FormData) {
     questions: parseLines(text(data, "questions")),
     actor: "owner",
   });
-  revalidatePath("/seller-crm");
+  await revalidateSellerSurfaces({
+    propertyId: text(data, "propertyId"),
+    engagementId,
+  });
 }
 export async function recordSellerFactsAction(data: FormData) {
   await requireOwner();
@@ -120,7 +193,10 @@ export async function recordSellerFactsAction(data: FormData) {
     independentAdviceRequired: data.get("independentAdviceRequired") === "on",
     actor: "owner",
   });
-  revalidatePath("/seller-crm");
+  await revalidateSellerSurfaces({
+    propertyId: text(data, "propertyId"),
+    engagementId: text(data, "engagementId"),
+  });
 }
 export type SellerFactsFormState = {
   status: "idle" | "error" | "success";
@@ -159,7 +235,10 @@ export async function scheduleSellerFollowUpAction(data: FormData) {
       : undefined,
     actor: "owner",
   });
-  revalidatePath("/seller-crm");
+  await revalidateSellerSurfaces({
+    propertyId: text(data, "propertyId"),
+    engagementId: text(data, "engagementId"),
+  });
 }
 export async function recordSellerDispositionAction(data: FormData) {
   await requireOwner();
@@ -176,5 +255,8 @@ export async function recordSellerDispositionAction(data: FormData) {
       : undefined,
     actor: "owner",
   });
-  revalidatePath("/seller-crm");
+  await revalidateSellerSurfaces({
+    propertyId: text(data, "propertyId"),
+    engagementId: text(data, "engagementId"),
+  });
 }

@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   recordFacts: vi.fn(async () => ({})),
   scheduleFollowUp: vi.fn(async () => ({})),
   revalidatePath: vi.fn(),
+  createTransaction: vi.fn(async () => ({ id: "tx-created" })),
+  sellerEngagementFindUnique: vi.fn(),
+  dealTransactionFindUnique: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ requireOwner: mocks.requireOwner }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -21,6 +24,15 @@ vi.mock("@/lib/seller-crm", () => ({
   recordSellerFacts: mocks.recordFacts,
   scheduleSellerFollowUp: mocks.scheduleFollowUp,
 }));
+vi.mock("@/lib/transaction-control", () => ({
+  createControlledTransaction: mocks.createTransaction,
+}));
+vi.mock("@/lib/prisma", () => ({
+  getPrisma: () => ({
+    sellerEngagement: { findUnique: mocks.sellerEngagementFindUnique },
+    dealTransaction: { findUnique: mocks.dealTransactionFindUnique },
+  }),
+}));
 
 import {
   createSellerEngagementAction,
@@ -28,6 +40,7 @@ import {
   recordSellerDispositionAction,
   recordSellerFactsAction,
   scheduleSellerFollowUpAction,
+  startSellerThreadOnDealAction,
 } from "@/app/seller-crm-actions";
 
 const form = (values: Record<string, string>) => {
@@ -166,6 +179,78 @@ describe("seller CRM action validation", () => {
         representationStatus: "UNREPRESENTED",
         preferredChannel: "PHONE",
       }),
+    );
+  });
+
+  it("revalidates Deal Box when propertyId is posted with a conversation", async () => {
+    await recordSellerConversationAction(
+      form({
+        engagementId: "eng",
+        propertyId: "prop-9",
+        occurredAt: "2026-08-20T10:00",
+        sourceType: "Call",
+        summary: "Seller discussed the property.",
+      }),
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/seller-crm");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/deals/prop-9");
+    expect(mocks.sellerEngagementFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("looks up the deal path from the engagement when propertyId is omitted", async () => {
+    mocks.sellerEngagementFindUnique.mockResolvedValue({
+      transaction: { propertyId: "prop-looked-up" },
+    });
+    await recordSellerConversationAction(
+      form({
+        engagementId: "eng",
+        occurredAt: "2026-08-20T10:00",
+        sourceType: "Call",
+        summary: "Seller discussed the property.",
+      }),
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/deals/prop-looked-up");
+  });
+
+  it("starts a seller thread on a deal without a transaction", async () => {
+    await startSellerThreadOnDealAction(
+      form({
+        propertyId: "prop-new",
+        channel: "PHONE",
+        recipient: "3055550100",
+        recipientLabel: "Pat Owner",
+        purpose: "Seller relationship for this deal",
+      }),
+    );
+    expect(mocks.createTransaction).toHaveBeenCalledWith({
+      propertyId: "prop-new",
+      actor: "owner",
+    });
+    expect(mocks.createEngagement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transactionId: "tx-created",
+        channel: "PHONE",
+        recipient: "3055550100",
+        purpose: "Seller relationship for this deal",
+      }),
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/seller-crm");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/deals/prop-new");
+  });
+
+  it("starts a seller thread on an existing deal transaction without creating another", async () => {
+    await startSellerThreadOnDealAction(
+      form({
+        propertyId: "prop-live",
+        transactionId: "tx-live",
+        channel: "SMS",
+        recipient: "3055550100",
+        purpose: "Seller relationship for this deal",
+      }),
+    );
+    expect(mocks.createTransaction).not.toHaveBeenCalled();
+    expect(mocks.createEngagement).toHaveBeenCalledWith(
+      expect.objectContaining({ transactionId: "tx-live", channel: "SMS" }),
     );
   });
 });

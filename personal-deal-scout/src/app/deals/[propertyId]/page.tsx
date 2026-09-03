@@ -6,14 +6,15 @@ import {
   registerZillowReferenceAction,
 } from "@/app/deal-desk-actions";
 import { DealAnalysisCalculator } from "@/app/deals/[propertyId]/deal-analysis-calculator";
+import { DealBoxSellerPanel } from "@/app/deals/[propertyId]/deal-box-seller";
 import { requireOwner } from "@/lib/auth";
 import { evaluateComparableSales } from "@/lib/comp-engine";
 import { getDeal } from "@/lib/deal";
 import {
   acquisitionStageLabel,
   confidenceBand,
+  defaultDealSellerRecipient,
   offerVerdict,
-  sellerConversationHref,
 } from "@/lib/deal-cockpit";
 import {
   presentDealBoxBuyerMatch,
@@ -68,7 +69,6 @@ export default async function DealDeskPage({
   const closedOutcomeLine = formatClosedOutcomeLine(outcome);
   const researchSpendLine = formatResearchSpendLine(unitCost);
   const engagement = sellerEngagements[0];
-  const lastConversation = engagement?.conversations[0];
   const verified = property.researchFindings.filter(
     (finding) => finding.status === "VERIFIED",
   );
@@ -108,10 +108,6 @@ export default async function DealDeskPage({
     conflictCount: conflicts.length,
     sellerSafeMaximumCents: projection?.sellerSafeMaximumCents,
     projectedSpreadCents: projection?.feeBaseCents,
-  });
-  const sellerHref = sellerConversationHref({
-    engagementId: engagement?.id,
-    address: property.address,
   });
   const buyerMatches = selectDealBoxBuyerMatches(property.matches);
   const topMatch = buyerMatches[0];
@@ -208,43 +204,28 @@ export default async function DealDeskPage({
             </p>
             <p className="mt-1 font-bold">{nextAction}</p>
           </div>
-          <article className="mt-4 rounded-xl border border-slate-200 p-4">
-            <p className="text-xs font-bold uppercase text-slate-500">Seller</p>
-            <p className="mt-1 font-bold">
-              {engagement?.recipientLabel ||
-                property.contactName ||
-                property.ownerName ||
-                "Seller unknown"}
-            </p>
-            <p className="mt-1 text-sm text-slate-600">
-              {property.contactPhone
-                ? `Phone ${property.contactPhone}`
-                : "No phone on file"}
-            </p>
-            <p className="mt-1 text-sm text-slate-600">
-              Last contact:{" "}
-              {lastConversation
-                ? lastConversation.occurredAt.toLocaleString()
-                : "None recorded"}
-            </p>
-            {engagement ? (
-              <Link
-                className="mt-3 inline-block text-sm font-bold text-blue-700"
-                href={sellerHref}
-              >
-                {nextAction.startsWith("Build seller relationship")
-                  ? "Open seller conversation"
-                  : `Seller next step: ${sellerAction?.[0] ?? "Open conversation"}`}
-              </Link>
-            ) : (
-              <p className="mt-3 text-sm text-slate-600">
-                No seller engagement on this deal.{" "}
-                <Link className="font-bold text-blue-700" href={sellerHref}>
-                  Open Contacts with this property
-                </Link>
-              </p>
-            )}
-          </article>
+          <DealBoxSellerPanel
+            address={property.address}
+            conversations={engagement?.conversations ?? []}
+            engagementId={engagement?.id ?? null}
+            nextSellerAction={sellerAction?.[0] ?? null}
+            phone={property.contactPhone}
+            propertyId={property.id}
+            recipientDefault={defaultDealSellerRecipient(property)}
+            recipientLabel={
+              engagement?.recipientLabel ||
+              property.contactName ||
+              property.ownerName ||
+              ""
+            }
+            sellerName={
+              engagement?.recipientLabel ||
+              property.contactName ||
+              property.ownerName ||
+              "Seller unknown"
+            }
+            transactionId={transaction?.id ?? null}
+          />
           <Link
             className="mt-4 inline-block rounded-xl border border-blue-700 px-4 py-2 text-sm font-bold text-blue-700"
             href={`/deals/${property.id}/package`}

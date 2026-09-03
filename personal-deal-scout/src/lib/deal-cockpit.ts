@@ -78,3 +78,25 @@ export function sellerConversationHref(input: {
   }
   return "/seller-crm";
 }
+
+export const DEAL_BOX_NO_CONVERSATION =
+  "No conversation recorded on this deal.";
+export const DEAL_BOX_START_PURPOSE = "Seller relationship for this deal";
+export const DEAL_BOX_RECORD_EVIDENCE_COPY = "Saves evidence; does not send.";
+
+export function sellerFactsHref(engagementId: string) {
+  return `/seller-crm?engagementId=${encodeURIComponent(engagementId)}#seller-intake`;
+}
+
+export function defaultDealSellerRecipient(property: {
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  ownerName?: string | null;
+}) {
+  return (
+    property.contactPhone?.trim() ||
+    property.contactEmail?.trim() ||
+    property.ownerName?.trim() ||
+    ""
+  );
+}
