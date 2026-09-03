@@ -5,7 +5,10 @@ import {
   DEAL_BOX_NO_CONVERSATION,
   DEAL_BOX_RECORD_EVIDENCE_COPY,
   DEAL_BOX_START_PURPOSE,
+  dealBoxPrimaryCta,
+  dealBoxThumbnailUrl,
   defaultDealSellerRecipient,
+  isLostOrNurtureStage,
   offerVerdict,
   ownerQueueCtaLabel,
   sellerConversationHref,
@@ -13,18 +16,16 @@ import {
 } from "@/lib/deal-cockpit";
 
 describe("deal cockpit copy", () => {
-  it("maps acquisition stages to customer labels without a second enum", () => {
+  it("maps acquisition stages to seven customer labels without a second enum", () => {
     expect(acquisitionStageLabel("DISCOVERED")).toBe("New Lead");
-    expect(acquisitionStageLabel("RESEARCHABLE")).toBe("Researching");
-    expect(acquisitionStageLabel("OFFER_READY")).toBe("Offer Sent");
-    expect(acquisitionStageLabel("CONTRACTED")).toBe("Under Contract");
-    expect(acquisitionStageLabel("DISPOSITION_READY", { matchCount: 2 })).toBe(
-      "Buyer Matching",
-    );
-    expect(acquisitionStageLabel("DISPOSITION_READY", { matchCount: 0 })).toBe(
-      "Disposition",
-    );
+    expect(acquisitionStageLabel("RESEARCHABLE")).toBe("Analyzing");
+    expect(acquisitionStageLabel("BUYER_FIT")).toBe("Analyzing");
+    expect(acquisitionStageLabel("UNDERWRITING_READY")).toBe("Analyzing");
+    expect(acquisitionStageLabel("OFFER_READY")).toBe("Offer");
+    expect(acquisitionStageLabel("CONTRACTED")).toBe("Contract");
+    expect(acquisitionStageLabel("DISPOSITION_READY")).toBe("Disposition");
     expect(acquisitionStageLabel("DISQUALIFIED")).toBe("Lost");
+    expect(acquisitionStageLabel("NURTURE")).toBe("Nurture");
   });
 
   it("states offer/pass without requiring a percentage", () => {
@@ -107,5 +108,53 @@ describe("deal cockpit copy", () => {
     expect(DEAL_BOX_RECORD_EVIDENCE_COPY).toBe(
       "Saves evidence; does not send.",
     );
+  });
+
+  it("keeps Lost and Nurture off the seven-column pipeline", () => {
+    expect(isLostOrNurtureStage("DISQUALIFIED")).toBe(true);
+    expect(isLostOrNurtureStage("NURTURE")).toBe(true);
+    expect(isLostOrNurtureStage("OFFER_READY")).toBe(false);
+  });
+
+  it("names one primary Deal Box CTA from stage", () => {
+    expect(dealBoxPrimaryCta({ stage: "DISCOVERED", propertyId: "p1" }).label).toBe(
+      "Qualify",
+    );
+    expect(dealBoxPrimaryCta({ stage: "OFFER_READY", propertyId: "p1" })).toEqual({
+      label: "Make Offer",
+      href: "#numbers",
+    });
+    expect(
+      dealBoxPrimaryCta({ stage: "CONTRACTED", propertyId: "p1" }).label,
+    ).toBe("Send Contract");
+  });
+
+  it("only uses listing photos with displayable rights as the Deal Box thumbnail", () => {
+    expect(
+      dealBoxThumbnailUrl([
+        {
+          url: "https://cdn.example/restricted.jpg",
+          kind: "LISTING_PHOTO",
+          rightsStatus: "UNKNOWN",
+          position: 0,
+        },
+        {
+          url: "https://cdn.example/ok.jpg",
+          kind: "LISTING_PHOTO",
+          rightsStatus: "LICENSED",
+          position: 1,
+        },
+      ]),
+    ).toBe("https://cdn.example/ok.jpg");
+    expect(
+      dealBoxThumbnailUrl([
+        {
+          url: "https://cdn.example/map.png",
+          kind: "MAP",
+          rightsStatus: "OWNED",
+          position: 0,
+        },
+      ]),
+    ).toBeNull();
   });
 });

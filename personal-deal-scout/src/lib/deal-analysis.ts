@@ -151,3 +151,45 @@ export function analyzeDealStrategy(input: AnalysisInput) {
     guaranteed: false,
   };
 }
+
+/** Wholesale MAO is an offer formula, not seller-safe maximum. */
+export const DEFAULT_INVESTOR_BPS = 7000;
+
+export function computeWholesaleMao(input: {
+  arvCents?: bigint | null;
+  repairCents?: bigint | null;
+  assignmentFeeCents?: bigint | null;
+  investorBps?: number;
+}) {
+  const investorBps = input.investorBps ?? DEFAULT_INVESTOR_BPS;
+  if (
+    !Number.isInteger(investorBps) ||
+    investorBps <= 0 ||
+    investorBps > 10_000
+  ) {
+    throw new Error("Investor share must be between 1 and 10000 bps.");
+  }
+  const formula = `MAO = ARV × ${investorBps / 100}% − repairs − assignment fee`;
+  if (input.arvCents == null || input.arvCents <= BigInt(0)) {
+    return {
+      maoCents: null,
+      investorBps,
+      formula,
+      status: "INSUFFICIENT_ARV" as const,
+    };
+  }
+  const repairCents = input.repairCents ?? BigInt(0);
+  const assignmentFeeCents = input.assignmentFeeCents ?? BigInt(0);
+  if (repairCents < BigInt(0) || assignmentFeeCents < BigInt(0)) {
+    throw new Error("Repairs and assignment fee cannot be negative.");
+  }
+  return {
+    maoCents:
+      (input.arvCents * BigInt(investorBps)) / BigInt(10_000) -
+      repairCents -
+      assignmentFeeCents,
+    investorBps,
+    formula,
+    status: "READY" as const,
+  };
+}

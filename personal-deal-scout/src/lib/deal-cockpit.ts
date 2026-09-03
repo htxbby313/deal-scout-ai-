@@ -3,29 +3,78 @@ import type { OwnerQueueItem } from "@/lib/funnel-owner-queue";
 
 const STAGE_LABELS: Record<AcquisitionStageName, string> = {
   DISCOVERED: "New Lead",
-  RESEARCHABLE: "Researching",
-  BUYER_FIT: "Qualified",
+  RESEARCHABLE: "Analyzing",
+  BUYER_FIT: "Analyzing",
   OUTREACH_READY: "Contacted",
   SELLER_ENGAGED: "Contacted",
-  UNDERWRITING_READY: "Negotiating",
-  OFFER_READY: "Offer Sent",
-  CONTRACTED: "Under Contract",
+  UNDERWRITING_READY: "Analyzing",
+  OFFER_READY: "Offer",
+  CONTRACTED: "Contract",
   DISPOSITION_READY: "Disposition",
   CLOSED: "Closed",
   DISQUALIFIED: "Lost",
-  NURTURE: "Contacted",
+  NURTURE: "Nurture",
   ARCHIVED: "Lost",
 };
 
-export function acquisitionStageLabel(
-  stage?: string | null,
-  options?: { matchCount?: number },
-) {
+export function acquisitionStageLabel(stage?: string | null) {
   if (!stage) return "New Lead";
-  if (stage === "DISPOSITION_READY" && (options?.matchCount ?? 0) > 0) {
-    return "Buyer Matching";
-  }
   return STAGE_LABELS[stage as AcquisitionStageName] ?? stage.replaceAll("_", " ");
+}
+
+export function isLostOrNurtureStage(stage?: string | null) {
+  return stage === "DISQUALIFIED" || stage === "NURTURE" || stage === "ARCHIVED";
+}
+
+export function dealBoxPrimaryCta(input: {
+  stage?: string | null;
+  propertyId: string;
+}) {
+  const stage = input.stage ?? "DISCOVERED";
+  if (stage === "OFFER_READY") {
+    return { label: "Make Offer", href: `#numbers` };
+  }
+  if (stage === "CONTRACTED") {
+    return {
+      label: "Send Contract",
+      href: `/deals/${input.propertyId}/package`,
+    };
+  }
+  if (stage === "DISPOSITION_READY") {
+    return { label: "Match Buyers", href: `#buyers` };
+  }
+  if (stage === "OUTREACH_READY" || stage === "SELLER_ENGAGED") {
+    return { label: "Continue seller", href: `#overview` };
+  }
+  if (stage === "DISCOVERED") {
+    return { label: "Qualify", href: `#overview` };
+  }
+  return { label: "Analyze", href: `#numbers` };
+}
+
+const DISPLAYABLE_MEDIA_RIGHTS = new Set([
+  "OWNED",
+  "LICENSED",
+  "PERMISSION_DOCUMENTED",
+  "EXTERNAL_APPROVED",
+]);
+
+export function dealBoxThumbnailUrl(
+  media: ReadonlyArray<{
+    url: string;
+    kind: string;
+    rightsStatus: string;
+    position: number;
+  }>,
+) {
+  const photo = [...media]
+    .filter(
+      (item) =>
+        item.kind === "LISTING_PHOTO" &&
+        DISPLAYABLE_MEDIA_RIGHTS.has(item.rightsStatus),
+    )
+    .sort((left, right) => left.position - right.position)[0];
+  return photo?.url ?? null;
 }
 
 export function confidenceBand(
