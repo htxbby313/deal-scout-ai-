@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import {
   BUY_BOX_BLOCKER_CODE,
   BUY_BOX_MATCH_CAP,
+  BUY_BOX_SCAN_BOX_CAP,
   parseBuyBoxPrompt,
   selectBuyBoxMatches,
   type BuyBoxCriteria,
@@ -111,6 +112,28 @@ export async function applyBuyBox(buyBoxId: string) {
     attached.push({ propertyId: property.id, address: property.address });
   }
   return { attached, unmatched: matches.length === 0 };
+}
+
+/** Cached properties only. Never paid enrichment. Caps boxes and matches. */
+export async function scanActiveBuyBoxes() {
+  const boxes = await getPrisma().buyOperatorPreference.findMany({
+    where: { ownerId: "owner", active: true },
+    orderBy: { updatedAt: "desc" },
+    take: BUY_BOX_SCAN_BOX_CAP,
+  });
+  const results = [];
+  for (const box of boxes) {
+    results.push({
+      buyBoxId: box.id,
+      name: box.name,
+      ...(await applyBuyBox(box.id)),
+    });
+  }
+  return {
+    scanned: boxes.length,
+    attachedCount: results.reduce((sum, item) => sum + item.attached.length, 0),
+    results,
+  };
 }
 
 async function attachBuyBoxMatch(input: {

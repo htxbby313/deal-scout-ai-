@@ -1,4 +1,5 @@
 export const BUY_BOX_MATCH_CAP = 25;
+export const BUY_BOX_SCAN_BOX_CAP = 10;
 export const BUY_BOX_BLOCKER_CODE = "BUYBOX_MATCH";
 
 export type BuyBoxCriteria = {
