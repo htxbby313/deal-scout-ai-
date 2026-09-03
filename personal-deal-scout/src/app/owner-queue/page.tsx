@@ -7,6 +7,7 @@ import {
   readFunnelOwnerQueue,
   readOwnerAgentActivity,
 } from "@/lib/funnel-owner-queue";
+import { scoutBriefing } from "@/lib/scout-briefing";
 
 export const dynamic = "force-dynamic";
 export default async function OwnerQueuePage() {
@@ -16,6 +17,7 @@ export default async function OwnerQueuePage() {
     readOwnerAgentActivity(),
   ]);
   const firstItem = items[0];
+  const scout = scoutBriefing(items);
   const kindLabel = (kind: string) =>
     ({
       AGENT_TASK: "Agent recommendation",
@@ -25,9 +27,6 @@ export default async function OwnerQueuePage() {
       DEVELOPER_DRAFT: "Developer draft",
       CONTRACT_TEMPLATE: "Contract review",
     })[kind] ?? kind.replaceAll("_", " ");
-  const attention = firstItem
-    ? `Work on ${firstItem.label} today.`
-    : "You’re caught up. Research continues in the background.";
   const rest = items.slice(1, 9);
   return (
     <WorkspaceShell active="owner-queue">
@@ -37,7 +36,16 @@ export default async function OwnerQueuePage() {
           <h1 className="mt-1 text-3xl font-bold">
             What should I work on today?
           </h1>
-          <p className="mt-2 text-sm text-slate-600">{attention}</p>
+          <p className="mt-2 text-sm font-semibold text-slate-800">
+            {scout.headline}
+          </p>
+          {scout.lines.length ? (
+            <ul className="mt-2 list-disc pl-5 text-sm text-slate-600">
+              {scout.lines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
           {firstItem ? (
             <Link
               className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
