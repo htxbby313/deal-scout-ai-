@@ -1,5 +1,6 @@
 import "server-only";
 
+import { evaluateGoogleVisualContextEnvironment } from "@/lib/google-visual-context";
 import { getPrisma } from "@/lib/prisma";
 
 const CARD_IMAGE_PATH = "/api/property-card-image";
@@ -23,6 +24,12 @@ function canonicalOrigin(fallbackOrigin: string) {
 }
 
 export async function ensureAutomaticPropertyCardMedia(origin: string, limit = 100) {
+  const googleMaps = evaluateGoogleVisualContextEnvironment({
+    serverFeaturesRequired: true,
+  });
+  if (!googleMaps.allowed) {
+    return { checked: 0, created: 0, updated: 0, skipped: "google_maps_disabled" as const };
+  }
   const db = getPrisma();
   const safeOrigin = canonicalOrigin(origin);
   const properties = await db.property.findMany({

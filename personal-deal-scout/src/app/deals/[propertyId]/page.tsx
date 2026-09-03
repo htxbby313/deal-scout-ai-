@@ -193,6 +193,7 @@ export default async function DealDeskPage({
   const primaryCta = dealBoxPrimaryCta({
     stage: funnel?.stage ?? property.acquisitionFunnels[0]?.stage,
     propertyId: property.id,
+    transactionId: transaction?.id ?? null,
   });
   const topBuyerCard = topMatch
     ? presentDealBoxBuyerMatch({
