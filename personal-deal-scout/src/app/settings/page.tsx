@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { saveOwnerProfileAction } from "@/app/owner-profile-actions";
 import { ThemeColorPicker } from "@/app/theme-color-picker";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
 import { evaluateGoogleVisualContextEnvironment } from "@/lib/google-visual-context";
+import { getOwnerProfile } from "@/lib/owner-profile-store";
 
 const googleBlockerLabels: Record<string, string> = {
   provider_disabled: "Google Maps is disabled",
@@ -60,6 +62,7 @@ const groups = [
 
 export default async function SettingsPage() {
   await requireOwner();
+  const profile = await getOwnerProfile();
   const googleMaps = evaluateGoogleVisualContextEnvironment({
     serverFeaturesRequired: false,
   });
@@ -75,6 +78,60 @@ export default async function SettingsPage() {
             Scout operates.
           </p>
         </header>
+        <section className="mt-6 rounded-2xl border bg-white p-5">
+          <h2 className="font-bold">Owner profile</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Fills Deal Packages. Single owner only — not a user directory, not
+            outbound, not an assistant.
+          </p>
+          <form action={saveOwnerProfileAction} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-sm font-semibold">
+              Name
+              <input
+                className="rounded-xl border px-3 py-2 font-normal"
+                defaultValue={profile.displayName}
+                name="displayName"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-semibold">
+              Company
+              <input
+                className="rounded-xl border px-3 py-2 font-normal"
+                defaultValue={profile.companyName}
+                name="companyName"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-semibold">
+              Phone
+              <input
+                className="rounded-xl border px-3 py-2 font-normal"
+                defaultValue={profile.phone}
+                name="phone"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-semibold">
+              Email
+              <input
+                className="rounded-xl border px-3 py-2 font-normal"
+                defaultValue={profile.email}
+                name="email"
+                type="email"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-semibold sm:col-span-2">
+              Markets
+              <input
+                className="rounded-xl border px-3 py-2 font-normal"
+                defaultValue={profile.markets.join(", ")}
+                name="markets"
+                placeholder="Meridian, Boise"
+              />
+            </label>
+            <button className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white sm:col-span-2">
+              Save owner profile
+            </button>
+          </form>
+        </section>
         <section className="mt-6 rounded-2xl border bg-white p-5">
           <h2 className="font-bold">App color</h2>
           <p className="mt-1 text-sm text-slate-500">
