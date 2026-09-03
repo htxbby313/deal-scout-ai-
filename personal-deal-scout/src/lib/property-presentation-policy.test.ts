@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { evaluatePropertyPresentation } from "./property-presentation-policy";
+import {
+  evaluatePropertyPresentation,
+  presentationGateLine,
+} from "./property-presentation-policy";
 
 describe("property presentation control", () => {
   it("blocks property presentation without a contractual interest", () => {
@@ -69,5 +72,8 @@ describe("property presentation control", () => {
       acquisitionFunnel: { stage: "CONTRACTED", gates: [] },
     });
     expect(result.blockers).toContain("transaction_status_not_contracted");
+    expect(presentationGateLine(result.blockers)).toBe(
+      "Not shoppable — Not under contract.",
+    );
   });
 });

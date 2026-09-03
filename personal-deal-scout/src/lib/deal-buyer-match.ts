@@ -204,9 +204,12 @@ export function presentDealBoxBuyerMatch(input: {
       verifiedProjectCount,
     }),
     comparableLine: formatComparablePurchase(comparable),
-    contactReadiness: contactReadinessLabel(
-      input.developer.qualificationStatus,
-    ),
+    contactReadiness: input.presentationAllowed
+      ? contactReadinessLabel(input.developer.qualificationStatus)
+      : "Internal only — do not call or send this deal",
     internalOnly: !input.presentationAllowed,
+    shoppableLabel: input.presentationAllowed
+      ? "Shoppable"
+      : "Not shoppable",
   };
 }
