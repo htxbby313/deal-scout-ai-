@@ -9,6 +9,11 @@ import { DealAnalysisCalculator } from "@/app/deals/[propertyId]/deal-analysis-c
 import { DealBoxSellerPanel } from "@/app/deals/[propertyId]/deal-box-seller";
 import { requireOwner } from "@/lib/auth";
 import { evaluateComparableSales } from "@/lib/comp-engine";
+import { analyzeDealStrategy } from "@/lib/deal-analysis";
+import {
+  estimateRehabFromAssumptions,
+  parseDealAssumptions,
+} from "@/lib/deal-assumptions";
 import { getDeal } from "@/lib/deal";
 import {
   acquisitionStageLabel,
@@ -135,6 +140,37 @@ export default async function DealDeskPage({
       bathrooms: item.bathrooms ? Number(item.bathrooms) : null,
     })),
   );
+  const dealAssumptions = parseDealAssumptions(
+    transaction?.dealAssumptions ?? null,
+  );
+  const rehabEstimate = dealAssumptions
+    ? estimateRehabFromAssumptions(dealAssumptions)
+    : null;
+  const strategyOutcome = dealAssumptions
+    ? analyzeDealStrategy({
+        strategy: dealAssumptions.strategy,
+        acquisitionCents: dealAssumptions.acquisitionCents
+          ? BigInt(dealAssumptions.acquisitionCents)
+          : (projection?.sellerContractPriceCents ?? BigInt(0)),
+        verifiedExitLowCents:
+          comps.valueLowCents ?? projection?.buyerPriceLowCents ?? null,
+        verifiedExitBaseCents:
+          comps.valueBaseCents ?? projection?.buyerPriceBaseCents ?? null,
+        verifiedExitHighCents:
+          comps.valueHighCents ?? projection?.buyerPriceHighCents ?? null,
+        rehabCents: rehabEstimate?.totalCents,
+        transactionCostsCents: BigInt(dealAssumptions.transactionCostsCents),
+        financingCostsCents: BigInt(dealAssumptions.financingCostsCents),
+        holdingCostsCents: BigInt(dealAssumptions.holdingCostsCents),
+        monthlyRentCents: BigInt(dealAssumptions.monthlyRentCents),
+        monthlyExpensesCents: BigInt(dealAssumptions.monthlyExpensesCents),
+      })
+    : null;
+  const strategyProfitLine = !dealAssumptions
+    ? "Not set"
+    : strategyOutcome?.baseCents == null
+      ? "Insufficient verified data"
+      : `${dollars(strategyOutcome.baseCents)} (${dealAssumptions.strategy.toLowerCase()})`;
   return (
     <WorkspaceShell active="pipeline">
       <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
@@ -192,6 +228,18 @@ export default async function DealDeskPage({
               }
             />
           </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Summary
+              label="Strategy profit (Estimate)"
+              value={strategyProfitLine}
+            />
+          </div>
+          {dealAssumptions ? (
+            <p className="mt-2 text-xs text-slate-500">
+              Estimate, not contractor bid. Does not change seller-safe
+              maximum or assignment projected spread above.
+            </p>
+          ) : null}
           {closedOutcomeLine ? (
             <p className="mt-4 text-sm font-semibold text-slate-800">
               {closedOutcomeLine}
@@ -447,6 +495,8 @@ export default async function DealDeskPage({
                   defaultAcquisitionCents={
                     projection?.sellerContractPriceCents.toString() ?? null
                   }
+                  initialAssumptions={dealAssumptions}
+                  propertyId={property.id}
                   verifiedExitBaseCents={
                     (
                       comps.valueBaseCents ?? projection?.buyerPriceBaseCents
