@@ -21,20 +21,18 @@ export async function saveBuyBoxAction(formData: FormData) {
     minSpread: text(formData, "minSpread"),
   });
   const box = await saveBuyBox(criteria);
-  const result = await applyBuyBox(box.id);
+  await applyBuyBox(box.id);
   revalidatePath("/properties");
   revalidatePath("/owner-queue");
   revalidatePath("/pipeline");
-  return result;
 }
 
 export async function scanBuyBoxAction(formData: FormData) {
   await requireOwner();
   const id = text(formData, "buyBoxId");
   if (!id) throw new Error("A Buy Box is required.");
-  const result = await applyBuyBox(id);
+  await applyBuyBox(id);
   revalidatePath("/properties");
   revalidatePath("/owner-queue");
   revalidatePath("/pipeline");
-  return result;
 }
