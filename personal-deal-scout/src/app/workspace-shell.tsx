@@ -31,12 +31,12 @@ export function WorkspaceShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#f6f8fb] text-slate-950 lg:grid lg:grid-cols-[220px_1fr]">
+    <div className="min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[248px_1fr]">
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
 
-      <aside className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden lg:border-b-0 lg:border-r">
+      <aside className="sticky top-0 z-40 border-b border-border/80 bg-card/95 backdrop-blur lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden lg:border-b-0 lg:border-r">
         <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-4 lg:block lg:px-5 lg:py-5">
           <Link className="flex items-center gap-3" href="/owner-queue">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-700 text-xs font-bold text-white">
@@ -52,6 +52,13 @@ export function WorkspaceShell({
           <span className="mt-4 hidden w-fit rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 lg:inline-block">
             Live
           </span>
+        </div>
+
+        <div className="hidden px-5 pb-4 lg:block">
+          <div className="rounded-xl border border-border/70 bg-muted/40 px-3 py-2.5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Workspace</p>
+            <p className="mt-1 text-sm font-semibold text-foreground">Acquisitions · Private</p>
+          </div>
         </div>
 
         <nav
