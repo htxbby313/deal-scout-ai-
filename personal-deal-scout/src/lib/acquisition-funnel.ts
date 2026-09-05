@@ -16,15 +16,14 @@ export type AcquisitionStageName =
   | "DISQUALIFIED"
   | "NURTURE"
   | "ARCHIVED";
-export type AcquisitionGateName =
-  | "PROPERTY_EVIDENCE"
-  | "SELLER_CONTACT"
-  | "UNDERWRITING"
-  | "COMPLIANCE"
-  | "CONTRACT"
-  | "BUYER_COVERAGE"
-  | "DISPOSITION"
-  | "CLOSING";
+
+/**
+ * Acquisition gates are intentionally limited to actual transaction controls.
+ * Research, property/contact matching, media, underwriting, and draft messaging
+ * are not blocked by compliance gates. Contract generation/execution remains the
+ * point where legal/transaction validation belongs.
+ */
+export type AcquisitionGateName = "CONTRACT";
 
 export type GateSnapshot = {
   type: AcquisitionGateName;
@@ -33,18 +32,9 @@ export type GateSnapshot = {
   expiresAt?: Date | string | null;
 };
 
-const requiredGate: Partial<Record<AcquisitionStageName, AcquisitionGateName>> =
-  {
-    RESEARCHABLE: "PROPERTY_EVIDENCE",
-    BUYER_FIT: "BUYER_COVERAGE",
-    OUTREACH_READY: "COMPLIANCE",
-    SELLER_ENGAGED: "SELLER_CONTACT",
-    UNDERWRITING_READY: "UNDERWRITING",
-    OFFER_READY: "COMPLIANCE",
-    CONTRACTED: "CONTRACT",
-    DISPOSITION_READY: "DISPOSITION",
-    CLOSED: "CLOSING",
-  };
+const requiredGate: Partial<Record<AcquisitionStageName, AcquisitionGateName>> = {
+  CONTRACTED: "CONTRACT",
+};
 
 function date(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -167,9 +157,9 @@ export function evaluateBuyerDemand(input: {
     demand.zipCodes.includes(property.zipCode) ||
     Boolean(
       property.county &&
-      demand.counties
-        .map((item) => item.toLowerCase())
-        .includes(property.county.toLowerCase()),
+        demand.counties
+          .map((item) => item.toLowerCase())
+          .includes(property.county.toLowerCase()),
     ) ||
     demand.states
       .map((item) => item.toUpperCase())
@@ -317,4 +307,5 @@ export function evaluateCampaignActivation(input: {
   }
   return { allowed: blockers.length === 0, blockers };
 }
+
 import { latestAcquisitionGate } from "@/lib/acquisition-gate-versioning";
