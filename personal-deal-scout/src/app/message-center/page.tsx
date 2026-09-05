@@ -7,6 +7,7 @@ import {
   isConversationPathwayId,
   type ConversationPathwayId,
 } from "@/lib/conversation-pathways";
+import { CopyMessageButton } from "./copy-button";
 import {
   regenerateMessageAction,
   saveMessageAction,
@@ -37,9 +38,7 @@ export default async function MessageCenterPage({
       orderBy: [{ type: "asc" }, { channel: "asc" }],
     }),
     db.messageApproval.findMany({
-      where: {
-        status: { in: ["PENDING", "APPROVED", "SENT_BLOCKED"] },
-      },
+      where: { status: { in: ["PENDING", "APPROVED", "SENT_BLOCKED"] } },
       orderBy: { updatedAt: "desc" },
       take: 50,
     }),
@@ -65,9 +64,7 @@ export default async function MessageCenterPage({
               Work each pathway independently. Every draft has its own Edit, Regenerate, Copy, and Send controls.
             </p>
           </div>
-          <Link className="rounded-lg border px-3 py-2 text-sm font-semibold" href="/seller-crm">
-            Back to Contacts
-          </Link>
+          <Link className="rounded-lg border px-3 py-2 text-sm font-semibold" href="/seller-crm">Back to Contacts</Link>
         </div>
       </header>
 
@@ -78,9 +75,7 @@ export default async function MessageCenterPage({
               key={item.id}
               href={`/message-center?pathway=${item.id}`}
               className={`rounded-full border px-4 py-2 text-sm font-bold ${pathway === item.id ? "border-blue-600 bg-blue-50 text-blue-800" : "bg-white text-slate-600"}`}
-            >
-              {item.label}
-            </Link>
+            >{item.label}</Link>
           ))}
         </div>
       </nav>
@@ -88,12 +83,8 @@ export default async function MessageCenterPage({
       <div className="mx-auto grid max-w-7xl gap-6 p-5 sm:p-8 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <section className="space-y-4">
           <div className="rounded-2xl border bg-white p-5">
-            <h2 className="text-lg font-bold">
-              {CONVERSATION_PATHWAYS.find((item) => item.id === pathway)?.label}
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {CONVERSATION_PATHWAYS.find((item) => item.id === pathway)?.description}
-            </p>
+            <h2 className="text-lg font-bold">{CONVERSATION_PATHWAYS.find((item) => item.id === pathway)?.label}</h2>
+            <p className="mt-1 text-sm text-slate-500">{CONVERSATION_PATHWAYS.find((item) => item.id === pathway)?.description}</p>
           </div>
 
           {pathwayDrafts.map((draft) => (
@@ -108,40 +99,23 @@ export default async function MessageCenterPage({
 
               <form action={saveMessageAction} className="mt-4 space-y-3">
                 <input name="approvalId" type="hidden" value={draft.id} />
-                <textarea
-                  name="body"
-                  defaultValue={draft.body}
-                  rows={8}
-                  aria-label={`Edit message to ${draft.recipientLabel}`}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
+                <textarea name="body" defaultValue={draft.body} rows={8} aria-label={`Edit message to ${draft.recipientLabel}`} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                 <div className="flex flex-wrap gap-2">
                   <button className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">Save Edit</button>
                   <button formAction={regenerateMessageAction} className="rounded-lg border px-4 py-2 text-sm font-bold">Regenerate</button>
                   <button formAction={sendMessageAction} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white">Send</button>
-                  <button
-                    type="button"
-                    onClick={() => undefined}
-                    className="rounded-lg border px-4 py-2 text-sm font-bold"
-                    title="Use the browser copy action or select the message text"
-                  >
-                    Copy
-                  </button>
+                  <CopyMessageButton text={draft.body} />
                 </div>
               </form>
 
               {draft.blockerCodes.length ? (
-                <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
-                  Send result: {draft.blockerCodes.join(" · ")}
-                </p>
+                <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Send result: {draft.blockerCodes.join(" · ")}</p>
               ) : null}
             </article>
           ))}
 
           {!pathwayDrafts.length ? (
-            <div className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-slate-500">
-              No drafts in this pathway yet. You can still edit the pathway template on the right.
-            </div>
+            <div className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-slate-500">No drafts in this pathway yet. You can still edit the pathway template on the right.</div>
           ) : null}
         </section>
 
@@ -156,12 +130,7 @@ export default async function MessageCenterPage({
                   <input name="pathway" type="hidden" value={pathway} />
                   <input name="channel" type="hidden" value={channel} />
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500">{channel}</label>
-                  <textarea
-                    name="body"
-                    defaultValue={template?.body ?? defaultPathwayTemplates[pathway]}
-                    rows={5}
-                    className="mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  />
+                  <textarea name="body" defaultValue={template?.body ?? defaultPathwayTemplates[pathway]} rows={5} className="mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-blue-500" />
                   <button className="mt-2 rounded-lg border px-3 py-2 text-xs font-bold">Save {channel} Template</button>
                 </form>
               );
