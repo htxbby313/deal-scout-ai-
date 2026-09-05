@@ -23,10 +23,12 @@ export type AcquisitionStageName =
  * are not blocked by compliance gates. Contract generation/execution remains the
  * point where legal/transaction validation belongs.
  */
+import type { AcquisitionGateType } from "@prisma/client";
+
 export type AcquisitionGateName = "CONTRACT";
 
 export type GateSnapshot = {
-  type: AcquisitionGateName;
+  type: AcquisitionGateType;
   version: number;
   status: "PENDING" | "SATISFIED" | "FAILED" | "EXPIRED" | "WAIVED";
   expiresAt?: Date | string | null;

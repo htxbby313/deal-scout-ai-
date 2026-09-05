@@ -1,46 +1,16 @@
 export const primaryNavigation = [
-  {
-    href: "/owner-queue",
-    label: "Home",
-    icon: "H",
-    active: ["owner-queue"],
-  },
-  {
-    href: "/properties",
-    label: "Opportunities",
-    icon: "O",
-    active: ["properties", "research", "operations", "county-coverage"],
-  },
-  {
-    href: "/pipeline",
-    label: "Deals",
-    icon: "D",
-    active: ["pipeline", "transactions", "contracts", "campaigns"],
-  },
-  {
-    href: "/seller-crm",
-    label: "Contacts",
-    icon: "C",
-    active: ["seller-crm", "disposition", "developers", "buyer-evidence"],
-  },
-  {
-    href: "/executive",
-    label: "Reports",
-    icon: "$",
-    active: ["executive", "profitability", "profit-priority"],
-  },
+  { href: "/owner-queue", label: "Command Center", icon: "⌂", active: ["owner-queue"] },
+  { href: "/deals", label: "Deals", icon: "◈", active: ["properties", "pipeline", "research", "operations", "county-coverage", "deals"] },
+  { href: "/seller-crm", label: "People", icon: "○", active: ["seller-crm", "developers", "buyer-evidence", "disposition"] },
+  { href: "/message-center", label: "Communications", icon: "□", active: ["message-center", "campaigns"] },
+  { href: "/transactions", label: "Transactions", icon: "▣", active: ["transactions", "contracts"] },
 ] as const;
 
-export const moreNavigation = [
-  ["/agents", "Agent activity"],
-  ["/research", "Research map"],
-  ["/operations", "Research progress"],
-  ["/county-coverage", "Public-record sources"],
-  ["/transactions", "Approvals"],
-  ["/contracts", "Contracts"],
-  ["/campaigns", "Outreach plans"],
-  ["/buyer-evidence", "Buyer verification"],
-  ["/disposition", "Disposition"],
-  ["/profit-priority", "Ranking preferences"],
-  ["/settings", "Settings"],
-] as const;
+export const contextualNavigation = {
+  deals: [["/opportunities", "Opportunities"], ["/properties", "Properties"], ["/pipeline", "Pipeline"], ["/research", "Map"]],
+  people: [["/seller-crm", "All Contacts"], ["/seller-crm?view=sellers", "Sellers"], ["/developers", "Buyers & Developers"]],
+  communications: [["/message-center", "Message Center"], ["/message-center?view=templates", "Templates"], ["/seller-crm?view=activity", "Activity"]],
+  transactions: [["/transactions", "Offers"], ["/contracts", "Contracts"], ["/disposition", "Assignments"], ["/transactions?view=closing", "Closing"]],
+} as const;
+
+export const moreNavigation = [["/agents", "Agent activity"], ["/executive", "Reports"], ["/profitability", "Profitability"], ["/settings", "Settings"]] as const;
