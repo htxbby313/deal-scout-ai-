@@ -2,13 +2,23 @@ import { describe, expect, it } from "vitest";
 import { buyerIntroduction, currentBuiltInTemplate, greeting, propertyPackageInquiry, refreshLegacyIntroduction, sellerIntroduction, sellerIntroductionTemplate } from "@/lib/conversation-voice";
 
 describe("Tay's inquiry-first conversation voice", () => {
-  it("uses the approved buyer inquiry without unverified market or familiarity claims", () => {
+  it("uses a developer-specific acquisition inquiry without unverified market or familiarity claims", () => {
     const body = buyerIntroduction("Jordan");
     expect(body).toContain("Hi Jordan,");
     expect(body).toContain("I'm Tay");
-    expect(body).toContain("rather start with what you actually want to buy");
+    expect(body).toContain("acquisitions team");
+    expect(body).toContain("your team actually looks for");
+    expect(body).toContain("good acquisition looks like for your team");
     expect(body.match(/\?/g)).toHaveLength(1);
     for (const internal of ["Contact route:", "buy box", "No property is being offered", "I’m Cole", "off-market"]) expect(body).not.toContain(internal);
+  });
+  it("keeps seller and developer acquisition openings on separate pathways", () => {
+    const seller = sellerIntroduction({ address: "1 Main St", name: "Jordan", hasPhone: true });
+    const developer = buyerIntroduction("Jordan");
+    expect(seller).toContain("plans for 1 Main St");
+    expect(developer).toContain("acquisitions team");
+    expect(developer).not.toContain("plans for 1 Main St");
+    expect(seller).not.toContain("acquisitions team");
   });
   it("does not greet placeholders as people or invent a first name", () => {
     for (const name of [undefined, "Unknown Owner", "Research pending", "Property contact"]) expect(greeting(name)).toBe("Hi,");
