@@ -38,7 +38,7 @@ export function sellerIntroduction(input: { address: string; name?: string | nul
 }
 
 export function buyerIntroduction(name?: string | null) {
-  return `${greeting(name)}\n\nI'm ${senderName} with ${companyName}. I'm reaching out to get to know a few buyers and learn what they're looking for.\n\nI spend my time researching properties, and I'd rather start with what you actually want to buy than guess and send you a list.\n\nWould you be open to a quick conversation about what a good opportunity looks like for your team?\n\nThanks,\n${senderName}\n${companyName}`;
+  return `${greeting(name)}\n\nI'm ${senderName} with ${companyName}. I'm reaching out because I'd like to get to know your acquisitions team and understand the kinds of properties and opportunities that fit your business.\n\nI spend my time researching properties, and I'd rather understand what your team actually looks for than send you something that isn't relevant.\n\nWould you be open to a quick conversation about what a good acquisition looks like for your team?\n\nThanks,\n${senderName}\n${companyName}`;
 }
 
 // Exact legacy machine-copy shapes only; additions, disclosures and edits do not match.
