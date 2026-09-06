@@ -37,8 +37,10 @@ export function sellerIntroduction(input: { address: string; name?: string | nul
     : "Who would be the best person to speak with about it, and is there a number I could reach them on?"}`;
 }
 
+// Developer Acquisition is a company relationship, not a property-seller conversation.
+// The purpose of the opening is to learn the developer's buy box before presenting a specific site.
 export function buyerIntroduction(name?: string | null) {
-  return `${greeting(name)}\n\nI'm ${senderName} with ${companyName}. I'm reaching out because I'd like to get to know your acquisitions team and understand the kinds of properties and opportunities that fit your business.\n\nI spend my time researching properties, and I'd rather understand what your team actually looks for than send you something that isn't relevant.\n\nWould you be open to a quick conversation about what a good acquisition looks like for your team?\n\nThanks,\n${senderName}\n${companyName}`;
+  return `${greeting(name)}\n\nI'm ${senderName} with ${companyName}. I'm reaching out because I'd like to get to know your acquisitions team and understand your current buy box.\n\nI'm interested in learning which markets, property types, price ranges, and opportunity profiles your team is actively looking for, so I can bring you opportunities that actually fit.\n\nWould you be open to a quick conversation about your acquisition criteria?\n\nThanks,\n${senderName}\n${companyName}`;
 }
 
 // Exact legacy machine-copy shapes only; additions, disclosures and edits do not match.
