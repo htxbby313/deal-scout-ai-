@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "npm run db:generate",
     "dev": "node ./node_modules/next/dist/bin/next dev",
-    "build": "npm run db:generate && npm run db:migrate:deploy && node ./node_modules/next/dist/bin/next build",
+    "build": "npm run db:generate && if [ -n \"$DIRECT_URL\" ] || [ -n \"$DATABASE_URL\" ]; then npm run db:migrate:deploy; else echo 'Skipping Prisma migrations: no DATABASE_URL or DIRECT_URL is available during the build.'; fi && node ./node_modules/next/dist/bin/next build",
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "node ./node_modules/eslint/bin/eslint.js src prisma next.config.ts eslint.config.mjs",
     "test": "node ./node_modules/vitest/vitest.mjs run --config vitest.config.ts",
@@ -19,9 +19,11 @@
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
+    "@types/geojson": "^7946.0.16",
     "@vercel/analytics": "^2.0.1",
     "@vercel/queue": "^0.5.0",
     "@vercel/speed-insights": "^2.0.0",
+    "geojson": "^0.5.0",
     "leaflet": "^1.9.4",
     "next": "^16.3.1",
     "react": "19.2.4",
