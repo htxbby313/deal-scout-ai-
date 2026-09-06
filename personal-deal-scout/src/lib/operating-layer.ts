@@ -220,7 +220,14 @@ export async function readOperatingLayer(
               now: new Date(),
             })
           : { visibleScore: null, blockers: ["priority_score_missing"] };
-        const currentGates = latestAcquisitionGates(funnel.gates);
+        const currentGates = latestAcquisitionGates(
+          funnel.gates.filter((gate) => gate.type === "CONTRACT"),
+        ).map((gate) => ({
+          type: "CONTRACT" as const,
+          version: gate.version,
+          status: gate.status,
+          expiresAt: gate.expiresAt,
+        }));
         return {
           id: funnel.id,
           propertyId: funnel.propertyId,
@@ -618,6 +625,13 @@ export async function advanceAcquisitionStage(input: {
             expiresAt: gate.expiresAt,
           })),
         );
+          funnel.gates.filter((gate) => gate.type === "CONTRACT"),
+        ).map((gate) => ({
+          type: "CONTRACT" as const,
+          version: gate.version,
+          status: gate.status,
+          expiresAt: gate.expiresAt,
+        }));
         const decision = terminal
           ? {
               allowed: funnel.transaction?.controlStatus !== "STOPPED",

@@ -9,7 +9,7 @@ import {
 const now = new Date("2026-08-19T12:00:00Z");
 
 describe("acquisition funnel policy", () => {
-  it("requires sequential stages, live gates, and active transaction control", () => {
+  it("requires sequential stages, live contract gates, and active transaction control", () => {
     expect(
       evaluateStageTransition({
         currentStage: "OFFER_READY",
@@ -24,6 +24,7 @@ describe("acquisition funnel policy", () => {
         ],
         transactionStatus: "UNDER_CONTRACT",
         transactionControlStatus: "ACTIVE",
+        transactionStatus: "UNDER_CONTRACT",
         now,
       }).allowed,
     ).toBe(true);
@@ -40,6 +41,7 @@ describe("acquisition funnel policy", () => {
       ],
       transactionStatus: "UNDER_CONTRACT",
       transactionControlStatus: "STOPPED",
+      transactionStatus: "UNDER_CONTRACT",
       now,
     });
     expect(stopped.allowed).toBe(false);

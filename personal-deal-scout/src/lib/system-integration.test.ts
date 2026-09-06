@@ -22,7 +22,7 @@ import { evaluateTransactionGate } from "./transaction-policy";
 const now = new Date("2026-08-19T20:00:00Z");
 
 describe("research to funnel to CRM to financial truth boundaries", () => {
-  it("keeps missing research evidence out of seller and buyer workflow", () => {
+  it("keeps missing research evidence out of stage-gate blocking", () => {
     expect(routeSellerFitEvidence([], now.toISOString()).status).toBe(
       "NEEDS_MANUAL_VERIFICATION",
     );
@@ -41,6 +41,7 @@ describe("research to funnel to CRM to financial truth boundaries", () => {
       allowed: true,
       blockers: [],
     });
+    ).toMatchObject({ allowed: true, blockers: [] });
   });
 
   it.each(["ON_HOLD", "STOPPED"] as const)(
