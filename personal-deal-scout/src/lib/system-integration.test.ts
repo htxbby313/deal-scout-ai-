@@ -37,6 +37,10 @@ describe("research to funnel to CRM to financial truth boundaries", () => {
         transactionControlStatus: "ACTIVE",
         now,
       }),
+    ).toMatchObject({
+      allowed: true,
+      blockers: [],
+    });
     ).toMatchObject({ allowed: true, blockers: [] });
   });
 

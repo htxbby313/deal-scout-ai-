@@ -30,12 +30,13 @@ export default async function OwnerQueuePage() {
   const rest = items.slice(1, 9);
   return (
     <WorkspaceShell active="owner-queue">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-        <header className="border-b pb-6">
-          <p className="text-sm font-semibold text-blue-700">Home</p>
-          <h1 className="mt-1 text-3xl font-bold">
-            What should I work on today?
-          </h1>
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-8 lg:py-8">
+        <header className="flex flex-col gap-6 border-b border-border pb-7 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Command Center</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+              Good morning. Let&apos;s move a deal forward.
+            </h1>
           <p className="mt-2 text-sm font-semibold text-slate-800">
             {scout.headline}
           </p>
@@ -61,8 +62,14 @@ export default async function OwnerQueuePage() {
               Review opportunities
             </Link>
           )}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/70 bg-card p-4"><p className="text-xs font-semibold text-muted-foreground">Open priorities</p><p className="mt-2 text-2xl font-bold">{items.length}</p></div>
+            <div className="rounded-xl border border-border/70 bg-card p-4"><p className="text-xs font-semibold text-muted-foreground">Agent activity</p><p className="mt-2 text-2xl font-bold">{activity.length}</p></div>
+            <div className="col-span-2 rounded-xl border border-border/70 bg-card p-4 sm:col-span-1"><p className="text-xs font-semibold text-muted-foreground">Workspace status</p><p className="mt-2 text-sm font-bold text-emerald-700">Live and monitoring</p></div>
+          </div>
         </header>
-        <section className="mt-6 overflow-hidden rounded-2xl border bg-white">
+        <section className="mt-6 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
           <div className="border-b p-5">
             <h2 className="text-xl font-bold">Also on deck</h2>
           </div>
