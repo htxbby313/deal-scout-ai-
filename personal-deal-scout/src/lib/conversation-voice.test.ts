@@ -2,23 +2,26 @@ import { describe, expect, it } from "vitest";
 import { buyerIntroduction, currentBuiltInTemplate, greeting, propertyPackageInquiry, refreshLegacyIntroduction, sellerIntroduction, sellerIntroductionTemplate } from "@/lib/conversation-voice";
 
 describe("Tay's inquiry-first conversation voice", () => {
-  it("uses a developer-specific acquisition inquiry without unverified market or familiarity claims", () => {
+  it("uses a developer-specific acquisition inquiry focused on relationship and buy-box discovery", () => {
     const body = buyerIntroduction("Jordan");
     expect(body).toContain("Hi Jordan,");
     expect(body).toContain("I'm Tay");
     expect(body).toContain("acquisitions team");
-    expect(body).toContain("your team actually looks for");
-    expect(body).toContain("good acquisition looks like for your team");
+    expect(body).toContain("current buy box");
+    expect(body).toContain("markets, property types, price ranges");
+    expect(body).toContain("acquisition criteria");
     expect(body.match(/\?/g)).toHaveLength(1);
-    for (const internal of ["Contact route:", "buy box", "No property is being offered", "I’m Cole", "off-market"]) expect(body).not.toContain(internal);
+    for (const internal of ["Contact route:", "No property is being offered", "I’m Cole", "off-market"]) expect(body).not.toContain(internal);
   });
   it("keeps seller and developer acquisition openings on separate pathways", () => {
     const seller = sellerIntroduction({ address: "1 Main St", name: "Jordan", hasPhone: true });
     const developer = buyerIntroduction("Jordan");
     expect(seller).toContain("plans for 1 Main St");
     expect(developer).toContain("acquisitions team");
+    expect(developer).toContain("buy box");
     expect(developer).not.toContain("plans for 1 Main St");
     expect(seller).not.toContain("acquisitions team");
+    expect(seller).not.toContain("buy box");
   });
   it("does not greet placeholders as people or invent a first name", () => {
     for (const name of [undefined, "Unknown Owner", "Research pending", "Property contact"]) expect(greeting(name)).toBe("Hi,");
@@ -47,7 +50,7 @@ describe("Tay's inquiry-first conversation voice", () => {
     expect(refreshLegacyIntroduction("Owner edited: " + old)).toBeNull();
     expect(refreshLegacyIntroduction(buyerIntroduction("Pat"))).toBeNull();
   });
-  it("recognizes the exact former buyer introduction and removes internal checklists", () => {
+  it("recognizes the exact former buyer introduction and converts it to the current developer relationship voice", () => {
     const old = "Hello Pat,\n\nI’m Cole with Coleman & Co. Holdings LLC. We research off-market acquisition opportunities and would like to learn your current buy box before discussing any specific property. Could you confirm your target markets, property types, price range, closing timeline, and the best acquisitions contact? We also need to confirm your business phone.\n\nNo property is being offered in this message. We will only present a specific opportunity after we hold the necessary contractual interest and the transaction is cleared for disposition.\n\nContact route: https://example.com";
     expect(refreshLegacyIntroduction(old)).toBe(buyerIntroduction("Pat"));
     expect(refreshLegacyIntroduction(old + "\nRequired disclosure.")).toBeNull();
