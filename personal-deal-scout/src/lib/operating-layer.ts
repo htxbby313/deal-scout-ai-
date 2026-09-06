@@ -625,13 +625,6 @@ export async function advanceAcquisitionStage(input: {
             expiresAt: gate.expiresAt,
           })),
         );
-          funnel.gates.filter((gate) => gate.type === "CONTRACT"),
-        ).map((gate) => ({
-          type: "CONTRACT" as const,
-          version: gate.version,
-          status: gate.status,
-          expiresAt: gate.expiresAt,
-        }));
         const decision = terminal
           ? {
               allowed: funnel.transaction?.controlStatus !== "STOPPED",
