@@ -1,18 +1,15 @@
 export const CONVERSATION_PATHWAYS = [
   {
-    id: "SITE_ACQUISITION",
-    label: "Site Acquisition",
-    description: "Research and work the property as the asset, independent of seller or buyer disposition.",
-  },
-  {
     id: "SELLER_ACQUISITION",
     label: "Seller Acquisition",
-    description: "Build the owner relationship around a specific property.",
+    description:
+      "Build the relationship with the owner or authorized property contact for a specific property you may want to acquire or contract.",
   },
   {
     id: "DEVELOPER_BUYER_ACQUISITION",
-    label: "Developer / Buyer Acquisition",
-    description: "Build demand-side relationships and present opportunities when you choose.",
+    label: "Developer Acquisition",
+    description:
+      "Build company-level relationships with developers, builders, housing acquisitions teams, and other buyers to learn and maintain their buy box.",
   },
 ] as const;
 
@@ -23,10 +20,8 @@ export function isConversationPathwayId(value: string): value is ConversationPat
 }
 
 export const defaultPathwayTemplates: Record<ConversationPathwayId, string> = {
-  SITE_ACQUISITION:
-    "Research [PROPERTY] and keep the opportunity moving with whatever property, contact, map, photo, and market context is currently available.",
   SELLER_ACQUISITION:
     "Hi [OWNER], I'm Tay with Coleman & Co. Holdings LLC. I wanted to ask about [PROPERTY]. Would you be open to talking about your plans for it?",
   DEVELOPER_BUYER_ACQUISITION:
-    "Hi [CONTACT], I'm Tay with Coleman & Co. Holdings LLC. I'd like to understand the kinds of properties and opportunities your team looks for. Would you be open to a quick conversation?",
+    "Hi [CONTACT], I'm Tay with Coleman & Co. Holdings LLC. I'd like to get to know your acquisitions team and understand your current buy box, including the markets, property types, price ranges, and opportunities you are actively looking for. Would you be open to a quick conversation?",
 };
