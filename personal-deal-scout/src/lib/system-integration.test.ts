@@ -41,7 +41,6 @@ describe("research to funnel to CRM to financial truth boundaries", () => {
       allowed: true,
       blockers: [],
     });
-    ).toMatchObject({ allowed: true, blockers: [] });
   });
 
   it.each(["ON_HOLD", "STOPPED"] as const)(

@@ -32,10 +32,14 @@ export async function requireOwner() {
 }
 
 export async function createOwnerSession(username: string, password: string) {
-  const config = configured();
-  if (!ownerCredentialsMatch({ suppliedUsername: username, suppliedPassword: password, configuredUsername: config.username, configuredPassword: config.password })) return false;
-  (await cookies()).set(COOKIE_NAME, createOwnerToken(config.username, config.secret), {
-    httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 12,
-  });
-  return true;
+  try {
+    const config = configured();
+    if (!ownerCredentialsMatch({ suppliedUsername: username, suppliedPassword: password, configuredUsername: config.username, configuredPassword: config.password })) return false;
+    (await cookies()).set(COOKIE_NAME, createOwnerToken(config.username, config.secret), {
+      httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 12,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }

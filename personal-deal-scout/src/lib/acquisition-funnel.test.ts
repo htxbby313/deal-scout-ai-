@@ -24,7 +24,6 @@ describe("acquisition funnel policy", () => {
         ],
         transactionStatus: "UNDER_CONTRACT",
         transactionControlStatus: "ACTIVE",
-        transactionStatus: "UNDER_CONTRACT",
         now,
       }).allowed,
     ).toBe(true);
@@ -41,7 +40,6 @@ describe("acquisition funnel policy", () => {
       ],
       transactionStatus: "UNDER_CONTRACT",
       transactionControlStatus: "STOPPED",
-      transactionStatus: "UNDER_CONTRACT",
       now,
     });
     expect(stopped.allowed).toBe(false);
