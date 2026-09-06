@@ -8,6 +8,7 @@ import {
   buyerIntroduction,
   propertyPackageInquiry,
   sellerIntroduction,
+  withPortfolioLink,
 } from "@/lib/conversation-voice";
 import {
   defaultPathwayTemplates,
@@ -37,16 +38,27 @@ function applyTemplate(
   return template.replace(/\[([A-Z_]+)\]/g, (_, key: string) => context[key] ?? `[${key}]`);
 }
 
+function isTextOutboundChannel(channel: string) {
+  return channel === "SMS" || channel === "EMAIL";
+}
+
+function prepareOutboundBody(body: string, channel: string) {
+  return isTextOutboundChannel(channel) ? withPortfolioLink(body) : body.trim();
+}
+
 export async function saveMessageAction(formData: FormData) {
   await requireOwner();
   const id = text(formData, "approvalId");
   const body = text(formData, "body");
   if (!id || body.length < 2) throw new Error("Message text is required.");
 
+  const approval = await getPrisma().messageApproval.findUnique({ where: { id }, select: { channel: true } });
+  if (!approval) throw new Error("Message not found.");
+
   await getPrisma().messageApproval.update({
     where: { id },
     data: {
-      body,
+      body: prepareOutboundBody(body, approval.channel),
       status: "PENDING",
       blockerCodes: [],
     },
@@ -59,6 +71,20 @@ export async function sendMessageAction(formData: FormData) {
   await requireOwner();
   const id = text(formData, "approvalId");
   if (!id) throw new Error("Message is required.");
+
+  const db = getPrisma();
+  const approval = await db.messageApproval.findUnique({ where: { id }, select: { body: true, channel: true } });
+  if (!approval) throw new Error("Message not found.");
+
+  // Enforce the recipient-facing portfolio link immediately before the existing provider gate.
+  // This does not bypass approval, permission, evidence, or provider safeguards.
+  if (isTextOutboundChannel(approval.channel)) {
+    await db.messageApproval.update({
+      where: { id },
+      data: { body: withPortfolioLink(approval.body) },
+    });
+  }
+
   await attemptProviderSend(id);
   revalidatePath("/message-center");
   revalidatePath("/seller-crm");
@@ -127,7 +153,7 @@ export async function regenerateMessageAction(formData: FormData) {
 
   await db.messageApproval.update({
     where: { id },
-    data: { body, status: "PENDING", blockerCodes: [] },
+    data: { body: prepareOutboundBody(body, approval.channel), status: "PENDING", blockerCodes: [] },
   });
   revalidatePath("/message-center");
   revalidatePath("/seller-crm");
