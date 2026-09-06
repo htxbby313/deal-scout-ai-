@@ -19,6 +19,12 @@ export const dynamic = "force-dynamic";
 
 const channels = ["SMS", "EMAIL", "VOICE", "INTERNAL"] as const;
 
+type DraftForContext = {
+  subject: string | null;
+  recipientLabel: string;
+  lead?: { property?: { address: string; city: string; state: string; zipCode: string } | null } | null;
+};
+
 function pathwayFromParam(value?: string): ConversationPathwayId {
   return value && isConversationPathwayId(value) ? value : "SELLER_ACQUISITION";
 }
@@ -31,33 +37,34 @@ function isPricingRequest(subject?: string | null) {
   return subject?.startsWith("Pricing request:") ?? false;
 }
 
-function draftContext(draft: {
-  subject: string | null;
-  lead?: { property?: { address: string; city: string; state: string; zipCode: string } | null } | null;
-}) {
+function draftContext(
+  draft: DraftForContext,
+  propertyByOwner: Map<string, { address: string; city: string; state: string; zipCode: string }>,
+) {
   if (isDeveloperDraft(draft.subject)) {
     return {
-      label: "Company",
       value: draft.subject!.replace("Acquisitions relationship:", "").trim() || "Company relationship",
+      kind: "Company" as const,
     };
   }
 
-  if (draft.lead?.property) {
+  const property = draft.lead?.property ?? propertyByOwner.get(draft.recipientLabel);
+  if (property) {
     return {
-      label: "Property",
-      value: draft.lead.property.address,
-      detail: `${draft.lead.property.city}, ${draft.lead.property.state} ${draft.lead.property.zipCode}`,
+      value: property.address,
+      detail: `${property.city}, ${property.state} ${property.zipCode}`,
+      kind: "Property" as const,
     };
   }
 
   if (isPricingRequest(draft.subject)) {
     return {
-      label: "Property",
       value: draft.subject!.replace("Pricing request:", "").trim() || "Property",
+      kind: "Property" as const,
     };
   }
 
-  return { label: "Relationship", value: "Property not linked" };
+  return { value: "Property not linked", kind: "Property" as const };
 }
 
 export default async function MessageCenterPage({
@@ -88,10 +95,40 @@ export default async function MessageCenterPage({
       ? isDeveloperDraft(draft.subject)
       : !isDeveloperDraft(draft.subject);
   });
+
+  const sellerOwnerNames = pathwayDrafts
+    .filter((draft) => !isDeveloperDraft(draft.subject) && !draft.lead?.property)
+    .map((draft) => draft.recipientLabel)
+    .filter(Boolean);
+
+  const fallbackProperties = sellerOwnerNames.length
+    ? await db.property.findMany({
+        where: { ownerName: { in: [...new Set(sellerOwnerNames)] } },
+        orderBy: { updatedAt: "desc" },
+        select: { ownerName: true, address: true, city: true, state: true, zipCode: true },
+      })
+    : [];
+
+  const propertyByOwner = new Map<
+    string,
+    { address: string; city: string; state: string; zipCode: string }
+  >();
+  for (const property of fallbackProperties) {
+    if (!propertyByOwner.has(property.ownerName)) {
+      propertyByOwner.set(property.ownerName, {
+        address: property.address,
+        city: property.city,
+        state: property.state,
+        zipCode: property.zipCode,
+      });
+    }
+  }
+
   const pathwayMeta = CONVERSATION_PATHWAYS.find((item) => item.id === pathway)!;
   const isDeveloperPathway = pathway === "DEVELOPER_BUYER_ACQUISITION";
-
-  const pathwayContext = pathwayDrafts.length ? draftContext(pathwayDrafts[0]) : null;
+  const pathwayContext = pathwayDrafts.length
+    ? draftContext(pathwayDrafts[0], propertyByOwner)
+    : null;
 
   return (
     <main className="min-h-dvh bg-slate-50 text-slate-950">
@@ -101,7 +138,7 @@ export default async function MessageCenterPage({
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Deal Scout</p>
             <h1 className="mt-1 text-3xl font-bold">Message Center</h1>
             <p className="mt-1 max-w-3xl text-sm text-slate-500">
-              Relationship messaging only. Seller Acquisition is for the owner or authorized contact on a specific property. Developer Acquisition is for company relationships and buy-box discovery. Property research itself stays in the property workspace.
+              Relationship messaging only. Seller Acquisition is for the owner or authorized contact on a specific property. Developer Buyer Acquisition is for company relationships and buy-box discovery. Property research itself stays in the property workspace.
             </p>
           </div>
           <Link className="rounded-lg border px-3 py-2 text-sm font-semibold" href="/seller-crm">
@@ -128,18 +165,18 @@ export default async function MessageCenterPage({
         <section className="space-y-4">
           <div className="rounded-2xl border bg-white p-5">
             <div className="flex items-center justify-between gap-4">
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
                   {pathwayMeta.label}
                 </div>
-                <h2 className="mt-2 text-xl font-bold">
+                <h2 className="mt-2 truncate text-xl font-bold">
                   {pathwayContext?.value ?? (isDeveloperPathway ? "Developer company" : "Property")}
                 </h2>
                 {pathwayContext?.detail ? (
                   <p className="mt-1 text-sm text-slate-500">{pathwayContext.detail}</p>
                 ) : null}
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+              <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                 {isDeveloperPathway ? "Company relationship" : "Property relationship"}
               </span>
             </div>
@@ -152,15 +189,12 @@ export default async function MessageCenterPage({
           </div>
 
           {pathwayDrafts.map((draft) => {
-            const context = draftContext(draft);
+            const context = draftContext(draft, propertyByOwner);
             return (
               <article key={draft.id} className="rounded-2xl border bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                      {context.label}
-                    </p>
-                    <h2 className="mt-1 truncate font-bold">{context.value}</h2>
+                    <h2 className="truncate font-bold">{context.value}</h2>
                     {context.detail ? (
                       <p className="mt-1 text-xs text-slate-500">{context.detail}</p>
                     ) : null}
@@ -169,9 +203,11 @@ export default async function MessageCenterPage({
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">{draft.provider}</span>
-                    <span className="text-xs font-semibold text-slate-400">
-                      {isDeveloperPathway ? "Developer buyer" : "Seller acquisition"}
+                    <span className="max-w-56 truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-bold" title={context.value}>
+                      {context.value}
+                    </span>
+                    <span className="rounded-full border px-3 py-1 text-xs font-semibold text-slate-500">
+                      {context.kind}
                     </span>
                   </div>
                 </div>
@@ -211,22 +247,24 @@ export default async function MessageCenterPage({
 
         <aside className="space-y-4">
           <div className="rounded-2xl border bg-white p-5">
-            <h2 className="font-bold">Independent pathway template</h2>
+            <h2 className="font-bold">{pathwayMeta.label} templates</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Changes here affect only this relationship pathway and channel.
+              This editor belongs only to the selected pathway. Seller templates stay property-owner focused; developer buyer templates stay company and buy-box focused.
             </p>
             {channels.map((channel) => {
               const template = templates.find(
                 (item) => item.type === pathway && item.channel === channel,
               );
+              const templateBody = template?.body ?? defaultPathwayTemplates[pathway];
               return (
                 <form key={channel} action={savePathwayTemplateAction} className="mt-4 border-t pt-4">
                   <input name="pathway" type="hidden" value={pathway} />
                   <input name="channel" type="hidden" value={channel} />
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500">{channel}</label>
                   <textarea
+                    key={`${pathway}-${channel}-${template?.updatedAt?.getTime() ?? "default"}`}
                     name="body"
-                    defaultValue={template?.body ?? defaultPathwayTemplates[pathway]}
+                    defaultValue={templateBody}
                     rows={5}
                     className="mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-blue-500"
                   />
