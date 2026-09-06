@@ -7,7 +7,7 @@ export const CONVERSATION_PATHWAYS = [
   },
   {
     id: "DEVELOPER_BUYER_ACQUISITION",
-    label: "Developer Acquisition",
+    label: "Developer Buyer Acquisition",
     description:
       "Build company-level relationships with developers, builders, housing acquisitions teams, and other buyers to learn and maintain their buy box.",
   },
