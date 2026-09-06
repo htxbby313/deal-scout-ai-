@@ -1,6 +1,9 @@
 // Recipient-facing copy only. Routing, evidence and approval rules stay in services.
 export const senderName = "Tay";
 export const companyName = "Coleman & Co. Holdings LLC";
+export const portfolioUrl = "https://coleman-co-holdings.netlify.app/";
+export const portfolioLinkLabel = "Coleman & Co. Holdings portfolio";
+
 export const conversationVoice = {
   version: 1,
   principles: [
@@ -60,4 +63,10 @@ export function propertyPackageInquiry(input: { name?: string | null; address: s
     input.yearBuilt && `Year built: ${input.yearBuilt}`,
   ].filter(Boolean).join("\n");
   return `${greeting(input.name)}\n\nIt's ${senderName} with ${companyName}. Would you be interested in taking a look at ${input.address}?\n\n${companyName} holds a documented contractual interest in the property.\n\n${details}\n\nI can share the approved deal package if you'd like to see whether it fits what you're looking for.\n\nThanks,\n${senderName}\n${companyName}`;
+}
+
+export function withPortfolioLink(body: string) {
+  const clean = body.trim();
+  if (!clean || clean.includes(portfolioUrl)) return clean;
+  return `${clean}\n\n${portfolioLinkLabel}: ${portfolioUrl}`;
 }
