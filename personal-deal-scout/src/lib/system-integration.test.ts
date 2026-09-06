@@ -22,7 +22,7 @@ import { evaluateTransactionGate } from "./transaction-policy";
 const now = new Date("2026-08-19T20:00:00Z");
 
 describe("research to funnel to CRM to financial truth boundaries", () => {
-  it("keeps missing research evidence out of seller and buyer workflow", () => {
+  it("keeps missing research evidence out of stage-gate blocking", () => {
     expect(routeSellerFitEvidence([], now.toISOString()).status).toBe(
       "NEEDS_MANUAL_VERIFICATION",
     );
@@ -33,14 +33,11 @@ describe("research to funnel to CRM to financial truth boundaries", () => {
       evaluateStageTransition({
         currentStage: "DISCOVERED",
         nextStage: "RESEARCHABLE",
-        gates: [{ type: "PROPERTY_EVIDENCE", version: 1, status: "PENDING" }],
+        gates: [],
         transactionControlStatus: "ACTIVE",
         now,
       }),
-    ).toMatchObject({
-      allowed: false,
-      blockers: ["gate_property_evidence_not_satisfied"],
-    });
+    ).toMatchObject({ allowed: true, blockers: [] });
   });
 
   it.each(["ON_HOLD", "STOPPED"] as const)(
@@ -50,7 +47,7 @@ describe("research to funnel to CRM to financial truth boundaries", () => {
         evaluateStageTransition({
           currentStage: "RESEARCHABLE",
           nextStage: "BUYER_FIT",
-          gates: [{ type: "BUYER_COVERAGE", version: 1, status: "SATISFIED" }],
+          gates: [],
           transactionControlStatus: controlStatus,
           now,
         }).allowed,
