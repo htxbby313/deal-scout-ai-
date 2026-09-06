@@ -186,6 +186,9 @@ export default async function MessageCenterPage({
                 ? "Start with the company and its acquisitions contact. The goal is to learn and maintain the developer's buy box before presenting a property."
                 : "Start with the property and its owner or authorized contact. The goal is to discuss the property's plans and pursue an acquisition conversation."}
             </p>
+            <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              SMS and email outbound messages automatically include a clickable Coleman &amp; Co. Holdings portfolio link. The website itself remains separate from the Deal Scout application code.
+            </p>
           </div>
 
           {pathwayDrafts.map((draft) => {
