@@ -9,41 +9,43 @@ import {
 const now = new Date("2026-08-19T12:00:00Z");
 
 describe("acquisition funnel policy", () => {
-  it("requires sequential stages, live gates, and active transaction control", () => {
+  it("requires sequential stages, live contract gates, and active transaction control", () => {
     expect(
       evaluateStageTransition({
-        currentStage: "UNDERWRITING_READY",
-        nextStage: "OFFER_READY",
+        currentStage: "OFFER_READY",
+        nextStage: "CONTRACTED",
         gates: [
           {
-            type: "COMPLIANCE",
+            type: "CONTRACT",
             version: 1,
             status: "SATISFIED",
             expiresAt: "2026-09-01",
           },
         ],
         transactionControlStatus: "ACTIVE",
+        transactionStatus: "UNDER_CONTRACT",
         now,
       }).allowed,
     ).toBe(true);
     const stopped = evaluateStageTransition({
-      currentStage: "UNDERWRITING_READY",
-      nextStage: "OFFER_READY",
+      currentStage: "OFFER_READY",
+      nextStage: "CONTRACTED",
       gates: [
         {
-          type: "COMPLIANCE",
+          type: "CONTRACT",
           version: 1,
           status: "SATISFIED",
           expiresAt: "2026-08-01",
         },
       ],
       transactionControlStatus: "STOPPED",
+      transactionStatus: "UNDER_CONTRACT",
       now,
     });
     expect(stopped.allowed).toBe(false);
     expect(stopped.blockers).toEqual([
       "transaction_stopped",
-      "gate_compliance_expired",
+      "gate_contract_expired",
     ]);
   });
 
