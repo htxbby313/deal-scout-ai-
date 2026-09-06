@@ -892,14 +892,18 @@ function calculateAllMatches(
             (project.city.toLowerCase() === property.city.toLowerCase() &&
               project.state === property.state)),
       );
-      const statedMarketFit = statedDeveloperMarketFit(property, developer);
-      const priceFits =
-        !developer.maximumPurchasePrice ||
-        !property.estimatedValue ||
-        developer.maximumPurchasePrice >= property.estimatedValue;
+  const statedMarketFit = statedDeveloperMarketFit(property, developer);
+  const propertyTypeText = (property.propertyType ?? "").toLowerCase();
+  const statedTypeText = (developer.notes ?? "").toLowerCase();
+  const propertyTypeFits = !propertyTypeText || !statedTypeText || statedTypeText.includes(propertyTypeText) || (propertyTypeText.includes("land") && /land|development|ground-up/.test(statedTypeText));
+  const priceFits =
+    !developer.maximumPurchasePrice ||
+    !property.estimatedValue ||
+    developer.maximumPurchasePrice >= property.estimatedValue;
       return (
-        (explicitMarketFit || verifiedMarketFit || statedMarketFit.matched) &&
-        priceFits
+    (explicitMarketFit || verifiedMarketFit || statedMarketFit.matched) &&
+    propertyTypeFits &&
+    priceFits
       );
     })
     .map((developer) => {

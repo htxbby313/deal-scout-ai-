@@ -399,16 +399,20 @@ export default async function DevelopersPage({
                   </div>
                 </div>
                 <div className="mt-6 grid gap-4 lg:grid-cols-3">
-                  <article className="rounded-xl border p-4">
-                    <b>Demonstrated buy box</b>
-                    <p className="mt-3 text-sm">
-                      {crmValue(selected.notes, "Property types") ||
-                        "Asset focus needs verification"}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {crmValue(selected.notes, "Target markets") ||
-                        "Markets will be derived from projects"}
-                    </p>
+                  <article className="rounded-xl border border-teal-200 bg-teal-50/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <b>Individual buy box</b>
+                        <p className="mt-1 text-xs text-slate-500">Specific to {selected.companyName}</p>
+                      </div>
+                      <span className="rounded-full bg-white px-2 py-1 text-[11px] font-bold text-teal-800 ring-1 ring-teal-200">{selected.targetZipCodes.length ? "Defined" : "Needs confirmation"}</span>
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-sm">
+                      <div><dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Markets / ZIPs</dt><dd className="mt-1 font-semibold">{selected.targetZipCodes.length ? selected.targetZipCodes.join(", ") : crmValue(selected.notes, "Target markets") || "Not specified"}</dd></div>
+                      <div><dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Property types</dt><dd className="mt-1 font-semibold">{crmValue(selected.notes, "Property types") || "Not specified"}</dd></div>
+                      <div className="grid grid-cols-2 gap-3"><div><dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Max acquisition</dt><dd className="mt-1 font-semibold">{money(selected.maximumPurchasePrice)}</dd></div><div><dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Typical build</dt><dd className="mt-1 font-semibold">{money(selected.typicalBuildPrice)}</dd></div></div>
+                      <div><dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Acquisition criteria</dt><dd className="mt-1 leading-5 text-slate-700">{crmValue(selected.notes, "Acquisition criteria") || crmValue(selected.notes, "Active acquisition signal") || "Confirm criteria with the company."}</dd></div>
+                    </dl>
                   </article>
                   <article className="rounded-xl border p-4">
                     <b>Qualification</b>

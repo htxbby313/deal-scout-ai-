@@ -1014,9 +1014,14 @@ export function PropertyBrowser({
                         <b>{match.companyName}</b>
                         <b className="text-blue-700">{match.score}</b>
                       </div>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">
-                        {match.reasons.join(" ")}
-                      </p>
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Why this company matches
+              </p>
+              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-5 text-slate-600">
+                {match.reasons.slice(0, 4).map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
                     </article>
                       ))
                     : null}
