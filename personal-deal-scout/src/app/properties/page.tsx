@@ -86,16 +86,27 @@ export default async function PropertiesPage() {
   return (
     <WorkspaceShell>
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
-        <header className="border-b pb-6">
-          <p className="text-sm font-semibold text-blue-700">
-            Source-backed opportunities
-          </p>
-          <h1 className="mt-1 text-3xl font-bold">Opportunities</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Open Analyze on an address to work the deal. Import stays out of the
-            way until you need it.
-          </p>
+        <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">
+              Deal intelligence
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Property command center</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Prioritize source-backed opportunities, review evidence quality, and move the strongest properties into your deal pipeline.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+            <span className="rounded-full border border-border bg-card px-3 py-2">{properties.length} properties</span>
+            <span className="rounded-full border border-border bg-card px-3 py-2">{countyEvidence.length} evidence items</span>
+            <a className="rounded-full bg-blue-700 px-3 py-2 text-white" href="#add-or-import">Add property</a>
+          </div>
         </header>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"><p className="text-xs font-semibold text-slate-500">Active opportunities</p><p className="mt-2 text-2xl font-bold">{properties.length}</p><p className="mt-1 text-xs text-slate-500">Source-backed records in workspace</p></div>
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"><p className="text-xs font-semibold text-slate-500">Research coverage</p><p className="mt-2 text-2xl font-bold">{countyEvidence.length}</p><p className="mt-1 text-xs text-slate-500">Recent county observations</p></div>
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"><p className="text-xs font-semibold text-slate-500">Buy boxes</p><p className="mt-2 text-2xl font-bold">{buyBoxes.length}</p><p className="mt-1 text-xs text-slate-500">Active matching strategies</p></div>
+        </div>
         <div className="mt-6">
           <PropertyBrowser properties={properties} />
         </div>

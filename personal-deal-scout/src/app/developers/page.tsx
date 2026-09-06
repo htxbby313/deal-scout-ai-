@@ -181,16 +181,14 @@ export default async function DevelopersPage({
             Buyers & developers
           </Link>
         </nav>
-        <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <header className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-blue-700">Contacts</p>
-            <h1 className="mt-1 text-3xl font-bold">
-              Buyer & developer relationships
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Relationship intelligence</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+              Developer command center
             </h1>
-            <p className="mt-2 text-sm text-slate-600">
-              Build acquisition relationships from a contact name, business
-              email, and phone. Missing details become research or conversation
-              follow-ups instead of silently removing the company.
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Rank buyers and developers by relationship readiness, active markets, and property fit. Keep research gaps visible without losing the record.
             </p>
           </div>
           <div className="flex gap-2">
@@ -208,6 +206,11 @@ export default async function DevelopersPage({
             </a>
           </div>
         </header>
+        <section className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"><p className="text-xs font-semibold text-slate-500">Relationship ready</p><p className="mt-2 text-2xl font-bold">{qualifiedCount}</p><p className="mt-1 text-xs text-slate-500">Priority and qualified contacts</p></div>
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"><p className="text-xs font-semibold text-slate-500">Research needed</p><p className="mt-2 text-2xl font-bold">{researchCount}</p><p className="mt-1 text-xs text-slate-500">Contacts with a follow-up gap</p></div>
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"><p className="text-xs font-semibold text-slate-500">Visible in queue</p><p className="mt-2 text-2xl font-bold">{visible.length}</p><p className="mt-1 text-xs text-slate-500">Current filtered relationship set</p></div>
+        </section>
         <nav className="mt-6 flex gap-2">
           <Link
             className={`rounded-full px-4 py-2 text-sm font-bold ${view === "qualified" ? "bg-slate-950 text-white" : "bg-white ring-1 ring-slate-200"}`}
