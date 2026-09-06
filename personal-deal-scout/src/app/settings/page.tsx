@@ -6,6 +6,8 @@ import { requireOwner } from "@/lib/auth";
 import { evaluateGoogleVisualContextEnvironment } from "@/lib/google-visual-context";
 import { getOwnerProfile } from "@/lib/owner-profile-store";
 
+export const dynamic = "force-dynamic";
+
 const googleBlockerLabels: Record<string, string> = {
   provider_disabled: "Google Maps is disabled",
   browser_key_missing: "browser key missing",
