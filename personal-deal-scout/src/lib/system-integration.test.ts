@@ -33,13 +33,13 @@ describe("research to funnel to CRM to financial truth boundaries", () => {
       evaluateStageTransition({
         currentStage: "DISCOVERED",
         nextStage: "RESEARCHABLE",
-        gates: [{ type: "PROPERTY_EVIDENCE", version: 1, status: "PENDING" }],
+        gates: [],
         transactionControlStatus: "ACTIVE",
         now,
       }),
     ).toMatchObject({
-      allowed: false,
-      blockers: ["gate_property_evidence_not_satisfied"],
+      allowed: true,
+      blockers: [],
     });
   });
 
@@ -50,7 +50,7 @@ describe("research to funnel to CRM to financial truth boundaries", () => {
         evaluateStageTransition({
           currentStage: "RESEARCHABLE",
           nextStage: "BUYER_FIT",
-          gates: [{ type: "BUYER_COVERAGE", version: 1, status: "SATISFIED" }],
+          gates: [],
           transactionControlStatus: controlStatus,
           now,
         }).allowed,

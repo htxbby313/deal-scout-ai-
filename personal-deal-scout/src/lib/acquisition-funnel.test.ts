@@ -12,38 +12,40 @@ describe("acquisition funnel policy", () => {
   it("requires sequential stages, live gates, and active transaction control", () => {
     expect(
       evaluateStageTransition({
-        currentStage: "UNDERWRITING_READY",
-        nextStage: "OFFER_READY",
+        currentStage: "OFFER_READY",
+        nextStage: "CONTRACTED",
         gates: [
           {
-            type: "COMPLIANCE",
+            type: "CONTRACT",
             version: 1,
             status: "SATISFIED",
             expiresAt: "2026-09-01",
           },
         ],
+        transactionStatus: "UNDER_CONTRACT",
         transactionControlStatus: "ACTIVE",
         now,
       }).allowed,
     ).toBe(true);
     const stopped = evaluateStageTransition({
-      currentStage: "UNDERWRITING_READY",
-      nextStage: "OFFER_READY",
+      currentStage: "OFFER_READY",
+      nextStage: "CONTRACTED",
       gates: [
         {
-          type: "COMPLIANCE",
+          type: "CONTRACT",
           version: 1,
           status: "SATISFIED",
           expiresAt: "2026-08-01",
         },
       ],
+      transactionStatus: "UNDER_CONTRACT",
       transactionControlStatus: "STOPPED",
       now,
     });
     expect(stopped.allowed).toBe(false);
     expect(stopped.blockers).toEqual([
       "transaction_stopped",
-      "gate_compliance_expired",
+      "gate_contract_expired",
     ]);
   });
 

@@ -610,7 +610,14 @@ export async function advanceAcquisitionStage(input: {
         });
         if (!criteria.allowed)
           return { advanced: false as const, blockers: criteria.blockers };
-        const currentGates = latestAcquisitionGates(funnel.gates);
+        const currentGates = latestAcquisitionGates(
+          funnel.gates.map((gate) => ({
+            type: gate.type,
+            version: gate.version,
+            status: gate.status,
+            expiresAt: gate.expiresAt,
+          })),
+        );
         const decision = terminal
           ? {
               allowed: funnel.transaction?.controlStatus !== "STOPPED",
