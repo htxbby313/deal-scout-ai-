@@ -24,6 +24,19 @@ function pathwayType(pathway: string): ConversationPathwayId {
   return pathway;
 }
 
+function pathwayFromApproval(subject?: string | null): ConversationPathwayId {
+  return subject?.startsWith("Acquisitions relationship:")
+    ? "DEVELOPER_BUYER_ACQUISITION"
+    : "SELLER_ACQUISITION";
+}
+
+function applyTemplate(
+  template: string,
+  context: Record<string, string | null | undefined>,
+) {
+  return template.replace(/\[([A-Z_]+)\]/g, (_, key: string) => context[key] ?? `[${key}]`);
+}
+
 export async function saveMessageAction(formData: FormData) {
   await requireOwner();
   const id = text(formData, "approvalId");
@@ -54,19 +67,33 @@ export async function sendMessageAction(formData: FormData) {
 export async function regenerateMessageAction(formData: FormData) {
   await requireOwner();
   const id = text(formData, "approvalId");
-  const approval = await getPrisma().messageApproval.findUnique({ where: { id } });
+  const db = getPrisma();
+  const approval = await db.messageApproval.findUnique({
+    where: { id },
+    include: { lead: { include: { property: true } } },
+  });
   if (!approval) throw new Error("Message not found.");
 
   let body = approval.body;
   const subject = approval.subject ?? "";
+  const pathway = pathwayFromApproval(subject);
+  const storedTemplate = await db.messageTemplate.findUnique({
+    where: { type_channel: { type: pathway, channel: approval.channel } },
+  });
+  const template = storedTemplate?.active
+    ? storedTemplate.body
+    : defaultPathwayTemplates[pathway];
 
   if (subject.startsWith("Acquisitions relationship:")) {
     const companyName = subject.replace("Acquisitions relationship:", "").trim();
-    const developer = await getPrisma().developer.findUnique({ where: { companyName } });
-    body = buyerIntroduction(developer?.contactName || approval.recipientLabel);
+    const developer = await db.developer.findUnique({ where: { companyName } });
+    body = applyTemplate(template, {
+      CONTACT: developer?.contactName || approval.recipientLabel,
+      COMPANY: companyName,
+    });
   } else if (subject.startsWith("Pricing request:")) {
     const address = subject.replace("Pricing request:", "").trim();
-    const property = await getPrisma().property.findFirst({ where: { address } });
+    const property = await db.property.findFirst({ where: { address } });
     if (property) {
       body = propertyPackageInquiry({
         name: approval.recipientLabel,
@@ -77,18 +104,28 @@ export async function regenerateMessageAction(formData: FormData) {
       });
     }
   } else if (approval.recipientLabel) {
-    const property = await getPrisma().property.findFirst({
+    const property = approval.lead?.property ?? (await db.property.findFirst({
       where: { ownerName: approval.recipientLabel },
       orderBy: { updatedAt: "desc" },
-    });
-    if (property) body = sellerIntroduction({
-      name: approval.recipientLabel,
-      address: property.address,
-      hasPhone: Boolean(property.contactPhone),
-    });
+    }));
+    if (property) {
+      body = applyTemplate(template, {
+        OWNER: approval.recipientLabel,
+        PROPERTY: property.address,
+        CITY: property.city,
+        STATE: property.state,
+        ZIP: property.zipCode,
+      });
+    } else {
+      body = sellerIntroduction({
+        name: approval.recipientLabel,
+        address: approval.recipientLabel,
+        hasPhone: false,
+      });
+    }
   }
 
-  await getPrisma().messageApproval.update({
+  await db.messageApproval.update({
     where: { id },
     data: { body, status: "PENDING", blockerCodes: [] },
   });
