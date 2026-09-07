@@ -14,6 +14,17 @@ export function CreateTransactionForm({ properties, developers }: { properties: 
 export function OwnerControls({ transactionId, stopped }: { transactionId: string; stopped: boolean }) {
   return <div className="grid gap-3 lg:grid-cols-3">{(["ACTIVE", "ON_HOLD", "STOPPED"] as const).map((control) => <ControlForm control={control} disabled={stopped} key={control} transactionId={transactionId} />)}</div>;
 }
+
+export function CommunicationControls({ transactionId, status }: { transactionId: string; status: "ACTIVE" | "ON_HOLD" | "STOPPED" }) {
+  if (status === "STOPPED") return <div className="rounded-xl border border-red-200 bg-red-50 p-3"><b className="text-sm text-red-900">Communications stopped</b><p className="mt-1 text-xs text-red-700">No further messages or agent follow-ups are allowed for this relationship.</p></div>;
+  return <div className="grid gap-3 sm:grid-cols-2"><SimpleCommunicationControl control="ACTIVE" current={status} label="Allow communications" transactionId={transactionId} /><SimpleCommunicationControl control="ON_HOLD" current={status} label="Pause communications" transactionId={transactionId} /></div>;
+}
+
+function SimpleCommunicationControl({ transactionId, control, current, label }: { transactionId: string; control: "ACTIVE" | "ON_HOLD"; current: "ACTIVE" | "ON_HOLD"; label: string }) {
+  const [state, action, pending] = useActionState(setTransactionControlAction.bind(null, transactionId, control), initial);
+  const selected = current === control;
+  return <form action={action} className={`rounded-xl border p-3 ${selected ? "border-blue-300 bg-blue-50" : "bg-white"}`}><input name="reason" type="hidden" value={control === "ACTIVE" ? "Owner enabled relationship communications." : "Owner paused relationship communications."} /><button className={`w-full rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-50 ${selected ? "bg-blue-700 text-white" : "border bg-white text-slate-800"}`} disabled={selected || pending}>{pending ? "Saving…" : selected ? `${label} · On` : label}</button><Result state={state} /></form>;
+}
 function ControlForm({ transactionId, control, disabled }: { transactionId: string; control: "ACTIVE" | "ON_HOLD" | "STOPPED"; disabled: boolean }) {
   const [state, action, pending] = useActionState(setTransactionControlAction.bind(null, transactionId, control), initial);
   const destructive = control === "STOPPED";

@@ -45,6 +45,7 @@ export async function setTransactionControlAction(transactionId: string, control
   try {
     await setOwnerControl({ transactionId, controlStatus, actor: "owner", reason: value(data, "reason") });
     revalidatePath("/transactions");
+    revalidatePath("/seller-crm");
     return { status: "success", message: controlStatus === "STOPPED" ? "Transaction stopped permanently." : `Transaction set to ${controlStatus.toLowerCase().replace("_", " ")}.` };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Control could not be changed." }; }
 }
