@@ -15,22 +15,27 @@
     "db:migrate:deploy": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate deploy",
     "db:status": "node --env-file-if-exists=.env scripts/prisma-direct.cjs migrate status",
     "db:seed": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs prisma/seed.ts",
-    "db:resolve-public-records": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs scripts/resolve-public-record-no-results.ts"
+    "db:resolve-public-records": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs scripts/resolve-public-record-no-results.ts",
+    "dev:novu": "npx novu dev -p 4005 --no-studio --route /api/novu --run \"node ./node_modules/next/dist/bin/next dev\""
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.60",
+    "@novu/framework": "^2.13.2",
     "@prisma/client": "^6.16.2",
     "@types/geojson": "^7946.0.16",
     "@vercel/analytics": "^2.0.1",
     "@vercel/queue": "^0.5.0",
     "@vercel/speed-insights": "^2.0.0",
     "geojson": "^0.5.0",
+    "ai": "^7.0.93",
     "leaflet": "^1.9.4",
     "next": "^16.3.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-leaflet": "^5.0.0",
     "server-only": "^0.0.1",
-    "zod": "^4.1.11"
+    "zod": "^4.1.11",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -54,5 +59,14 @@
     "esbuild": true,
     "prisma": true,
     "unrs-resolver": true
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma",
+      "unrs-resolver"
+    ]
   }
 }

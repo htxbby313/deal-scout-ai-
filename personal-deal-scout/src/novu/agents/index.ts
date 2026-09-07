@@ -1,0 +1,1 @@
+export { dealScout } from "./dealscout";
