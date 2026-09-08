@@ -11,7 +11,6 @@ import { z } from "zod";
 
 import { getPrisma } from "@/lib/prisma";
 import { canSendOutbound, propertyReadiness } from "@/lib/domain";
-import { evaluateLegacyOutboundBoundary } from "@/lib/legacy-outbound-boundary";
 import { logOperation } from "@/lib/operational-logging";
 import { developerRelationshipQualification } from "@/lib/developer-qualification";
 import { isDealBoxWorkingSetDeveloper } from "@/lib/deal-buyer-match";
@@ -38,6 +37,7 @@ export type AuditType =
   | "property.evidence_updated"
   | "property.retired"
   | "provider.blocked"
+  | "provider.sent"
   | "webhook.received"
   | "scheduler.followups"
   | "research.census_permits"
@@ -1317,46 +1317,15 @@ export async function setApprovalStatus(
 
 export async function attemptProviderSend(approvalId: string) {
   try {
-    return await getPrisma().$transaction(async (tx) => {
-      const approval = await tx.messageApproval.findUnique({
-        where: { id: approvalId },
-      });
+    const db = getPrisma();
+    const approval = await db.messageApproval.findUnique({ where: { id: approvalId }, include: { lead: { include: { property: true } } } });
       if (!approval) throw new Error("Approval not found.");
-      const legacyBoundary = evaluateLegacyOutboundBoundary({
-        approvalStatus: approval.status,
-        transactionActive: false,
-        suppressionClear: false,
-        consentCurrent: false,
-        stateProcedureCurrent: false,
-        disclosurePresent: false,
-        contactWindowVerified: false,
-        providerReady: false,
-        operationAllowed: false,
-        adapterReviewed: false,
-      });
-      if (!legacyBoundary.allowed) {
-        const blocked = await tx.messageApproval.update({
-          where: { id: approvalId },
-          data: {
-            status: "SENT_BLOCKED",
-            provider: "disabled",
-            blockerCodes: legacyBoundary.blockers,
-          },
-        });
-        await audit(
-          tx,
-          "provider.blocked",
-          "Blocked legacy outbound draft; unified transaction, suppression, consent, procedure, disclosure, window, provider-operation, and reviewed-adapter gates are required.",
-          { approvalId, blockers: legacyBoundary.blockers },
-        );
-        return blocked;
-      }
-      const setting = await tx.systemSetting.upsert({
+      const setting = await db.systemSetting.upsert({
         where: { id: "singleton" },
         update: {},
         create: { id: "singleton", mode: "RESEARCH" },
       });
-      const provider = await tx.providerSetting.upsert({
+      const provider = await db.providerSetting.upsert({
         where: { provider: approval.channel },
         update: {},
         create: {
@@ -1365,52 +1334,49 @@ export async function attemptProviderSend(approvalId: string) {
           configured: false,
         },
       });
-      const envConfigured = Boolean(
-        process.env[`${approval.channel}_PROVIDER_API_KEY`],
-      );
-      if (
-        !canSendOutbound({
+      const envConfigured = approval.channel === "EMAIL" ? Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) : approval.channel === "SMS" ? Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) : false;
+      const developer = approval.leadId ? null : await db.developer.findFirst({ where: { companyName: approval.recipientLabel }, select: { email: true, phone: true, communicationsEnabled: true } });
+      const recipient = approval.channel === "EMAIL" ? approval.lead?.property.contactEmail || developer?.email : approval.channel === "SMS" ? approval.lead?.property.contactPhone || developer?.phone : null;
+      const deliveryAllowed = canSendOutbound({
           approvalStatus: approval.status,
           systemMode: setting.mode,
           providerEnabled: provider.enabled,
           providerConfigured: provider.configured,
           environmentConfigured: envConfigured,
-        })
-      ) {
-        const blockerCodes = [
+        });
+      const blockerCodes = [
           approval.status !== "APPROVED" && "owner_approval_missing",
           setting.mode !== "ACTIVE" && "system_not_active",
           !provider.enabled && "provider_disabled",
           !provider.configured && "provider_not_configured",
           !envConfigured && "provider_credentials_missing",
+          !recipient && "recipient_missing",
+          developer && !developer.communicationsEnabled && "buyer_communications_paused",
         ].filter(Boolean) as string[];
-        const blocked = await tx.messageApproval.update({
+      if (!deliveryAllowed || blockerCodes.length) {
+        const blocked = await db.messageApproval.update({
           where: { id: approvalId },
           data: { status: "SENT_BLOCKED", provider: "disabled", blockerCodes },
         });
-        await audit(
-          tx,
-          "provider.blocked",
-          `Blocked outbound ${approval.channel}; approval, ACTIVE mode, enabled provider, and verified configuration are required.`,
-          { approvalId, systemMode: setting.mode, blockers: blockerCodes },
-        );
+        await db.auditLog.create({ data: {
+          type: "provider.blocked",
+          summary: `Blocked outbound ${approval.channel}; approval, active delivery settings, credentials, and a recipient are required.`,
+          details: { approvalId, systemMode: setting.mode, blockers: blockerCodes },
+        } });
         return blocked;
       }
-      // No provider adapter is selected. Fail closed until a real, reviewed adapter exists.
-      await audit(
-        tx,
-        "provider.blocked",
-        `Blocked outbound ${approval.channel}; no provider adapter is configured.`,
-        { approvalId },
-      );
-      return tx.messageApproval.update({
-        where: { id: approvalId },
-        data: {
-          status: "SENT_BLOCKED",
-          blockerCodes: ["provider_adapter_missing"],
-        },
+      const { sendProviderMessage } = await import("@/lib/provider-adapters");
+      const sent = await sendProviderMessage({ channel: approval.channel, to: recipient!, subject: approval.subject, body: approval.body, idempotencyKey: `deal-scout-${approval.id}` });
+      return db.$transaction(async (tx) => {
+        const completed = await tx.messageApproval.update({ where: { id: approvalId }, data: { status: "SENT", provider: sent.provider, blockerCodes: [] } });
+        await audit(
+          tx,
+          "provider.sent",
+          `Sent approved ${approval.channel} through ${sent.provider}.`,
+          { approvalId, providerReference: sent.reference },
+        );
+        return completed;
       });
-    });
   } catch (error) {
     return safeError(error, "process outbound message");
   }

@@ -5,6 +5,7 @@ import { DEVELOPER_RESEARCH_VERSION, enqueueDeveloperResearchBatch, runAutomatic
 import { enqueuePropertyResearchBatch, PROPERTY_RESEARCH_VERSION, runAutomaticPropertyResearchBatch } from "@/lib/property-research";
 import { runCensusPermitResearch } from "@/lib/government-research";
 import { runWithResearchDeadline } from "@/lib/research-runtime";
+import { runMotivatedSellerDiscovery } from "@/lib/motivated-seller-discovery";
 
 const REFRESH_DAYS = 7;
 
@@ -25,10 +26,13 @@ export async function ensureAutomaticResearchBacklog(limit = 250) {
 
 export async function runAutomaticResearchCycle(options: { deadlineAt?: number } = {}) {
   const operation = async () => {
-    const government = await runAutomaticGovernmentResearch();
+    const [government, discovery] = await Promise.all([
+      runAutomaticGovernmentResearch(),
+      runMotivatedSellerDiscovery().catch((error) => ({ status: "failed" as const, searched: 0, created: 0, references: 0, error: error instanceof Error ? error.message : "Motivated-seller discovery failed" })),
+    ]);
     const queued = await ensureAutomaticResearchBacklog();
     const [properties, developers] = await Promise.all([runAutomaticPropertyResearchBatch(25), runAutomaticDeveloperResearchBatch(25)]);
-    return { queued, properties, developers, government };
+    return { queued, properties, developers, government, discovery };
   };
   return options.deadlineAt ? runWithResearchDeadline(options.deadlineAt, operation) : operation();
 }

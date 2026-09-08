@@ -9,7 +9,7 @@ const states: Record<string, string> = {"01":"Alabama","02":"Alaska","04":"Arizo
 
 export const governmentSources = [
   { name: CENSUS_SOURCE, purpose: "Ranks counties by current residential permit activity and year-over-year momentum.", url: "https://www.census.gov/construction/bps/", status: "Connected" },
-  { name: "HUD FHA Single Family REO", purpose: "Imports publicly listed step-6 federal REO properties and verifies county geography with Census TIGERweb.", url: "https://egis.hud.gov/arcgis/rest/services/cpdmaps/HudSfReo/MapServer/1", status: "Connected" },
+  { name: "Owner-controlled public seller search", purpose: "Finds public FSBO, default, tax-pressure, probate, and similar seller-controlled opportunities; government and lender inventory is excluded.", url: "https://www.firecrawl.dev/", status: "Connected" },
   { name: "GSA Auctions", purpose: "Active federal real-property auctions and government surplus sales.", url: "https://www.gsaauctions.gov/", status: "Queued" },
   { name: "SEC EDGAR", purpose: "Public-company filings used to verify acquisitions and development activity.", url: "https://www.sec.gov/search-filings", status: "Queued" },
 ] as const;

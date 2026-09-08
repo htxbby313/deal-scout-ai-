@@ -4,6 +4,7 @@ export type SellerSignalProperty = {
   sourceName?: string | null;
   opportunityStatus?: string | null;
   notes?: string | null;
+  estimatedValue?: number | null;
   researchFindings?: Array<{
     topic?: string | null;
     label?: string | null;
@@ -22,6 +23,10 @@ export type MotivatedSellerScore = {
 };
 
 const contains = (text: string, patterns: RegExp[]) => patterns.some((pattern) => pattern.test(text));
+const money = (value?: string | null) => {
+  const parsed = Number((value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
 
 export function scoreMotivatedSeller(property: SellerSignalProperty): MotivatedSellerScore {
   const findingText = (property.researchFindings ?? [])
@@ -50,6 +55,19 @@ export function scoreMotivatedSeller(property: SellerSignalProperty): MotivatedS
     add(25, "Estimated equity shortfall");
     feasibilityScore -= 30;
     blockers.push("Payoff or short-sale path needs verification");
+  }
+  const debtFinding = (property.researchFindings ?? []).find((finding) => contains(`${finding.topic} ${finding.label}`, [/mortgage balance/, /estimated debt/, /loan balance/, /payoff/]));
+  const lienFinding = (property.researchFindings ?? []).find((finding) => contains(`${finding.topic} ${finding.label}`, [/liens? and taxes/, /tax lien/, /recorded lien/]));
+  const estimatedDebt = money(debtFinding?.value);
+  const liensAndTaxes = money(lienFinding?.value) ?? 0;
+  if (property.estimatedValue && estimatedDebt) {
+    const estimatedSellingCosts = Math.round(property.estimatedValue * 0.08);
+    const estimatedNetEquity = property.estimatedValue - estimatedDebt - liensAndTaxes - estimatedSellingCosts;
+    if (estimatedNetEquity <= 0 && !signals.includes("Estimated equity shortfall")) {
+      add(25, "Estimated equity shortfall after selling costs");
+      feasibilityScore -= 30;
+      blockers.push("Mortgage payoff, liens, and selling-cost estimate need verification");
+    }
   }
   if (contains(text, [/probate/, /inherited/, /estate sale/, /absentee owner/])) add(10, "Ownership transition or absentee signal");
 
