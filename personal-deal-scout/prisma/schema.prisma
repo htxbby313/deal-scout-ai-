@@ -177,51 +177,51 @@ enum DiscoveryReferenceStatus {
 }
 
 model Property {
-  id             String   @id @default(cuid())
-  address        String
-  city           String
-  state          String
-  zipCode        String
-  ownerName      String
-  county         String?
-  neighborhood   String?
-  latitude       Float?
-  longitude      Float?
-  marketFips     String?
-  yearBuilt      String?
-  lotSize        String?
-  estimatedValue Int?
-  notes          String?
-  propertyType   String?
-  leadSource     String?
-  opportunityStatus OpportunityStatus @default(NEEDS_VERIFICATION)
-  contactName    String?
-  contactPhone   String?
-  contactEmail   String?
-  contactUrl     String?
-  sourceName     String?
-  sourceUrl      String?
-  sourceRecordDate String?
+  id                    String                       @id @default(cuid())
+  address               String
+  city                  String
+  state                 String
+  zipCode               String
+  ownerName             String
+  county                String?
+  neighborhood          String?
+  latitude              Float?
+  longitude             Float?
+  marketFips            String?
+  yearBuilt             String?
+  lotSize               String?
+  estimatedValue        Int?
+  notes                 String?
+  propertyType          String?
+  leadSource            String?
+  opportunityStatus     OpportunityStatus            @default(NEEDS_VERIFICATION)
+  contactName           String?
+  contactPhone          String?
+  contactEmail          String?
+  contactUrl            String?
+  sourceName            String?
+  sourceUrl             String?
+  sourceRecordDate      String?
   verificationSourceUrl String?
-  verificationDate String?
-  lastVerifiedAt DateTime?
-  confidence     Int @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  leads          Lead[]
-  matches        DeveloperMatch[]
-  researchRuns   PropertyResearchRun[]
-  researchFindings PropertyResearchFinding[]
-  media          PropertyMedia[]
-  transactions   DealTransaction[]
-  agentTasks     AgentTask[]
-  acquisitionFunnels AcquisitionFunnel[]
-  countyRegistryId String?
-  countyRegistry CountySourceRegistry? @relation(fields: [countyRegistryId], references: [id], onDelete: SetNull)
-  countyObservations CountyFactObservation[]
-  countyEntityMatches CountyEntityMatch[]
-  discoveryReferences PropertyDiscoveryReference[]
-  comparableSales ComparableSale[]
+  verificationDate      String?
+  lastVerifiedAt        DateTime?
+  confidence            Int                          @default(0)
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  leads                 Lead[]
+  matches               DeveloperMatch[]
+  researchRuns          PropertyResearchRun[]
+  researchFindings      PropertyResearchFinding[]
+  media                 PropertyMedia[]
+  transactions          DealTransaction[]
+  agentTasks            AgentTask[]
+  acquisitionFunnels    AcquisitionFunnel[]
+  countyRegistryId      String?
+  countyRegistry        CountySourceRegistry?        @relation(fields: [countyRegistryId], references: [id], onDelete: SetNull)
+  countyObservations    CountyFactObservation[]
+  countyEntityMatches   CountyEntityMatch[]
+  discoveryReferences   PropertyDiscoveryReference[]
+  comparableSales       ComparableSale[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
@@ -231,20 +231,20 @@ model Property {
 }
 
 model PropertyResearchRun {
-  id             String   @id @default(cuid())
-  propertyId     String
-  researchVersion Int     @default(1)
-  status         String
-  sourcesChecked Int      @default(0)
-  findingsFound  Int      @default(0)
-  manualNeeded   Int      @default(0)
-  error          String?
-  attemptCount   Int      @default(0)
-  maxAttempts    Int      @default(3)
-  exhausted      Boolean  @default(false)
-  startedAt      DateTime @default(now())
-  finishedAt     DateTime?
-  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id              String    @id @default(cuid())
+  propertyId      String
+  researchVersion Int       @default(1)
+  status          String
+  sourcesChecked  Int       @default(0)
+  findingsFound   Int       @default(0)
+  manualNeeded    Int       @default(0)
+  error           String?
+  attemptCount    Int       @default(0)
+  maxAttempts     Int       @default(3)
+  exhausted       Boolean   @default(false)
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  property        Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId, startedAt])
   @@index([propertyId, researchVersion])
@@ -253,40 +253,40 @@ model PropertyResearchRun {
 }
 
 model PropertyResearchFinding {
-  id          String                @id @default(cuid())
-  propertyId  String
-  topic       String
-  label       String
-  value       String?
-  status      ResearchFindingStatus
-  sourceName  String?
-  sourceUrl   String?
-  observedAt  DateTime              @default(now())
-  confidence  Int                   @default(0)
-  notes       String?
-  property    Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id         String                @id @default(cuid())
+  propertyId String
+  topic      String
+  label      String
+  value      String?
+  status     ResearchFindingStatus
+  sourceName String?
+  sourceUrl  String?
+  observedAt DateTime              @default(now())
+  confidence Int                   @default(0)
+  notes      String?
+  property   Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, topic])
   @@index([propertyId, status])
 }
 
 model PropertyMedia {
-  id            String            @id @default(cuid())
-  propertyId    String
-  url           String
-  sourceUrl     String
-  sourceName    String
-  caption       String?
-  altText       String
-  kind          PropertyMediaKind @default(LISTING_PHOTO)
-  position      Int               @default(0)
-  sendApproved  Boolean           @default(false)
-  rightsStatus  MediaRightsStatus @default(UNKNOWN)
-  rightsEvidenceUrl String?
+  id                 String            @id @default(cuid())
+  propertyId         String
+  url                String
+  sourceUrl          String
+  sourceName         String
+  caption            String?
+  altText            String
+  kind               PropertyMediaKind @default(LISTING_PHOTO)
+  position           Int               @default(0)
+  sendApproved       Boolean           @default(false)
+  rightsStatus       MediaRightsStatus @default(UNKNOWN)
+  rightsEvidenceUrl  String?
   externalApprovedAt DateTime?
-  discoveredAt  DateTime          @default(now())
-  reviewedAt    DateTime?
-  property      Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  discoveredAt       DateTime          @default(now())
+  reviewedAt         DateTime?
+  property           Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, url])
   @@index([propertyId, position])
@@ -319,18 +319,18 @@ model ComparableSale {
 }
 
 model Lead {
-  id                     String   @id @default(cuid())
+  id                     String            @id @default(cuid())
   propertyId             String
   ownerName              String
   status                 String
   priority               String
   nextActionType         String
   nextActionAt           String
-  estimatedAssignmentFee Int      @default(0)
+  estimatedAssignmentFee Int               @default(0)
   notes                  String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-  property               Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  property               Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   tasks                  Task[]
   approvals              MessageApproval[]
   transactions           DealTransaction[]
@@ -356,39 +356,56 @@ model Task {
 }
 
 model Developer {
-  id                    String   @id @default(cuid())
-  companyName           String   @unique
-  contactName           String?
-  phone                 String?
-  email                 String?
-  website               String?
-  contactUrl            String?
-  targetZipCodes        String[]
-  maximumPurchasePrice  Int?
-  typicalBuildPrice     Int?
-  notes                 String?
-  active                Boolean  @default(true)
-  qualificationStatus   QualificationStatus @default(RESEARCH_NEEDED)
-  contactVerifiedAt     DateTime?
-  lastResearchedAt      DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  projects              DeveloperProject[]
-  matches               DeveloperMatch[]
-  researchRuns          DeveloperResearchRun[]
-  transactions          DealTransaction[]
-  agentTasks            AgentTask[]
-  demandVersions        BuyerDemandVersion[]
-  capacityEvidence      BuyerCapacityEvidence[]
-  reliabilityEvidence   BuyerReliabilityEvidence[]
-  countyEntityMatches   CountyEntityMatch[]
-  buyerPriceEvidence    BuyerPropertyPriceEvidence[]
+  id                     String                         @id @default(cuid())
+  companyName            String                         @unique
+  contactName            String?
+  phone                  String?
+  email                  String?
+  website                String?
+  contactUrl             String?
+  targetZipCodes         String[]
+  maximumPurchasePrice   Int?
+  typicalBuildPrice      Int?
+  notes                  String?
+  active                 Boolean                        @default(true)
+  communicationsEnabled  Boolean                        @default(false)
+  qualificationStatus    QualificationStatus            @default(RESEARCH_NEEDED)
+  contactVerifiedAt      DateTime?
+  lastResearchedAt       DateTime?
+  createdAt              DateTime                       @default(now())
+  updatedAt              DateTime                       @updatedAt
+  projects               DeveloperProject[]
+  matches                DeveloperMatch[]
+  researchRuns           DeveloperResearchRun[]
+  transactions           DealTransaction[]
+  agentTasks             AgentTask[]
+  demandVersions         BuyerDemandVersion[]
+  capacityEvidence       BuyerCapacityEvidence[]
+  reliabilityEvidence    BuyerReliabilityEvidence[]
+  countyEntityMatches    CountyEntityMatch[]
+  buyerPriceEvidence     BuyerPropertyPriceEvidence[]
   buyerPerformanceIssues BuyerPerformanceIssue[]
-  buyerPermissions      BuyerCommunicationPermission[]
+  buyerPermissions       BuyerCommunicationPermission[]
   buyerReliabilityScores BuyerReliabilityScoreHistory[]
+  buyerConversations     BuyerConversation[]
 
   @@index([qualificationStatus])
   @@index([active, updatedAt])
+}
+
+model BuyerConversation {
+  id                String    @id @default(cuid())
+  developerId       String
+  direction         String
+  channel           String
+  summary           String
+  providerReference String?   @unique
+  occurredAt        DateTime
+  recordedBy        String
+  createdAt         DateTime  @default(now())
+  developer         Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+  @@index([developerId, occurredAt])
 }
 
 enum DealTransactionStatus {
@@ -439,20 +456,20 @@ enum TransactionDocumentStatus {
 }
 
 model DeveloperResearchRun {
-  id             String    @id @default(cuid())
-  developerId    String
-  researchVersion Int      @default(1)
-  status         String
-  sourcesChecked Int       @default(0)
-  findingsFound  Int       @default(0)
-  manualNeeded   Int       @default(0)
-  error          String?
-  attemptCount   Int       @default(0)
-  maxAttempts    Int       @default(3)
-  exhausted      Boolean   @default(false)
-  startedAt      DateTime  @default(now())
-  finishedAt     DateTime?
-  developer      Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  id              String    @id @default(cuid())
+  developerId     String
+  researchVersion Int       @default(1)
+  status          String
+  sourcesChecked  Int       @default(0)
+  findingsFound   Int       @default(0)
+  manualNeeded    Int       @default(0)
+  error           String?
+  attemptCount    Int       @default(0)
+  maxAttempts     Int       @default(3)
+  exhausted       Boolean   @default(false)
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  developer       Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
 
   @@index([developerId, startedAt])
   @@index([developerId, researchVersion])
@@ -461,7 +478,7 @@ model DeveloperResearchRun {
 }
 
 model DeveloperProject {
-  id                    String    @id @default(cuid())
+  id                    String                  @id @default(cuid())
   developerId           String
   address               String
   city                  String
@@ -475,12 +492,12 @@ model DeveloperProject {
   sourceUrl             String?
   sourceRecordDate      String?
   verifiedAt            DateTime?
-  confidence            Int       @default(0)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  developer             Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  confidence            Int                     @default(0)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  developer             Developer               @relation(fields: [developerId], references: [id], onDelete: Cascade)
   countyRegistryId      String?
-  countyRegistry        CountySourceRegistry? @relation(fields: [countyRegistryId], references: [id], onDelete: SetNull)
+  countyRegistry        CountySourceRegistry?   @relation(fields: [countyRegistryId], references: [id], onDelete: SetNull)
   countyObservations    CountyFactObservation[]
   countyEntityMatches   CountyEntityMatch[]
 
@@ -535,24 +552,24 @@ model ProviderSetting {
 }
 
 model ExternalProvider {
-  id                  String                  @id @default(cuid())
-  key                 String                  @unique
+  id                  String                    @id @default(cuid())
+  key                 String                    @unique
   displayName         String
   kind                String
-  status              ExternalProviderStatus @default(DISABLED)
-  liveRequestsEnabled Boolean                 @default(false)
+  status              ExternalProviderStatus    @default(DISABLED)
+  liveRequestsEnabled Boolean                   @default(false)
   policy              Json
-  timeoutMs           Int                     @default(15000)
-  maxAttempts         Int                     @default(3)
+  timeoutMs           Int                       @default(15000)
+  maxAttempts         Int                       @default(3)
   quotaLimit          Int?
   quotaWindow         String?
   nextEligibleAt      DateTime?
   circuitOpenUntil    DateTime?
-  failureCount        Int                     @default(0)
+  failureCount        Int                       @default(0)
   activatedAt         DateTime?
   activatedBy         String?
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
   datasets            MarketDatasetDefinition[]
   checkpoints         ProviderJobCheckpoint[]
 
@@ -580,9 +597,9 @@ model ProviderJobCheckpoint {
 }
 
 model MarketDatasetDefinition {
-  id                   String           @id @default(cuid())
+  id                   String                @id @default(cuid())
   providerId           String
-  key                  String           @unique
+  key                  String                @unique
   name                 String
   definition           String
   canonicalCatalogUrl  String
@@ -598,10 +615,10 @@ model MarketDatasetDefinition {
   fixtureHash          String
   reviewedBy           String
   reviewedAt           DateTime
-  enabled              Boolean          @default(false)
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  provider             ExternalProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  enabled              Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  provider             ExternalProvider      @relation(fields: [providerId], references: [id], onDelete: Restrict)
   imports              MarketDatasetImport[]
   observations         MarketObservation[]
 
@@ -701,15 +718,15 @@ model DeveloperMatch {
 }
 
 model GovernmentResearchRun {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   source       String
   status       String
   period       String?
-  recordsFound Int      @default(0)
+  recordsFound Int       @default(0)
   error        String?
-  startedAt    DateTime @default(now())
+  startedAt    DateTime  @default(now())
   finishedAt   DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([createdAt])
   @@index([source, period, status, finishedAt])
@@ -828,28 +845,28 @@ model TransactionAuditEvent {
 }
 
 model Agent {
-  id                       String            @id @default(cuid())
+  id                       String                    @id @default(cuid())
   name                     String
-  role                     AgentRole         @unique
-  status                   AgentStatus       @default(ACTIVE)
-  autonomyMode             AgentAutonomyMode @default(LOCKED)
+  role                     AgentRole                 @unique
+  status                   AgentStatus               @default(ACTIVE)
+  autonomyMode             AgentAutonomyMode         @default(LOCKED)
   description              String?
-  autonomousOutbound       Boolean           @default(false)
+  autonomousOutbound       Boolean                   @default(false)
   legalStandardsProvenAt   DateTime?
   ethicalStandardsProvenAt DateTime?
   complianceApprovedAt     DateTime?
   counselApprovedAt        DateTime?
   ownerAutonomyApprovedAt  DateTime?
   ownerAutonomyApprovedBy  String?
-  createdAt                DateTime          @default(now())
-  updatedAt                DateTime          @updatedAt
-  assignedTasks            AgentTask[]       @relation("AssignedAgentTasks")
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  assignedTasks            AgentTask[]               @relation("AssignedAgentTasks")
   runs                     AgentRun[]
-  eventsCreated            AgentEvent[]      @relation("AgentEventActor")
-  handoffsSent             AgentEvent[]      @relation("AgentEventSource")
-  handoffsReceived         AgentEvent[]      @relation("AgentEventTarget")
+  eventsCreated            AgentEvent[]              @relation("AgentEventActor")
+  handoffsSent             AgentEvent[]              @relation("AgentEventSource")
+  handoffsReceived         AgentEvent[]              @relation("AgentEventTarget")
   capabilityGrants         AgentCapabilityGrant[]
-  campaignAssignments     CampaignAgentAssignment[]
+  campaignAssignments      CampaignAgentAssignment[]
 
   @@index([status, autonomyMode])
 }
@@ -863,13 +880,13 @@ model AgentTask {
   description           String?
   status                AgentTaskStatus   @default(QUEUED)
   priority              AgentTaskPriority @default(NORMAL)
-  actionZone            AgentActionZone    @default(GREEN)
-  costClass             AgentCostClass     @default(FREE)
-  capability            String             @default("INTERNAL_RESEARCH")
-  estimatedCostCents    BigInt             @default(0)
+  actionZone            AgentActionZone   @default(GREEN)
+  costClass             AgentCostClass    @default(FREE)
+  capability            String            @default("INTERNAL_RESEARCH")
+  estimatedCostCents    BigInt            @default(0)
   expectedValueCents    BigInt?
   expectedBenefit       String?
-  materialRisks         String[]            @default([])
+  materialRisks         String[]          @default([])
   ownerApprovalRequired Boolean           @default(true)
   ownerApprovedAt       DateTime?
   ownerApprovedBy       String?
@@ -925,22 +942,22 @@ model AgentCapabilityGrant {
 }
 
 model AgentSchedulerCycle {
-  id                    String               @id @default(cuid())
-  trigger               AgentCycleTrigger
-  status                AgentSchedulerStatus @default(RUNNING)
-  deploymentId          String?
-  tasksCreated          Int                  @default(0)
-  tasksProcessed        Int                  @default(0)
-  tasksCompleted        Int                  @default(0)
-  tasksFailed           Int                  @default(0)
-  tasksWaitingApproval  Int                  @default(0)
-  propertiesConsidered  Int                  @default(0)
-  developersConsidered  Int                  @default(0)
-  transactionsConsidered Int                 @default(0)
-  researchSummary       Json?
-  errors                Json?
-  startedAt             DateTime             @default(now())
-  finishedAt            DateTime?
+  id                     String               @id @default(cuid())
+  trigger                AgentCycleTrigger
+  status                 AgentSchedulerStatus @default(RUNNING)
+  deploymentId           String?
+  tasksCreated           Int                  @default(0)
+  tasksProcessed         Int                  @default(0)
+  tasksCompleted         Int                  @default(0)
+  tasksFailed            Int                  @default(0)
+  tasksWaitingApproval   Int                  @default(0)
+  propertiesConsidered   Int                  @default(0)
+  developersConsidered   Int                  @default(0)
+  transactionsConsidered Int                  @default(0)
+  researchSummary        Json?
+  errors                 Json?
+  startedAt              DateTime             @default(now())
+  finishedAt             DateTime?
 
   @@index([status, startedAt])
   @@index([trigger, startedAt])
@@ -986,57 +1003,57 @@ model AgentEvent {
 }
 
 model FinancialProjection {
-  id                       String          @id @default(cuid())
-  transactionId            String
-  version                  Int
-  sellerContractPriceCents BigInt
-  sellerAskingPriceCents   BigInt?
-  sellerMinimumNetCents    BigInt?
-  buyerPriceLowCents       BigInt
-  buyerPriceBaseCents      BigInt
-  buyerPriceHighCents      BigInt
-  buyerPriceStatus         String
-  buyerPriceSourceUrl      String
-  buyerPriceObservedAt     DateTime
-  buyerPriceExpiresAt      DateTime
-  transactionCostsCents    BigInt
-  doubleClosingCostsCents  BigInt
-  titleExpensesCents       BigInt
-  closingExpensesCents     BigInt
-  transactionalFundingCents BigInt
-  financingCostsCents      BigInt
-  taxesCents               BigInt
-  liensAndPayoffsCents     BigInt
-  concessionsCents         BigInt
-  inspectionExpensesCents BigInt
-  legalExpensesCents      BigInt
-  dataMarketingCostsCents BigInt
-  insuranceExpensesCents  BigInt
-  otherExpensesCents      BigInt
-  riskReserveCents         BigInt
-  contingencyReserveCents BigInt
+  id                         String                  @id @default(cuid())
+  transactionId              String
+  version                    Int
+  sellerContractPriceCents   BigInt
+  sellerAskingPriceCents     BigInt?
+  sellerMinimumNetCents      BigInt?
+  buyerPriceLowCents         BigInt
+  buyerPriceBaseCents        BigInt
+  buyerPriceHighCents        BigInt
+  buyerPriceStatus           String
+  buyerPriceSourceUrl        String
+  buyerPriceObservedAt       DateTime
+  buyerPriceExpiresAt        DateTime
+  transactionCostsCents      BigInt
+  doubleClosingCostsCents    BigInt
+  titleExpensesCents         BigInt
+  closingExpensesCents       BigInt
+  transactionalFundingCents  BigInt
+  financingCostsCents        BigInt
+  taxesCents                 BigInt
+  liensAndPayoffsCents       BigInt
+  concessionsCents           BigInt
+  inspectionExpensesCents    BigInt
+  legalExpensesCents         BigInt
+  dataMarketingCostsCents    BigInt
+  insuranceExpensesCents     BigInt
+  otherExpensesCents         BigInt
+  riskReserveCents           BigInt
+  contingencyReserveCents    BigInt
   earnestMoneyDepositedCents BigInt
-  earnestMoneyAtRiskCents  BigInt
-  probabilityLowBps        Int
-  probabilityBaseBps       Int
-  probabilityHighBps       Int
-  feeLowCents              BigInt
-  feeBaseCents             BigInt
-  feeHighCents             BigInt
-  probabilityWeightedCents BigInt
-  sellerSafeMaximumCents   BigInt
-  targetFeeLowCents        BigInt
-  targetFeeHighCents       BigInt
-  evidence                 Json
-  createdBy                String
-  correctionReason         String?
-  supersedesId             String?
-  createdAt                DateTime        @default(now())
-  transaction              DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
-  supersedes               FinancialProjection? @relation("ProjectionCorrections", fields: [supersedesId], references: [id], onDelete: Restrict)
-  corrections              FinancialProjection[] @relation("ProjectionCorrections")
-  costEvidence             FinancialCostEvidence[]
-  outcomes                 TransactionOutcome[]
+  earnestMoneyAtRiskCents    BigInt
+  probabilityLowBps          Int
+  probabilityBaseBps         Int
+  probabilityHighBps         Int
+  feeLowCents                BigInt
+  feeBaseCents               BigInt
+  feeHighCents               BigInt
+  probabilityWeightedCents   BigInt
+  sellerSafeMaximumCents     BigInt
+  targetFeeLowCents          BigInt
+  targetFeeHighCents         BigInt
+  evidence                   Json
+  createdBy                  String
+  correctionReason           String?
+  supersedesId               String?
+  createdAt                  DateTime                @default(now())
+  transaction                DealTransaction         @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  supersedes                 FinancialProjection?    @relation("ProjectionCorrections", fields: [supersedesId], references: [id], onDelete: Restrict)
+  corrections                FinancialProjection[]   @relation("ProjectionCorrections")
+  costEvidence               FinancialCostEvidence[]
+  outcomes                   TransactionOutcome[]
 
   @@unique([transactionId, version])
   @@index([transactionId, createdAt])
@@ -1057,28 +1074,29 @@ model FinancialCostEvidence {
   createdBy      String
   createdAt      DateTime            @default(now())
   projection     FinancialProjection @relation(fields: [projectionId], references: [id], onDelete: Restrict)
+
   @@unique([projectionId, category, version])
   @@index([category, expiresAt])
 }
 
 model SettlementReview {
-  id                       String          @id @default(cuid())
-  transactionId            String
-  version                  Int
-  settlementDocumentUrl    String
-  settlementDocumentHash   String
-  grossAssignmentFeeCents  BigInt
-  actualExpensesCents      BigInt
-  realizedProfitCents      BigInt
-  reviewedBy               String
-  reviewedAt               DateTime
-  correctionReason         String?
-  correctsId               String?
-  createdAt                DateTime        @default(now())
-  transaction              DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
-  corrects                 SettlementReview? @relation("SettlementCorrections", fields: [correctsId], references: [id], onDelete: Restrict)
-  corrections              SettlementReview[] @relation("SettlementCorrections")
-  expenseLines             SettlementExpenseLine[]
+  id                      String                  @id @default(cuid())
+  transactionId           String
+  version                 Int
+  settlementDocumentUrl   String
+  settlementDocumentHash  String
+  grossAssignmentFeeCents BigInt
+  actualExpensesCents     BigInt
+  realizedProfitCents     BigInt
+  reviewedBy              String
+  reviewedAt              DateTime
+  correctionReason        String?
+  correctsId              String?
+  createdAt               DateTime                @default(now())
+  transaction             DealTransaction         @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  corrects                SettlementReview?       @relation("SettlementCorrections", fields: [correctsId], references: [id], onDelete: Restrict)
+  corrections             SettlementReview[]      @relation("SettlementCorrections")
+  expenseLines            SettlementExpenseLine[]
 
   @@unique([transactionId, version])
   @@unique([transactionId, settlementDocumentHash, version])
@@ -1094,6 +1112,7 @@ model SettlementExpenseLine {
   sourceReference    String
   createdAt          DateTime         @default(now())
   settlementReview   SettlementReview @relation(fields: [settlementReviewId], references: [id], onDelete: Restrict)
+
   @@unique([settlementReviewId, category, sourceReference])
 }
 
@@ -1195,27 +1214,27 @@ enum RetentionReviewStatus {
 }
 
 model SellerEngagement {
-  id                 String                 @id @default(cuid())
-  transactionId      String
-  channel            EngagementChannel
-  recipientHash      String
-  recipientLabel     String?
-  jurisdictionState  String
-  status             SellerEngagementStatus @default(DRAFT)
-  purpose            String
-  ownerApprovedAt    DateTime?
-  ownerApprovedBy    String?
-  completedAt        DateTime?
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  transaction        DealTransaction        @relation(fields: [transactionId], references: [id], onDelete: Restrict)
-  consents            ContactConsent[]
-  contactAttempts     SellerContactAttempt[]
-  conversations       SellerConversation[]
-  sellerFacts         SellerFactVersion[]
-  followUps           SellerFollowUp[]
-  offerHistory        SellerOfferHistory[]
-  dispositions        SellerLeadDisposition[]
+  id                String                  @id @default(cuid())
+  transactionId     String
+  channel           EngagementChannel
+  recipientHash     String
+  recipientLabel    String?
+  jurisdictionState String
+  status            SellerEngagementStatus  @default(DRAFT)
+  purpose           String
+  ownerApprovedAt   DateTime?
+  ownerApprovedBy   String?
+  completedAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  transaction       DealTransaction         @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  consents          ContactConsent[]
+  contactAttempts   SellerContactAttempt[]
+  conversations     SellerConversation[]
+  sellerFacts       SellerFactVersion[]
+  followUps         SellerFollowUp[]
+  offerHistory      SellerOfferHistory[]
+  dispositions      SellerLeadDisposition[]
 
   @@index([transactionId, status])
   @@index([recipientHash, channel])
@@ -1279,73 +1298,73 @@ enum SellerDispositionReason {
 }
 
 model SellerContactAttempt {
-  id              String                     @id @default(cuid())
-  engagementId    String
-  channel         EngagementChannel
-  status          SellerContactAttemptStatus @default(DRAFT)
-  senderIdentity  String?
-  provider        String?
-  draftContentHash String?
-  disclosureVersion String?
-  consentId       String?
-  policyId        String?
-  suppressionCheckedAt DateTime?
+  id                       String                     @id @default(cuid())
+  engagementId             String
+  channel                  EngagementChannel
+  status                   SellerContactAttemptStatus @default(DRAFT)
+  senderIdentity           String?
+  provider                 String?
+  draftContentHash         String?
+  disclosureVersion        String?
+  consentId                String?
+  policyId                 String?
+  suppressionCheckedAt     DateTime?
   permittedWindowCheckedAt DateTime?
-  ownerApprovedAt DateTime?
-  ownerApprovedBy String?
-  attemptedAt     DateTime?
-  providerReference String?
-  result          String?
-  sourceUrl       String?
-  createdAt       DateTime                   @default(now())
-  engagement      SellerEngagement           @relation(fields: [engagementId], references: [id], onDelete: Restrict)
-  conversations   SellerConversation[]
-  providerLogs    CommunicationProviderLog[]
+  ownerApprovedAt          DateTime?
+  ownerApprovedBy          String?
+  attemptedAt              DateTime?
+  providerReference        String?
+  result                   String?
+  sourceUrl                String?
+  createdAt                DateTime                   @default(now())
+  engagement               SellerEngagement           @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  conversations            SellerConversation[]
+  providerLogs             CommunicationProviderLog[]
 
   @@index([engagementId, status, createdAt])
 }
 
 model SellerConversation {
-  id              String               @id @default(cuid())
-  engagementId    String
-  contactAttemptId String?
-  occurredAt      DateTime
-  sourceType      String
-  sourceUrl       String?
+  id                 String                @id @default(cuid())
+  engagementId       String
+  contactAttemptId   String?
+  occurredAt         DateTime
+  sourceType         String
+  sourceUrl          String?
   sourceArtifactHash String?
-  summary         String
-  objections      String[]
-  questions       String[]
-  recordedBy      String
-  createdAt       DateTime             @default(now())
-  engagement      SellerEngagement     @relation(fields: [engagementId], references: [id], onDelete: Restrict)
-  contactAttempt  SellerContactAttempt? @relation(fields: [contactAttemptId], references: [id], onDelete: Restrict)
-  factVersions    SellerFactVersion[]
+  summary            String
+  objections         String[]
+  questions          String[]
+  recordedBy         String
+  createdAt          DateTime              @default(now())
+  engagement         SellerEngagement      @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  contactAttempt     SellerContactAttempt? @relation(fields: [contactAttemptId], references: [id], onDelete: Restrict)
+  factVersions       SellerFactVersion[]
 
   @@index([engagementId, occurredAt])
 }
 
 model SellerFactVersion {
-  id                String                     @id @default(cuid())
-  engagementId      String
-  conversationId    String
-  version           Int
-  priorities        String[]
-  timeline          String?
-  propertyCondition String?
-  desiredProceedsCents BigInt?
-  minimumNetProceedsCents BigInt?
-  authorityStatus   SellerAuthorityStatus
-  authoritySourceUrl String?
-  representationStatus SellerRepresentationStatus
-  preferredChannel  EngagementChannel?
+  id                         String                     @id @default(cuid())
+  engagementId               String
+  conversationId             String
+  version                    Int
+  priorities                 String[]
+  timeline                   String?
+  propertyCondition          String?
+  desiredProceedsCents       BigInt?
+  minimumNetProceedsCents    BigInt?
+  authorityStatus            SellerAuthorityStatus
+  authoritySourceUrl         String?
+  representationStatus       SellerRepresentationStatus
+  preferredChannel           EngagementChannel?
   independentAdviceOfferedAt DateTime?
-  sellerStatedAt    DateTime
-  recordedBy        String
-  correctionReason  String?
-  createdAt         DateTime                   @default(now())
-  engagement        SellerEngagement           @relation(fields: [engagementId], references: [id], onDelete: Restrict)
-  conversation      SellerConversation         @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  sellerStatedAt             DateTime
+  recordedBy                 String
+  correctionReason           String?
+  createdAt                  DateTime                   @default(now())
+  engagement                 SellerEngagement           @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  conversation               SellerConversation         @relation(fields: [conversationId], references: [id], onDelete: Restrict)
 
   @@unique([engagementId, version])
   @@index([engagementId, sellerStatedAt])
@@ -1369,38 +1388,38 @@ model SellerFollowUp {
 }
 
 model SellerOfferHistory {
-  id               String            @id @default(cuid())
-  engagementId     String
-  version          Int
-  status           SellerOfferStatus @default(DRAFT)
-  offerPriceCents  BigInt
-  sellerNetCents   BigInt?
+  id                    String            @id @default(cuid())
+  engagementId          String
+  version               Int
+  status                SellerOfferStatus @default(DRAFT)
+  offerPriceCents       BigInt
+  sellerNetCents        BigInt?
   financialProjectionId String?
-  documentVersionId String?
-  assumptions      String[]
-  expiresAt        DateTime?
-  ownerApprovedAt  DateTime?
-  ownerApprovedBy  String?
-  deliveredAt      DateTime?
-  responseAt       DateTime?
-  responseNotes    String?
-  createdBy        String
-  createdAt        DateTime          @default(now())
-  engagement       SellerEngagement  @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  documentVersionId     String?
+  assumptions           String[]
+  expiresAt             DateTime?
+  ownerApprovedAt       DateTime?
+  ownerApprovedBy       String?
+  deliveredAt           DateTime?
+  responseAt            DateTime?
+  responseNotes         String?
+  createdBy             String
+  createdAt             DateTime          @default(now())
+  engagement            SellerEngagement  @relation(fields: [engagementId], references: [id], onDelete: Restrict)
 
   @@unique([engagementId, version])
   @@index([status, expiresAt])
 }
 
 model SellerLeadDisposition {
-  id             String                  @id @default(cuid())
-  engagementId   String
-  reason         SellerDispositionReason
-  explanation    String?
-  nurtureUntil   DateTime?
-  decidedBy      String
-  decidedAt      DateTime                @default(now())
-  engagement     SellerEngagement        @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  id           String                  @id @default(cuid())
+  engagementId String
+  reason       SellerDispositionReason
+  explanation  String?
+  nurtureUntil DateTime?
+  decidedBy    String
+  decidedAt    DateTime                @default(now())
+  engagement   SellerEngagement        @relation(fields: [engagementId], references: [id], onDelete: Restrict)
 
   @@index([reason, decidedAt])
 }
@@ -1411,7 +1430,7 @@ model ContactSuppression {
   channel           EngagementChannel
   jurisdictionState String?
   reason            String
-  source             String
+  source            String
   effectiveAt       DateTime          @default(now())
   expiresAt         DateTime?
   createdAt         DateTime          @default(now())
@@ -1420,16 +1439,16 @@ model ContactSuppression {
 }
 
 model ContactConsent {
-  id            String            @id @default(cuid())
-  engagementId  String
-  channel       EngagementChannel
-  status        ConsentStatus     @default(UNKNOWN)
-  evidenceUrl   String?
-  evidenceNote  String?
-  capturedAt    DateTime
-  expiresAt     DateTime?
-  createdAt     DateTime          @default(now())
-  engagement    SellerEngagement  @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  id           String            @id @default(cuid())
+  engagementId String
+  channel      EngagementChannel
+  status       ConsentStatus     @default(UNKNOWN)
+  evidenceUrl  String?
+  evidenceNote String?
+  capturedAt   DateTime
+  expiresAt    DateTime?
+  createdAt    DateTime          @default(now())
+  engagement   SellerEngagement  @relation(fields: [engagementId], references: [id], onDelete: Restrict)
 
   @@index([engagementId, channel, capturedAt])
 }
@@ -1449,87 +1468,87 @@ model StateChannelPolicy {
 }
 
 model CommunicationPolicyProcedure {
-  id                String            @id @default(cuid())
-  jurisdictionState String
-  channel           EngagementChannel
-  version           Int
-  status            String            @default("DRAFT")
-  procedureText     String
-  requiredDisclosure String?
+  id                  String                                @id @default(cuid())
+  jurisdictionState   String
+  channel             EngagementChannel
+  version             Int
+  status              String                                @default("DRAFT")
+  procedureText       String
+  requiredDisclosure  String?
   permittedStartLocal String?
-  permittedEndLocal String?
-  counselSourceUrl  String?
-  counselApprovedAt DateTime?
-  effectiveAt       DateTime?
-  expiresAt         DateTime?
-  createdBy         String
-  createdAt         DateTime          @default(now())
-  acknowledgments   CommunicationTrainingAcknowledgment[]
-  listScrubs        CommunicationListScrub[]
+  permittedEndLocal   String?
+  counselSourceUrl    String?
+  counselApprovedAt   DateTime?
+  effectiveAt         DateTime?
+  expiresAt           DateTime?
+  createdBy           String
+  createdAt           DateTime                              @default(now())
+  acknowledgments     CommunicationTrainingAcknowledgment[]
+  listScrubs          CommunicationListScrub[]
 
   @@unique([jurisdictionState, channel, version])
   @@index([status, effectiveAt, expiresAt])
 }
 
 model CommunicationTrainingAcknowledgment {
-  id          String                       @id @default(cuid())
-  procedureId String
-  actor       String
-  acknowledgedAt DateTime                  @default(now())
-  evidenceHash String?
-  procedure   CommunicationPolicyProcedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  id             String                       @id @default(cuid())
+  procedureId    String
+  actor          String
+  acknowledgedAt DateTime                     @default(now())
+  evidenceHash   String?
+  procedure      CommunicationPolicyProcedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
 
   @@unique([procedureId, actor])
 }
 
 model CommunicationListScrub {
-  id          String                       @id @default(cuid())
-  procedureId String
-  source      String
-  sourceUrl   String?
+  id           String                       @id @default(cuid())
+  procedureId  String
+  source       String
+  sourceUrl    String?
   artifactHash String?
-  recordCount Int
-  scrubbedAt  DateTime
-  expiresAt   DateTime
-  reviewedBy  String
-  createdAt   DateTime                     @default(now())
-  procedure   CommunicationPolicyProcedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  recordCount  Int
+  scrubbedAt   DateTime
+  expiresAt    DateTime
+  reviewedBy   String
+  createdAt    DateTime                     @default(now())
+  procedure    CommunicationPolicyProcedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
 
   @@index([scrubbedAt, expiresAt])
 }
 
 model CommunicationProviderLog {
-  id              String               @id @default(cuid())
-  contactAttemptId String
-  provider        String
-  environment     String
-  eventType       String
+  id                String               @id @default(cuid())
+  contactAttemptId  String
+  provider          String
+  environment       String
+  eventType         String
   externalReference String?
-  idempotencyKey  String               @unique
-  payloadHash     String
-  webhookVerified Boolean              @default(false)
-  occurredAt      DateTime
-  createdAt       DateTime             @default(now())
-  contactAttempt  SellerContactAttempt @relation(fields: [contactAttemptId], references: [id], onDelete: Restrict)
+  idempotencyKey    String               @unique
+  payloadHash       String
+  webhookVerified   Boolean              @default(false)
+  occurredAt        DateTime
+  createdAt         DateTime             @default(now())
+  contactAttempt    SellerContactAttempt @relation(fields: [contactAttemptId], references: [id], onDelete: Restrict)
 
   @@index([contactAttemptId, occurredAt])
 }
 
 model DiligenceReview {
-  id                    String          @id @default(cuid())
+  id                    String                          @id @default(cuid())
   transactionId         String
   level                 DiligenceLevel
-  status                DiligenceStatus @default(PENDING)
-  evidenceCount         Int             @default(0)
-  unresolvedCount       Int             @default(0)
+  status                DiligenceStatus                 @default(PENDING)
+  evidenceCount         Int                             @default(0)
+  unresolvedCount       Int                             @default(0)
   reviewer              String?
   sourceManifest        Json?
   conclusion            String?
   startedAt             DateTime?
   completedAt           DateTime?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  transaction           DealTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+  transaction           DealTransaction                 @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   professionalArtifacts ProfessionalDiligenceArtifact[]
 
   @@unique([transactionId, level])
@@ -1537,44 +1556,44 @@ model DiligenceReview {
 }
 
 model ProfessionalDiligenceArtifact {
-  id              String          @id @default(cuid())
+  id                String          @id @default(cuid())
   diligenceReviewId String
-  category        String
-  artifactHash    String
-  sourceUrl       String
-  professionalName String
-  professionalRole String
-  verifiedAt      DateTime
-  expiresAt       DateTime?
-  notes           String?
-  createdAt       DateTime        @default(now())
-  diligenceReview DiligenceReview @relation(fields: [diligenceReviewId], references: [id], onDelete: Restrict)
+  category          String
+  artifactHash      String
+  sourceUrl         String
+  professionalName  String
+  professionalRole  String
+  verifiedAt        DateTime
+  expiresAt         DateTime?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  diligenceReview   DiligenceReview @relation(fields: [diligenceReviewId], references: [id], onDelete: Restrict)
 
   @@unique([diligenceReviewId, category, artifactHash])
   @@index([diligenceReviewId, category, verifiedAt])
 }
 
 model ProviderIntegrationReadiness {
-  id                    String                  @id @default(cuid())
-  provider              String
-  channel               EngagementChannel
-  status                ProviderReadinessStatus @default(DISABLED)
-  credentialsConfigured Boolean                 @default(false)
-  webhookVerified       Boolean                 @default(false)
-  suppressionIntegrated Boolean                 @default(false)
-  auditIntegrated       Boolean                 @default(false)
-  ownerEnabled          Boolean                 @default(false)
-  environment           String                  @default("SANDBOX")
-  environmentConfigured Boolean                 @default(false)
-  authenticationVerified Boolean                @default(false)
-  allowedOperations     String[]
-  idempotencyVerified   Boolean                 @default(false)
-  retryBoundariesVerified Boolean               @default(false)
-  sandboxVerified       Boolean                 @default(false)
+  id                        String                  @id @default(cuid())
+  provider                  String
+  channel                   EngagementChannel
+  status                    ProviderReadinessStatus @default(DISABLED)
+  credentialsConfigured     Boolean                 @default(false)
+  webhookVerified           Boolean                 @default(false)
+  suppressionIntegrated     Boolean                 @default(false)
+  auditIntegrated           Boolean                 @default(false)
+  ownerEnabled              Boolean                 @default(false)
+  environment               String                  @default("SANDBOX")
+  environmentConfigured     Boolean                 @default(false)
+  authenticationVerified    Boolean                 @default(false)
+  allowedOperations         String[]
+  idempotencyVerified       Boolean                 @default(false)
+  retryBoundariesVerified   Boolean                 @default(false)
+  sandboxVerified           Boolean                 @default(false)
   productionOwnerApprovedAt DateTime?
-  reviewedAt            DateTime?
-  notes                 String?
-  updatedAt             DateTime                @updatedAt
+  reviewedAt                DateTime?
+  notes                     String?
+  updatedAt                 DateTime                @updatedAt
 
   @@unique([provider, channel])
 }
@@ -1593,32 +1612,32 @@ model ProviderWebhookReceipt {
 }
 
 model TransactionOutcome {
-  id                    String                   @id @default(cuid())
-  transactionId         String
-  status                TransactionOutcomeStatus @default(OPEN)
-  sellerProceeds        Int?
-  assignmentFee         Int?
-  transactionCosts      Int?
-  cycleDays             Int?
-  cancellationReason    String?
-  reasonCode            String?
-  reasonExplanation     String?
-  version               Int                      @default(1)
+  id                      String                      @id @default(cuid())
+  transactionId           String
+  status                  TransactionOutcomeStatus    @default(OPEN)
+  sellerProceeds          Int?
+  assignmentFee           Int?
+  transactionCosts        Int?
+  cycleDays               Int?
+  cancellationReason      String?
+  reasonCode              String?
+  reasonExplanation       String?
+  version                 Int                         @default(1)
   predictedProbabilityBps Int?
-  projectionId          String?
-  priorityScoreId       String?
-  decisionSnapshot      Json?
-  correctionReason      String?
-  correctsId            String?
-  evidence              Json?
-  finalizedAt           DateTime?
-  createdAt             DateTime                 @default(now())
-  transaction           DealTransaction          @relation(fields: [transactionId], references: [id], onDelete: Restrict)
-  observations          LearningObservation[]
-  projection            FinancialProjection?     @relation(fields: [projectionId], references: [id], onDelete: Restrict)
-  priorityScore         ProfitPriorityScoreHistory? @relation(fields: [priorityScoreId], references: [id], onDelete: Restrict)
-  corrects              TransactionOutcome?      @relation("OutcomeCorrections", fields: [correctsId], references: [id], onDelete: Restrict)
-  corrections           TransactionOutcome[]     @relation("OutcomeCorrections")
+  projectionId            String?
+  priorityScoreId         String?
+  decisionSnapshot        Json?
+  correctionReason        String?
+  correctsId              String?
+  evidence                Json?
+  finalizedAt             DateTime?
+  createdAt               DateTime                    @default(now())
+  transaction             DealTransaction             @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  observations            LearningObservation[]
+  projection              FinancialProjection?        @relation(fields: [projectionId], references: [id], onDelete: Restrict)
+  priorityScore           ProfitPriorityScoreHistory? @relation(fields: [priorityScoreId], references: [id], onDelete: Restrict)
+  corrects                TransactionOutcome?         @relation("OutcomeCorrections", fields: [correctsId], references: [id], onDelete: Restrict)
+  corrections             TransactionOutcome[]        @relation("OutcomeCorrections")
 
   @@unique([transactionId, version])
   @@index([transactionId, status])
@@ -1627,37 +1646,37 @@ model TransactionOutcome {
 }
 
 model LearningObservation {
-  id                    String                    @id @default(cuid())
-  outcomeId             String
-  status                LearningObservationStatus @default(OBSERVED)
-  metric                String
-  observedValue         Float?
-  hypothesis            String
-  evidence              Json?
-  ownerReviewedAt       DateTime?
-  ownerReviewedBy       String?
-  appliedAutomatically  Boolean                   @default(false)
-  createdAt             DateTime                  @default(now())
-  outcome               TransactionOutcome        @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+  id                   String                    @id @default(cuid())
+  outcomeId            String
+  status               LearningObservationStatus @default(OBSERVED)
+  metric               String
+  observedValue        Float?
+  hypothesis           String
+  evidence             Json?
+  ownerReviewedAt      DateTime?
+  ownerReviewedBy      String?
+  appliedAutomatically Boolean                   @default(false)
+  createdAt            DateTime                  @default(now())
+  outcome              TransactionOutcome        @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
 
   @@index([status, createdAt])
 }
 
 model SettlementArtifact {
-  id                   String                 @id @default(cuid())
-  transactionId        String
-  artifactHash         String                 @unique
-  storageKey           String?
-  sourceUrl            String?
-  reviewer             String
-  reviewedAt           DateTime
-  closingDate          DateTime
-  sellerProceeds       Int?
-  assignmentFee        Int?
-  transactionCosts     Int?
-  ingestedAt           DateTime               @default(now())
-  transaction          DealTransaction        @relation(fields: [transactionId], references: [id], onDelete: Restrict)
-  corrections          SettlementCorrection[]
+  id               String                 @id @default(cuid())
+  transactionId    String
+  artifactHash     String                 @unique
+  storageKey       String?
+  sourceUrl        String?
+  reviewer         String
+  reviewedAt       DateTime
+  closingDate      DateTime
+  sellerProceeds   Int?
+  assignmentFee    Int?
+  transactionCosts Int?
+  ingestedAt       DateTime               @default(now())
+  transaction      DealTransaction        @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  corrections      SettlementCorrection[]
 
   @@index([transactionId, closingDate])
 }
@@ -1703,12 +1722,12 @@ model ContractTemplateVersion {
 }
 
 model DataRetentionPolicy {
-  id                         String            @id @default(cuid())
+  id                         String                  @id @default(cuid())
   category                   RetentionCategory
   jurisdictionState          String
   version                    Int
   retentionDays              Int
-  active                     Boolean           @default(false)
+  active                     Boolean                 @default(false)
   counselReviewer            String?
   counselApprovedAt          DateTime?
   counselApprovalEvidenceUrl String?
@@ -1716,7 +1735,7 @@ model DataRetentionPolicy {
   ownerApprovedAt            DateTime?
   effectiveAt                DateTime?
   expiresAt                  DateTime?
-  createdAt                  DateTime          @default(now())
+  createdAt                  DateTime                @default(now())
   reviews                    RetentionReviewRecord[]
 
   @@unique([category, jurisdictionState, version])
@@ -1724,18 +1743,18 @@ model DataRetentionPolicy {
 }
 
 model RetentionReviewRecord {
-  id                 String                @id @default(cuid())
-  policyId           String
-  recordType         String
-  recordIdHash       String
-  dueAt              DateTime
-  status             RetentionReviewStatus @default(PENDING)
-  legalHoldReason    String?
-  decidedBy          String?
-  decidedAt          DateTime?
-  decisionReason     String?
-  createdAt          DateTime              @default(now())
-  policy             DataRetentionPolicy   @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  id              String                @id @default(cuid())
+  policyId        String
+  recordType      String
+  recordIdHash    String
+  dueAt           DateTime
+  status          RetentionReviewStatus @default(PENDING)
+  legalHoldReason String?
+  decidedBy       String?
+  decidedAt       DateTime?
+  decisionReason  String?
+  createdAt       DateTime              @default(now())
+  policy          DataRetentionPolicy   @relation(fields: [policyId], references: [id], onDelete: Restrict)
 
   @@unique([policyId, recordType, recordIdHash])
   @@index([status, dueAt])
@@ -1818,27 +1837,27 @@ enum AcquisitionCampaignStatus {
 }
 
 model AcquisitionFunnel {
-  id            String           @id @default(cuid())
-  propertyId    String
-  transactionId String?          @unique
-  stage         AcquisitionStage @default(DISCOVERED)
-  stageEnteredAt DateTime        @default(now())
-  expiresAt     DateTime?
-  nextReviewAt  DateTime?
-  responsibleActor String?
-  lastActivityAt DateTime @default(now())
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  property      Property         @relation(fields: [propertyId], references: [id], onDelete: Restrict)
-  transaction   DealTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  stageHistory  AcquisitionStageHistory[]
-  gates         AcquisitionGate[]
-  buyerCoverage BuyerCoverage[]
-  campaigns     AcquisitionCampaign[]
-  priorityScores ProfitPriorityScoreHistory[]
-  buyerPriceEvidence BuyerPropertyPriceEvidence[]
-  blockers      AcquisitionFunnelBlocker[]
-  expirationEvents AcquisitionExpirationEvent[]
+  id                    String                       @id @default(cuid())
+  propertyId            String
+  transactionId         String?                      @unique
+  stage                 AcquisitionStage             @default(DISCOVERED)
+  stageEnteredAt        DateTime                     @default(now())
+  expiresAt             DateTime?
+  nextReviewAt          DateTime?
+  responsibleActor      String?
+  lastActivityAt        DateTime                     @default(now())
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  property              Property                     @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  transaction           DealTransaction?             @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  stageHistory          AcquisitionStageHistory[]
+  gates                 AcquisitionGate[]
+  buyerCoverage         BuyerCoverage[]
+  campaigns             AcquisitionCampaign[]
+  priorityScores        ProfitPriorityScoreHistory[]
+  buyerPriceEvidence    BuyerPropertyPriceEvidence[]
+  blockers              AcquisitionFunnelBlocker[]
+  expirationEvents      AcquisitionExpirationEvent[]
   campaignOpportunities CampaignOpportunity[]
 
   @@index([stage, expiresAt])
@@ -1848,20 +1867,20 @@ model AcquisitionFunnel {
 }
 
 model AcquisitionStageHistory {
-  id          String            @id @default(cuid())
-  funnelId    String
-  sequence    Int
-  fromStage   AcquisitionStage?
-  toStage     AcquisitionStage
-  actor       String
+  id               String            @id @default(cuid())
+  funnelId         String
+  sequence         Int
+  fromStage        AcquisitionStage?
+  toStage          AcquisitionStage
+  actor            String
   responsibleActor String?
-  reason      String
-  evidence    Json?
+  reason           String
+  evidence         Json?
   approvalEvidence Json?
-  blockerSnapshot Json?
-  occurredAt  DateTime          @default(now())
-  exitedAt    DateTime?
-  funnel      AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  blockerSnapshot  Json?
+  occurredAt       DateTime          @default(now())
+  exitedAt         DateTime?
+  funnel           AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
 
   @@unique([funnelId, sequence])
   @@index([funnelId, occurredAt])
@@ -1882,49 +1901,49 @@ enum FunnelBlockerStatus {
 }
 
 model AcquisitionStagePolicy {
-  id                 String                  @id @default(cuid())
-  stage              AcquisitionStage
-  version            Int
-  active             Boolean                 @default(false)
-  reviewIntervalHours Int
-  expiryAction       AcquisitionExpiryAction
-  requiredGateTypes  AcquisitionGateType[]
-  entryCriteria      Json?
-  exitCriteria       Json?
+  id                      String                       @id @default(cuid())
+  stage                   AcquisitionStage
+  version                 Int
+  active                  Boolean                      @default(false)
+  reviewIntervalHours     Int
+  expiryAction            AcquisitionExpiryAction
+  requiredGateTypes       AcquisitionGateType[]
+  entryCriteria           Json?
+  exitCriteria            Json?
   highValueThresholdCents BigInt?
-  reason             String
-  effectiveAt        DateTime?
-  expiresAt          DateTime?
-  createdBy          String
-  activatedBy        String?
-  activatedAt        DateTime?
-  createdAt          DateTime                @default(now())
-  expirationEvents   AcquisitionExpirationEvent[]
+  reason                  String
+  effectiveAt             DateTime?
+  expiresAt               DateTime?
+  createdBy               String
+  activatedBy             String?
+  activatedAt             DateTime?
+  createdAt               DateTime                     @default(now())
+  expirationEvents        AcquisitionExpirationEvent[]
 
   @@unique([stage, version])
   @@index([stage, active, effectiveAt, expiresAt])
 }
 
 model AcquisitionFunnelBlocker {
-  id           String              @id @default(cuid())
-  funnelId     String
-  code         String
-  status       FunnelBlockerStatus @default(OPEN)
-  explanation  String
-  sourceUrl    String?
-  openedAt     DateTime            @default(now())
-  expiresAt    DateTime?
-  resolvedAt   DateTime?
-  resolvedBy   String?
-  resolution   String?
-  funnel       AcquisitionFunnel   @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  id          String              @id @default(cuid())
+  funnelId    String
+  code        String
+  status      FunnelBlockerStatus @default(OPEN)
+  explanation String
+  sourceUrl   String?
+  openedAt    DateTime            @default(now())
+  expiresAt   DateTime?
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  resolution  String?
+  funnel      AcquisitionFunnel   @relation(fields: [funnelId], references: [id], onDelete: Restrict)
 
   @@index([funnelId, status, openedAt])
   @@index([status, expiresAt])
 }
 
 model AcquisitionExpirationEvent {
-  id             String                 @id @default(cuid())
+  id             String                  @id @default(cuid())
   funnelId       String
   policyId       String
   stageHistoryId String
@@ -1932,81 +1951,81 @@ model AcquisitionExpirationEvent {
   resultStage    AcquisitionStage?
   reason         String
   evidence       Json
-  occurredAt     DateTime               @default(now())
-  funnel         AcquisitionFunnel      @relation(fields: [funnelId], references: [id], onDelete: Restrict)
-  policy         AcquisitionStagePolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  occurredAt     DateTime                @default(now())
+  funnel         AcquisitionFunnel       @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  policy         AcquisitionStagePolicy  @relation(fields: [policyId], references: [id], onDelete: Restrict)
 
   @@unique([funnelId, stageHistoryId])
   @@index([action, occurredAt])
 }
 
 model AcquisitionGate {
-  id          String                @id @default(cuid())
-  funnelId    String
-  type        AcquisitionGateType
-  version     Int
-  status      AcquisitionGateStatus @default(PENDING)
-  evidence    Json?
-  sourceUrl   String?
-  decidedBy   String?
-  decidedAt   DateTime?
-  expiresAt   DateTime?
-  createdAt   DateTime              @default(now())
-  funnel      AcquisitionFunnel     @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  id        String                @id @default(cuid())
+  funnelId  String
+  type      AcquisitionGateType
+  version   Int
+  status    AcquisitionGateStatus @default(PENDING)
+  evidence  Json?
+  sourceUrl String?
+  decidedBy String?
+  decidedAt DateTime?
+  expiresAt DateTime?
+  createdAt DateTime              @default(now())
+  funnel    AcquisitionFunnel     @relation(fields: [funnelId], references: [id], onDelete: Restrict)
 
   @@unique([funnelId, type, version])
   @@index([funnelId, type, status, expiresAt])
 }
 
 model BuyerDemandVersion {
-  id                   String            @id @default(cuid())
-  developerId          String
-  version              Int
-  status               BuyerDemandStatus @default(DRAFT)
-  states               String[]
-  counties             String[]
-  zipCodes             String[]
-  assetTypes           String[]
-  excludedAreas        String[]
-  marketPolygons       Json?
-  minPurchasePriceCents BigInt?
-  maxPurchasePriceCents BigInt?
-  minCompletedValueCents BigInt?
-  maxCompletedValueCents BigInt?
-  minAcres             Float?
-  maxAcres             Float?
-  minLotWidthFeet      Float?
-  maxLotWidthFeet      Float?
-  minLotDepthFeet      Float?
-  maxLotDepthFeet      Float?
-  minFrontageFeet      Float?
-  accessPreferences    String[]
-  utilityPreferences   String[]
-  zoningPreferences    String[]
-  floodPreferences     String[]
-  entitlementPreferences String[]
-  redevelopmentPreferences String[]
-  requiredClosingDays  Int?
-  assignmentAcceptance String?
-  doubleCloseAcceptance String?
+  id                           String                         @id @default(cuid())
+  developerId                  String
+  version                      Int
+  status                       BuyerDemandStatus              @default(DRAFT)
+  states                       String[]
+  counties                     String[]
+  zipCodes                     String[]
+  assetTypes                   String[]
+  excludedAreas                String[]
+  marketPolygons               Json?
+  minPurchasePriceCents        BigInt?
+  maxPurchasePriceCents        BigInt?
+  minCompletedValueCents       BigInt?
+  maxCompletedValueCents       BigInt?
+  minAcres                     Float?
+  maxAcres                     Float?
+  minLotWidthFeet              Float?
+  maxLotWidthFeet              Float?
+  minLotDepthFeet              Float?
+  maxLotDepthFeet              Float?
+  minFrontageFeet              Float?
+  accessPreferences            String[]
+  utilityPreferences           String[]
+  zoningPreferences            String[]
+  floodPreferences             String[]
+  entitlementPreferences       String[]
+  redevelopmentPreferences     String[]
+  requiredClosingDays          Int?
+  assignmentAcceptance         String?
+  doubleCloseAcceptance        String?
   earnestMoneyExpectationCents BigInt?
-  inspectionRequirements String?
-  decisionMakerName    String?
-  approvedChannel      EngagementChannel?
-  currentBuyingStatus  String?
-  criteriaConfirmedAt DateTime?
-  maxAssignmentFeeCents BigInt?
-  strategy             String?
-  sourceUrl            String
-  verifiedAt           DateTime?
-  effectiveAt          DateTime?
-  expiresAt            DateTime?
-  createdBy            String
-  createdAt            DateTime          @default(now())
-  developer            Developer         @relation(fields: [developerId], references: [id], onDelete: Restrict)
-  coverage             BuyerCoverage[]
-  priceEvidence        BuyerPropertyPriceEvidence[]
-  reliabilityScores    BuyerReliabilityScoreHistory[]
+  inspectionRequirements       String?
+  decisionMakerName            String?
+  approvedChannel              EngagementChannel?
+  currentBuyingStatus          String?
+  criteriaConfirmedAt          DateTime?
+  maxAssignmentFeeCents        BigInt?
+  strategy                     String?
+  sourceUrl                    String
+  verifiedAt                   DateTime?
+  effectiveAt                  DateTime?
+  expiresAt                    DateTime?
+  createdBy                    String
+  createdAt                    DateTime                       @default(now())
+  developer                    Developer                      @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  coverage                     BuyerCoverage[]
+  priceEvidence                BuyerPropertyPriceEvidence[]
+  reliabilityScores            BuyerReliabilityScoreHistory[]
 
   @@unique([developerId, version])
   @@index([status, expiresAt])
@@ -2014,43 +2033,43 @@ model BuyerDemandVersion {
 }
 
 model BuyerCapacityEvidence {
-  id          String              @id @default(cuid())
-  developerId String
-  version     Int
-  status      BuyerEvidenceStatus @default(PENDING)
-  amountCents BigInt?
-  sourceUrl   String
+  id           String              @id @default(cuid())
+  developerId  String
+  version      Int
+  status       BuyerEvidenceStatus @default(PENDING)
+  amountCents  BigInt?
+  sourceUrl    String
   artifactHash String?
-  observedAt DateTime
-  verifiedBy  String?
-  verifiedAt  DateTime?
-  expiresAt   DateTime
-  createdAt   DateTime            @default(now())
-  developer   Developer           @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  observedAt   DateTime
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime            @default(now())
+  developer    Developer           @relation(fields: [developerId], references: [id], onDelete: Restrict)
 
   @@unique([developerId, version])
   @@index([developerId, status, expiresAt])
 }
 
 model BuyerReliabilityEvidence {
-  id                String              @id @default(cuid())
-  developerId       String
-  version           Int
-  status            BuyerEvidenceStatus @default(PENDING)
-  completedClosings Int                 @default(0)
-  failedClosings    Int                 @default(0)
-  retrades          Int                 @default(0)
-  responsesMeasured Int                 @default(0)
+  id                   String                         @id @default(cuid())
+  developerId          String
+  version              Int
+  status               BuyerEvidenceStatus            @default(PENDING)
+  completedClosings    Int                            @default(0)
+  failedClosings       Int                            @default(0)
+  retrades             Int                            @default(0)
+  responsesMeasured    Int                            @default(0)
   averageResponseHours Float?
-  unresolvedIssues  Int                 @default(0)
-  averageCloseDays  Int?
-  sourceUrl         String
-  verifiedBy        String?
-  verifiedAt        DateTime?
-  expiresAt         DateTime
-  createdAt         DateTime            @default(now())
-  developer         Developer           @relation(fields: [developerId], references: [id], onDelete: Restrict)
-  scores            BuyerReliabilityScoreHistory[]
+  unresolvedIssues     Int                            @default(0)
+  averageCloseDays     Int?
+  sourceUrl            String
+  verifiedBy           String?
+  verifiedAt           DateTime?
+  expiresAt            DateTime
+  createdAt            DateTime                       @default(now())
+  developer            Developer                      @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  scores               BuyerReliabilityScoreHistory[]
 
   @@unique([developerId, version])
   @@index([developerId, status, expiresAt])
@@ -2063,6 +2082,7 @@ enum BuyerPriceStatus {
   COMMITTED
   EXPIRED
 }
+
 enum BuyerPermissionStatus {
   UNKNOWN
   GRANTED
@@ -2070,6 +2090,7 @@ enum BuyerPermissionStatus {
   REVOKED
   EXPIRED
 }
+
 enum BuyerIssueStatus {
   OPEN
   DISPUTED
@@ -2078,99 +2099,103 @@ enum BuyerIssueStatus {
 }
 
 model BuyerPropertyPriceEvidence {
-  id String @id @default(cuid())
-  developerId String
+  id              String             @id @default(cuid())
+  developerId     String
   demandVersionId String
-  funnelId String
-  version Int
-  status BuyerPriceStatus
-  lowCents BigInt
-  baseCents BigInt
-  highCents BigInt
-  assumptions String[]
-  sourceUrl String
-  observedAt DateTime
-  expiresAt DateTime
-  reviewedBy String?
-  reviewedAt DateTime?
-  createdAt DateTime @default(now())
-  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
-  demandVersion BuyerDemandVersion @relation(fields: [demandVersionId], references: [id], onDelete: Restrict)
-  funnel AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  funnelId        String
+  version         Int
+  status          BuyerPriceStatus
+  lowCents        BigInt
+  baseCents       BigInt
+  highCents       BigInt
+  assumptions     String[]
+  sourceUrl       String
+  observedAt      DateTime
+  expiresAt       DateTime
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  developer       Developer          @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  demandVersion   BuyerDemandVersion @relation(fields: [demandVersionId], references: [id], onDelete: Restrict)
+  funnel          AcquisitionFunnel  @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+
   @@unique([developerId, funnelId, version])
   @@index([funnelId, status, expiresAt])
 }
 
 model BuyerCommunicationPermission {
-  id String @id @default(cuid())
+  id          String                @id @default(cuid())
   developerId String
-  channel EngagementChannel
-  status BuyerPermissionStatus @default(UNKNOWN)
-  sourceUrl String?
-  capturedAt DateTime
-  expiresAt DateTime?
-  reviewedBy String?
-  createdAt DateTime @default(now())
-  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  channel     EngagementChannel
+  status      BuyerPermissionStatus @default(UNKNOWN)
+  sourceUrl   String?
+  capturedAt  DateTime
+  expiresAt   DateTime?
+  reviewedBy  String?
+  createdAt   DateTime              @default(now())
+  developer   Developer             @relation(fields: [developerId], references: [id], onDelete: Restrict)
+
   @@index([developerId, channel, capturedAt])
 }
 
 model BuyerPerformanceIssue {
-  id String @id @default(cuid())
+  id          String           @id @default(cuid())
   developerId String
-  type String
-  status BuyerIssueStatus @default(OPEN)
-  occurredAt DateTime
+  type        String
+  status      BuyerIssueStatus @default(OPEN)
+  occurredAt  DateTime
   description String
-  sourceUrl String
-  resolution String?
-  resolvedAt DateTime?
-  reviewedBy String
-  createdAt DateTime @default(now())
-  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  sourceUrl   String
+  resolution  String?
+  resolvedAt  DateTime?
+  reviewedBy  String
+  createdAt   DateTime         @default(now())
+  developer   Developer        @relation(fields: [developerId], references: [id], onDelete: Restrict)
+
   @@index([developerId, status, occurredAt])
 }
 
 model BuyerReliabilityScoreConfiguration {
-  id String @id @default(cuid())
-  version Int @unique
-  status ProfitPriorityConfigurationStatus @default(DRAFT)
-  financialCapacityWeight Int
-  marketActivityWeight Int
-  criteriaSpecificityWeight Int
-  responseTimeWeight Int
-  closingRateWeight Int
-  pofFreshnessWeight Int
-  retradePenaltyWeight Int
-  failedClosingPenaltyWeight Int
+  id                           String                            @id @default(cuid())
+  version                      Int                               @unique
+  status                       ProfitPriorityConfigurationStatus @default(DRAFT)
+  financialCapacityWeight      Int
+  marketActivityWeight         Int
+  criteriaSpecificityWeight    Int
+  responseTimeWeight           Int
+  closingRateWeight            Int
+  pofFreshnessWeight           Int
+  retradePenaltyWeight         Int
+  failedClosingPenaltyWeight   Int
   unresolvedIssuePenaltyWeight Int
-  reason String
-  effectiveAt DateTime?
-  expiresAt DateTime?
-  createdBy String
-  createdAt DateTime @default(now())
-  scores BuyerReliabilityScoreHistory[]
+  reason                       String
+  effectiveAt                  DateTime?
+  expiresAt                    DateTime?
+  createdBy                    String
+  createdAt                    DateTime                          @default(now())
+  scores                       BuyerReliabilityScoreHistory[]
 }
 
 model BuyerReliabilityScoreHistory {
-  id String @id @default(cuid())
-  developerId String
-  demandVersionId String
+  id                    String                             @id @default(cuid())
+  developerId           String
+  demandVersionId       String
   reliabilityEvidenceId String
-  configurationId String
-  version Int
-  totalScore Int
-  componentScores Json
-  inputSnapshot Json
-  reasons String[]
-  blockers String[]
-  calculatedAt DateTime @default(now())
-  expiresAt DateTime
-  calculatedBy String
-  developer Developer @relation(fields: [developerId], references: [id], onDelete: Restrict)
-  demandVersion BuyerDemandVersion @relation(fields: [demandVersionId], references: [id], onDelete: Restrict)
-  reliabilityEvidence BuyerReliabilityEvidence @relation(fields: [reliabilityEvidenceId], references: [id], onDelete: Restrict)
-  configuration BuyerReliabilityScoreConfiguration @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+  configurationId       String
+  version               Int
+  totalScore            Int
+  componentScores       Json
+  inputSnapshot         Json
+  reasons               String[]
+  blockers              String[]
+  calculatedAt          DateTime                           @default(now())
+  expiresAt             DateTime
+  calculatedBy          String
+  developer             Developer                          @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  demandVersion         BuyerDemandVersion                 @relation(fields: [demandVersionId], references: [id], onDelete: Restrict)
+  reliabilityEvidence   BuyerReliabilityEvidence           @relation(fields: [reliabilityEvidenceId], references: [id], onDelete: Restrict)
+  configuration         BuyerReliabilityScoreConfiguration @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+
   @@unique([developerId, version])
   @@index([totalScore, expiresAt])
 }
@@ -2194,21 +2219,21 @@ model BuyerCoverage {
 }
 
 model AcquisitionCampaign {
-  id                    String                    @id @default(cuid())
+  id                    String                        @id @default(cuid())
   funnelId              String?
   type                  AcquisitionCampaignType
-  status                AcquisitionCampaignStatus @default(DRAFT)
+  status                AcquisitionCampaignStatus     @default(DRAFT)
   name                  String
   jurisdictionState     String
-  requiresOwnerApproval Boolean                   @default(true)
+  requiresOwnerApproval Boolean                       @default(true)
   ownerApprovedAt       DateTime?
   ownerApprovedBy       String?
-  outboundEnabled       Boolean                   @default(false)
+  outboundEnabled       Boolean                       @default(false)
   startsAt              DateTime?
   endsAt                DateTime?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  funnel                AcquisitionFunnel?        @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
+  funnel                AcquisitionFunnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
   boundaries            AcquisitionCampaignBoundary[]
   countyCoverage        CampaignCountyCoverage[]
   opportunities         CampaignOpportunity[]
@@ -2267,12 +2292,12 @@ enum CountyEntityMatchStatus {
 }
 
 model CountySourceRegistry {
-  id                       String               @id @default(cuid())
+  id                       String                   @id @default(cuid())
   stateCode                String
   countyName               String
   countyEquivalentType     String?
-  fipsCode                 String               @unique
-  coverageStatus           CountyCoverageStatus @default(NEEDS_REVIEW)
+  fipsCode                 String                   @unique
+  coverageStatus           CountyCoverageStatus     @default(NEEDS_REVIEW)
   coverageReason           String?
   manualSearchInstructions String?
   lastAccessibilityCheckAt DateTime?
@@ -2281,8 +2306,8 @@ model CountySourceRegistry {
   failureReason            String?
   reviewedBy               String?
   reviewedAt               DateTime?
-  createdAt                DateTime             @default(now())
-  updatedAt                DateTime             @updatedAt
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
   sources                  CountyOfficialSource[]
   properties               Property[]
   developerProjects        DeveloperProject[]
@@ -2293,39 +2318,39 @@ model CountySourceRegistry {
 }
 
 model CountyOfficialSource {
-  id                    String                   @id @default(cuid())
-  registryId            String
-  version               Int
-  agencyName            String
-  agencyType            CountyAgencyType
-  officialDomain        String
-  delegationEvidenceUrl String?
-  propertySearchUrl     String?
-  parcelGisUrl          String?
-  taxUrl                String?
-  recorderUrl           String?
-  bulkDataUrl           String?
-  queryEndpointUrl      String?
-  termsUrl              String?
-  robotsUrl             String?
-  accessMethod          String
-  authenticationRequired Boolean                @default(false)
-  subscriptionRequired  Boolean                 @default(false)
-  costStatus            String?
-  automationStatus      CountyAutomationStatus  @default(UNKNOWN)
-  robotsStatus          String?
-  rateLimitStatus       String?
-  supportedSearches     String[]
-  availableFields       String[]
-  coverageNotes         String?
-  sourceConfidence      Int
-  adapterVersion        String?
-  parserVersion         String?
-  effectiveAt           DateTime                 @default(now())
-  supersededAt          DateTime?
-  createdBy             String
-  createdAt             DateTime                 @default(now())
-  registry              CountySourceRegistry     @relation(fields: [registryId], references: [id], onDelete: Restrict)
+  id                     String                  @id @default(cuid())
+  registryId             String
+  version                Int
+  agencyName             String
+  agencyType             CountyAgencyType
+  officialDomain         String
+  delegationEvidenceUrl  String?
+  propertySearchUrl      String?
+  parcelGisUrl           String?
+  taxUrl                 String?
+  recorderUrl            String?
+  bulkDataUrl            String?
+  queryEndpointUrl       String?
+  termsUrl               String?
+  robotsUrl              String?
+  accessMethod           String
+  authenticationRequired Boolean                 @default(false)
+  subscriptionRequired   Boolean                 @default(false)
+  costStatus             String?
+  automationStatus       CountyAutomationStatus  @default(UNKNOWN)
+  robotsStatus           String?
+  rateLimitStatus        String?
+  supportedSearches      String[]
+  availableFields        String[]
+  coverageNotes          String?
+  sourceConfidence       Int
+  adapterVersion         String?
+  parserVersion          String?
+  effectiveAt            DateTime                @default(now())
+  supersededAt           DateTime?
+  createdBy              String
+  createdAt              DateTime                @default(now())
+  registry               CountySourceRegistry    @relation(fields: [registryId], references: [id], onDelete: Restrict)
   checks                 CountySourceCheck[]
   observations           CountyFactObservation[]
   entityMatches          CountyEntityMatch[]
@@ -2336,17 +2361,17 @@ model CountyOfficialSource {
 }
 
 model CountySourceCheck {
-  id                 String               @id @default(cuid())
-  sourceId           String
-  status             CountyCoverageStatus
-  httpStatus         Int?
-  retrievalMethod    String
-  responseHash       String?
-  failureReason      String?
-  circuitOpenUntil   DateTime?
-  retryCount         Int                  @default(0)
-  checkedAt          DateTime             @default(now())
-  source             CountyOfficialSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  id               String               @id @default(cuid())
+  sourceId         String
+  status           CountyCoverageStatus
+  httpStatus       Int?
+  retrievalMethod  String
+  responseHash     String?
+  failureReason    String?
+  circuitOpenUntil DateTime?
+  retryCount       Int                  @default(0)
+  checkedAt        DateTime             @default(now())
+  source           CountyOfficialSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
 
   @@index([sourceId, checkedAt])
   @@index([status, circuitOpenUntil])
@@ -2382,80 +2407,80 @@ model CountyFactObservation {
 }
 
 model CountyEntityMatch {
-  id                 String                  @id @default(cuid())
-  sourceId           String
-  developerId        String
-  propertyId         String?
-  developerProjectId String?
-  status             CountyEntityMatchStatus @default(NEEDS_MANUAL_VERIFICATION)
-  matchedName        String
-  rationale          String
-  supportingEvidence Json
+  id                  String                  @id @default(cuid())
+  sourceId            String
+  developerId         String
+  propertyId          String?
+  developerProjectId  String?
+  status              CountyEntityMatchStatus @default(NEEDS_MANUAL_VERIFICATION)
+  matchedName         String
+  rationale           String
+  supportingEvidence  Json
   conflictingEvidence Json?
-  confidence         Int
-  observedAt         DateTime
-  reviewedBy         String?
-  reviewedAt         DateTime?
-  createdAt          DateTime                @default(now())
-  source             CountyOfficialSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  developer          Developer               @relation(fields: [developerId], references: [id], onDelete: Restrict)
-  property           Property?               @relation(fields: [propertyId], references: [id], onDelete: Restrict)
-  developerProject   DeveloperProject?       @relation(fields: [developerProjectId], references: [id], onDelete: Restrict)
+  confidence          Int
+  observedAt          DateTime
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  createdAt           DateTime                @default(now())
+  source              CountyOfficialSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  developer           Developer               @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  property            Property?               @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  developerProject    DeveloperProject?       @relation(fields: [developerProjectId], references: [id], onDelete: Restrict)
 
   @@index([developerId, status, observedAt])
   @@index([propertyId, status])
 }
 
 model CampaignCountyCoverage {
-  id           String               @id @default(cuid())
-  campaignId   String
-  registryId   String
-  status       CountyCoverageStatus
-  reason       String?
-  evaluatedAt  DateTime             @default(now())
-  expiresAt    DateTime?
-  campaign     AcquisitionCampaign  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
-  registry     CountySourceRegistry @relation(fields: [registryId], references: [id], onDelete: Restrict)
+  id          String               @id @default(cuid())
+  campaignId  String
+  registryId  String
+  status      CountyCoverageStatus
+  reason      String?
+  evaluatedAt DateTime             @default(now())
+  expiresAt   DateTime?
+  campaign    AcquisitionCampaign  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  registry    CountySourceRegistry @relation(fields: [registryId], references: [id], onDelete: Restrict)
 
   @@unique([campaignId, registryId])
   @@index([status, expiresAt])
 }
 
 model AcquisitionCampaignBoundary {
-  id                    String              @id @default(cuid())
-  campaignId            String
-  version               Int
-  allowedStates         String[]
-  allowedCounties       String[]
-  allowedCities         String[]
-  allowedZipCodes       String[]
-  allowedNeighborhoods  String[]
-  radiusCenterLatitude  Float?
-  radiusCenterLongitude Float?
-  radiusMiles           Float?
-  mapPolygon            Json?
-  includedPropertyTypes String[]
-  excludedPropertyTypes String[]
-  acquisitionStrategy   String?
-  developmentFilters    Json?
-  priceFilters          Json?
-  targetBuyerGroup      String?
+  id                         String              @id @default(cuid())
+  campaignId                 String
+  version                    Int
+  allowedStates              String[]
+  allowedCounties            String[]
+  allowedCities              String[]
+  allowedZipCodes            String[]
+  allowedNeighborhoods       String[]
+  radiusCenterLatitude       Float?
+  radiusCenterLongitude      Float?
+  radiusMiles                Float?
+  mapPolygon                 Json?
+  includedPropertyTypes      String[]
+  excludedPropertyTypes      String[]
+  acquisitionStrategy        String?
+  developmentFilters         Json?
+  priceFilters               Json?
+  targetBuyerGroup           String?
   minimumRequiredProfitCents BigInt?
-  maximumEarnestMoneyCents BigInt?
-  maximumResearchCostCents BigInt?
-  maximumOutreachCostCents BigInt?
-  evidenceFreshnessHours Int?
-  allowedChannels       String[]
-  audienceCriteria      Json
-  sourceRequirements    Json
-  doNotContactEnforced  Boolean             @default(true)
-  consentRequired       Boolean             @default(true)
-  maxRecipientsPerDay   Int                 @default(0)
-  effectiveAt           DateTime?
-  expiresAt             DateTime?
-  createdBy             String
-  createdAt             DateTime            @default(now())
-  campaign              AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  maximumEarnestMoneyCents   BigInt?
+  maximumResearchCostCents   BigInt?
+  maximumOutreachCostCents   BigInt?
+  evidenceFreshnessHours     Int?
+  allowedChannels            String[]
+  audienceCriteria           Json
+  sourceRequirements         Json
+  doNotContactEnforced       Boolean             @default(true)
+  consentRequired            Boolean             @default(true)
+  maxRecipientsPerDay        Int                 @default(0)
+  effectiveAt                DateTime?
+  expiresAt                  DateTime?
+  createdBy                  String
+  createdAt                  DateTime            @default(now())
+  campaign                   AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
 
   @@unique([campaignId, version])
   @@index([campaignId, effectiveAt, expiresAt])
@@ -2468,6 +2493,7 @@ enum CampaignOpportunityStatus {
   COMPLETED
   CANCELLED
 }
+
 enum CampaignCostType {
   RESEARCH
   OUTREACH
@@ -2479,67 +2505,71 @@ enum CampaignCostType {
 }
 
 model CampaignOpportunity {
-  id String @id @default(cuid())
-  campaignId String
-  funnelId String
-  status CampaignOpportunityStatus @default(CANDIDATE)
-  reason String
-  assignedAt DateTime @default(now())
+  id          String                    @id @default(cuid())
+  campaignId  String
+  funnelId    String
+  status      CampaignOpportunityStatus @default(CANDIDATE)
+  reason      String
+  assignedAt  DateTime                  @default(now())
   completedAt DateTime?
-  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
-  funnel AcquisitionFunnel @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+  campaign    AcquisitionCampaign       @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  funnel      AcquisitionFunnel         @relation(fields: [funnelId], references: [id], onDelete: Restrict)
+
   @@unique([campaignId, funnelId])
   @@index([campaignId, status, assignedAt])
 }
 
 model CampaignAgentAssignment {
-  id String @id @default(cuid())
-  campaignId String
-  agentId String
+  id             String              @id @default(cuid())
+  campaignId     String
+  agentId        String
   responsibility String
-  active Boolean @default(true)
-  assignedAt DateTime @default(now())
-  removedAt DateTime?
-  assignedBy String
-  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  active         Boolean             @default(true)
+  assignedAt     DateTime            @default(now())
+  removedAt      DateTime?
+  assignedBy     String
+  campaign       AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  agent          Agent               @relation(fields: [agentId], references: [id], onDelete: Restrict)
+
   @@unique([campaignId, agentId])
   @@index([agentId, active])
 }
 
 model CampaignCostEntry {
-  id String @id @default(cuid())
-  campaignId String
-  funnelId String?
-  type CampaignCostType
-  amountCents BigInt
-  incurredAt DateTime
-  sourceUrl String
+  id           String              @id @default(cuid())
+  campaignId   String
+  funnelId     String?
+  type         CampaignCostType
+  amountCents  BigInt
+  incurredAt   DateTime
+  sourceUrl    String
   artifactHash String?
-  description String
-  recordedBy String
-  createdAt DateTime @default(now())
-  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  description  String
+  recordedBy   String
+  createdAt    DateTime            @default(now())
+  campaign     AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+
   @@index([campaignId, type, incurredAt])
   @@index([funnelId, incurredAt])
 }
 
 model CampaignGoalVersion {
-  id String @id @default(cuid())
-  campaignId String
-  version Int
-  discoveredTarget Int?
-  researchedTarget Int?
-  sellerContactTarget Int?
-  offerTarget Int?
-  contractTarget Int?
-  closeTarget Int?
+  id                        String              @id @default(cuid())
+  campaignId                String
+  version                   Int
+  discoveredTarget          Int?
+  researchedTarget          Int?
+  sellerContactTarget       Int?
+  offerTarget               Int?
+  contractTarget            Int?
+  closeTarget               Int?
   realizedProfitTargetCents BigInt?
-  effectiveAt DateTime
-  expiresAt DateTime?
-  createdBy String
-  createdAt DateTime @default(now())
-  campaign AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  effectiveAt               DateTime
+  expiresAt                 DateTime?
+  createdBy                 String
+  createdAt                 DateTime            @default(now())
+  campaign                  AcquisitionCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+
   @@unique([campaignId, version])
   @@index([campaignId, effectiveAt, expiresAt])
 }
@@ -2605,19 +2635,19 @@ model ProfitPriorityScoreHistory {
 }
 
 model WeightChangeProposal {
-  id               String   @id @default(cuid())
-  version          Int      @unique
-  status           String   @default("DRAFT")
+  id                String    @id @default(cuid())
+  version           Int       @unique
+  status            String    @default("DRAFT")
   minimumSampleSize Int
-  actualSampleSize Int
-  proposedWeights  Json
-  rationale        String
-  sourceOutcomeIds String[]
-  createdBy        String
-  createdAt        DateTime @default(now())
-  reviewedBy       String?
-  reviewedAt       DateTime?
-  reviewReason     String?
+  actualSampleSize  Int
+  proposedWeights   Json
+  rationale         String
+  sourceOutcomeIds  String[]
+  createdBy         String
+  createdAt         DateTime  @default(now())
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  reviewReason      String?
 }
 
 model BuyOperatorPreference {

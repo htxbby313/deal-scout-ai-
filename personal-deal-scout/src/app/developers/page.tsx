@@ -13,6 +13,7 @@ import {
   type QualificationStatus,
 } from "@/lib/database";
 import { getPrisma } from "@/lib/prisma";
+import { BuyerCommunicationControls } from "@/app/developers/buyer-communication-controls";
 
 export const dynamic = "force-dynamic";
 const labels: Record<QualificationStatus, string> = {
@@ -156,6 +157,15 @@ export default async function DevelopersPage({
         return property ? [{ property, match }] : [];
       })
     : [];
+  const relationship = selected
+    ? await getPrisma().developer.findUnique({
+        where: { id: selected.id },
+        select: {
+          communicationsEnabled: true,
+          buyerConversations: { orderBy: { occurredAt: "desc" }, take: 20 },
+        },
+      })
+    : null;
   const qualifiedCount = db.developers.filter((developer) =>
     qualified.includes(developer.qualificationStatus),
   ).length;
@@ -440,6 +450,23 @@ export default async function DevelopersPage({
                       ) : null}
                     </div>
                   </article>
+                </div>
+              </section>
+              <BuyerCommunicationControls developerId={selected.id} enabled={relationship?.communicationsEnabled ?? false} />
+              <section className="rounded-2xl border bg-white p-5 shadow-sm">
+                <h3 className="font-bold">Relationship history</h3>
+                <p className="mt-1 text-sm text-slate-500">Buyer replies and verified outbound events stay attached to this buyer.</p>
+                <div className="mt-4 space-y-3">
+                  {relationship?.buyerConversations.map((item) => <article className={`rounded-xl border p-3 text-sm ${item.direction === "INBOUND" ? "bg-blue-50" : "bg-slate-50"}`} key={item.id}><div className="flex justify-between gap-3 text-xs font-semibold text-slate-500"><span>{item.direction === "INBOUND" ? "Buyer response" : "Outbound"} · {item.channel}</span><time>{item.occurredAt.toLocaleString()}</time></div><p className="mt-2 whitespace-pre-wrap">{item.summary}</p></article>)}
+                  {!relationship?.buyerConversations.length ? <Empty>No buyer responses recorded yet.</Empty> : null}
+                </div>
+              </section>
+              <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                <h3 className="font-bold">Next action</h3>
+                <p className="mt-1 text-sm text-slate-600">Review matching properties or contact this buyer using the verified route already on file.</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <PrimaryLink href="/disposition">Find matching deals</PrimaryLink>
+                  <SecondaryLink href="/seller-crm">Open conversations</SecondaryLink>
                 </div>
               </section>
               <section className="rounded-2xl border bg-white p-6 shadow-sm">
