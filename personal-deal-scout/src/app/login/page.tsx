@@ -1,12 +1,10 @@
-import { loginAction } from "./actions";
-
 export const dynamic = "force-dynamic";
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center px-6">
-      <form action={loginAction} className="w-full rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+      <form action="/api/login" method="post" className="w-full rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-widest text-blue-700">Private owner access</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-950">Deal Scout AI</h1>
         <p className="mt-2 text-sm text-slate-600">Sign in with the single owner account configured on the server.</p>
