@@ -22,6 +22,7 @@ import {
 import { listingFactLines, listingFacts } from "@/lib/listing-facts";
 import { useThemeColor } from "@/lib/theme-color";
 import { evaluateLuxuryRedevelopmentFit } from "@/lib/luxury-redevelopment";
+import { scoreMotivatedSeller } from "@/lib/motivated-seller-score";
 
 export type PropertyView = {
   id: string;
@@ -49,6 +50,7 @@ export type PropertyView = {
   contactEmail?: string;
   contactUrl?: string;
   sourceName?: string;
+  leadSource?: string;
   sourceUrl?: string;
   sourceRecordDate?: string;
   verificationSourceUrl?: string;
@@ -536,17 +538,19 @@ export function PropertyBrowser({
   properties: PropertyView[];
 }) {
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"actionable" | "research">("actionable");
+  const [view, setView] = useState<"all" | "motivated" | "actionable" | "research">("motivated");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [state, setState] = useState("");
   const [county, setCounty] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
-  const [sort, setSort] = useState("luxury-fit");
+  const [sort, setSort] = useState("motivation");
   const [visibleLimit, setVisibleLimit] = useState(24);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const mapColor = useThemeColor();
   const rankCategory =
-    sort === "luxury-fit"
+    sort === "motivation"
+      ? "Seller motivation"
+      : sort === "luxury-fit"
       ? "Luxury redevelopment fit"
       : sort === "confidence"
         ? "Highest confidence"
@@ -617,10 +621,9 @@ export function PropertyBrowser({
   const filtered = useMemo(
     () =>
       regionFiltered
-        .filter((property) =>
-          view === "actionable" ? actionable(property) : !actionable(property),
-        )
+        .filter((property) => view === "all" || (view === "motivated" ? scoreMotivatedSeller(property).eligible : view === "actionable" ? actionable(property) : !actionable(property)))
         .toSorted((a, b) => {
+          if (sort === "motivation") return scoreMotivatedSeller(b).motivationScore - scoreMotivatedSeller(a).motivationScore;
           if (sort === "luxury-fit")
             return (
               evaluateLuxuryRedevelopmentFit(b).score -
@@ -646,6 +649,7 @@ export function PropertyBrowser({
   );
   const selected = properties.find((property) => property.id === selectedId);
   const actionableCount = properties.filter(actionable).length;
+  const motivatedCount = properties.filter((property) => scoreMotivatedSeller(property).eligible).length;
   useEffect(() => {
     if (!selected) return;
     const previousOverflow = document.body.style.overflow;
@@ -729,16 +733,23 @@ export function PropertyBrowser({
             }}
             value={sort}
           >
-            <option value="luxury-fit">Luxury redevelopment fit</option>
-            <option value="research-desc">Most researched</option>
-            <option value="confidence">Highest confidence</option>
+            <option value="motivation">Most motivated sellers</option>
+            <option value="luxury-fit">Highest potential</option>
+            <option value="research-desc">Most complete research</option>
+            <option value="confidence">Strongest source confidence</option>
             <option value="price-asc">Price low to high</option>
             <option value="price-desc">Price high to low</option>
             <option value="address">Address A–Z</option>
           </select>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <div className="flex rounded-xl border p-1">
+          <div className="flex flex-wrap rounded-xl border p-1">
+            <button className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${view === "motivated" ? "bg-emerald-700 text-white" : "text-slate-500"}`} onClick={() => { setView("motivated"); setSort("motivation"); setVisibleLimit(24); }} type="button">
+              Motivated sellers · {motivatedCount}
+            </button>
+            <button className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${view === "all" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => { setView("all"); setVisibleLimit(24); }} type="button">
+              All leads · {properties.length}
+            </button>
             <button
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${view === "actionable" ? "bg-slate-950 text-white" : "text-slate-500"}`}
               onClick={() => {
@@ -841,6 +852,13 @@ export function PropertyBrowser({
                     </span>
                   ))}
               </div>
+              {scoreMotivatedSeller(property).eligible ? (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs">
+                  <span className="text-emerald-800">Seller motivation</span>
+                  <b className="mt-1 block text-emerald-950">{scoreMotivatedSeller(property).motivationScore}/100 · Closing feasibility {scoreMotivatedSeller(property).feasibilityScore}/100</b>
+                  <span className="mt-1 block text-emerald-800">{scoreMotivatedSeller(property).signals.join(" · ")}</span>
+                </div>
+              ) : null}
               <div className="mt-3 rounded-xl border border-slate-200 p-3 text-xs">
                 <span className="text-slate-500">Deal stage</span>
                 <b className="mt-1 block">
@@ -887,9 +905,13 @@ export function PropertyBrowser({
       ) : null}
       {!filtered.length ? (
         <p className="mt-5 rounded-2xl border border-dashed bg-white p-10 text-center text-sm text-slate-500">
-          {view === "actionable"
-            ? "No properties meet the actionable standard yet."
-            : "No properties need verification."}
+          {view === "all"
+            ? "No leads match these filters. Clear the search or add a lead."
+            : view === "motivated"
+              ? "No owner-controlled motivation signals are documented yet. HUD and lender-owned properties are excluded."
+              : view === "actionable"
+                ? "No leads are contact ready yet."
+                : "No leads currently need action."}
         </p>
       ) : null}
       {selected ? (

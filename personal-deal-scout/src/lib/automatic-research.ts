@@ -4,7 +4,6 @@ import { getPrisma } from "@/lib/prisma";
 import { DEVELOPER_RESEARCH_VERSION, enqueueDeveloperResearchBatch, runAutomaticDeveloperResearchBatch } from "@/lib/developer-research";
 import { enqueuePropertyResearchBatch, PROPERTY_RESEARCH_VERSION, runAutomaticPropertyResearchBatch } from "@/lib/property-research";
 import { runCensusPermitResearch } from "@/lib/government-research";
-import { importHudReoCounty, HUD_REO_SOURCE } from "@/lib/hud-reo";
 import { runWithResearchDeadline } from "@/lib/research-runtime";
 
 const REFRESH_DAYS = 7;
@@ -43,13 +42,5 @@ async function runAutomaticGovernmentResearch() {
     try { await runCensusPermitResearch(); census = { status: "completed" }; }
     catch (error) { census = { status: "failed", error: error instanceof Error ? error.message : "Census research failed." }; }
   }
-  const markets = await db.marketSignal.findMany({ orderBy: [{ capturedAt: "desc" }, { rank: "asc" }], distinct: ["fips"], select: { fips: true }, take: 5 });
-  const hud = [];
-  for (const market of markets) {
-    const latest = await db.governmentResearchRun.findFirst({ where: { source: HUD_REO_SOURCE, period: market.fips, status: "COMPLETED" }, orderBy: { finishedAt: "desc" } });
-    if (latest?.finishedAt && latest.finishedAt >= cutoff) continue;
-    try { hud.push({ fips: market.fips, status: "completed" as const, result: await importHudReoCounty(market.fips) }); }
-    catch (error) { hud.push({ fips: market.fips, status: "failed" as const, error: error instanceof Error ? error.message : "HUD research failed." }); }
-  }
-  return { census, hud };
+  return { census, hud: [], ownerTargeting: "FSBO_DEFAULT_TAX_REPAIR_EQUITY_PRESSURE" as const };
 }
