@@ -465,8 +465,8 @@ export default async function DevelopersPage({
                 <h3 className="font-bold">Next action</h3>
                 <p className="mt-1 text-sm text-slate-600">Review matching properties or contact this buyer using the verified route already on file.</p>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <PrimaryLink href="/disposition">Find matching deals</PrimaryLink>
-                  <SecondaryLink href="/seller-crm">Open conversations</SecondaryLink>
+                  <Link className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" href="/disposition">Find matching deals</Link>
+                  <Link className="rounded-xl border bg-white px-4 py-2 text-sm font-bold text-slate-700" href="/seller-crm">Open conversations</Link>
                 </div>
               </section>
               <section className="rounded-2xl border bg-white p-6 shadow-sm">

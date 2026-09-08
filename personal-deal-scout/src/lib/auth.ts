@@ -16,15 +16,19 @@ function configured() {
   return { username, password, secret };
 }
 
-// TEMPORARY DEVELOPMENT ACCESS:
-// Authentication is intentionally disabled while Deal Scout is being fortified.
-// Restore the authenticated implementations below before making the app public.
 export async function ownerIsAuthenticated() {
-  return true;
+  try {
+    const { username, secret } = configured();
+    const token = (await cookies()).get(COOKIE_NAME)?.value;
+    if (!token) return false;
+    return verifyOwnerToken(token, username, secret);
+  } catch {
+    return false;
+  }
 }
 
 export async function requireOwner() {
-  return;
+  if (!(await ownerIsAuthenticated())) redirect("/login");
 }
 
 export async function createOwnerSession(username: string, password: string) {
