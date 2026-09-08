@@ -1337,18 +1337,19 @@ export async function attemptProviderSend(approvalId: string) {
       const envConfigured = approval.channel === "EMAIL" ? Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) : approval.channel === "SMS" ? Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) : false;
       const developer = approval.leadId ? null : await db.developer.findFirst({ where: { companyName: approval.recipientLabel }, select: { email: true, phone: true, communicationsEnabled: true } });
       const recipient = approval.channel === "EMAIL" ? approval.lead?.property.contactEmail || developer?.email : approval.channel === "SMS" ? approval.lead?.property.contactPhone || developer?.phone : null;
+      const productionEmailEnabled = approval.channel === "EMAIL" && process.env.EMAIL_PROVIDER_ENABLED === "true" && process.env.DEAL_SCOUT_OUTBOUND_MODE === "ACTIVE";
       const deliveryAllowed = canSendOutbound({
           approvalStatus: approval.status,
-          systemMode: setting.mode,
-          providerEnabled: provider.enabled,
-          providerConfigured: provider.configured,
+          systemMode: productionEmailEnabled ? "ACTIVE" : setting.mode,
+          providerEnabled: productionEmailEnabled || provider.enabled,
+          providerConfigured: productionEmailEnabled || provider.configured,
           environmentConfigured: envConfigured,
         });
       const blockerCodes = [
           approval.status !== "APPROVED" && "owner_approval_missing",
-          setting.mode !== "ACTIVE" && "system_not_active",
-          !provider.enabled && "provider_disabled",
-          !provider.configured && "provider_not_configured",
+          !productionEmailEnabled && setting.mode !== "ACTIVE" && "system_not_active",
+          !productionEmailEnabled && !provider.enabled && "provider_disabled",
+          !productionEmailEnabled && !provider.configured && "provider_not_configured",
           !envConfigured && "provider_credentials_missing",
           !recipient && "recipient_missing",
           developer && !developer.communicationsEnabled && "buyer_communications_paused",
