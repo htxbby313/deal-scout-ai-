@@ -222,6 +222,7 @@ model Property {
   countyEntityMatches   CountyEntityMatch[]
   discoveryReferences   PropertyDiscoveryReference[]
   comparableSales       ComparableSale[]
+  messageApprovals      MessageApproval[]
 
   @@unique([address, zipCode])
   @@index([opportunityStatus])
@@ -388,6 +389,7 @@ model Developer {
   buyerPermissions       BuyerCommunicationPermission[]
   buyerReliabilityScores BuyerReliabilityScoreHistory[]
   buyerConversations     BuyerConversation[]
+  messageApprovals       MessageApproval[]
 
   @@index([qualificationStatus])
   @@index([active, updatedAt])
@@ -518,19 +520,27 @@ model MessageTemplate {
 }
 
 model MessageApproval {
-  id             String   @id @default(cuid())
-  leadId         String?
-  templateId     String?
-  channel        String
-  recipientLabel String
-  subject        String?
-  body           String
-  status         String   @default("PENDING")
-  provider       String   @default("disabled")
-  blockerCodes   String[] @default([])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  lead           Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  id                 String                       @id @default(cuid())
+  leadId             String?
+  templateId         String?
+  channel            String
+  recipientLabel     String
+  subject            String?
+  body               String
+  status             String                       @default("PENDING")
+  provider           String                       @default("disabled")
+  blockerCodes       String[]                     @default([])
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  lead               Lead?                        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  propertyId         String?
+  developerId        String?
+  property           Property?                    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  developer          Developer?                   @relation(fields: [developerId], references: [id], onDelete: SetNull)
+  outreachDeliveries AutonomousOutreachDelivery[]
+
+  @@index([propertyId, status])
+  @@index([developerId, status])
 }
 
 model AuditLog {
@@ -2219,30 +2229,88 @@ model BuyerCoverage {
 }
 
 model AcquisitionCampaign {
-  id                    String                        @id @default(cuid())
-  funnelId              String?
-  type                  AcquisitionCampaignType
-  status                AcquisitionCampaignStatus     @default(DRAFT)
-  name                  String
-  jurisdictionState     String
-  requiresOwnerApproval Boolean                       @default(true)
-  ownerApprovedAt       DateTime?
-  ownerApprovedBy       String?
-  outboundEnabled       Boolean                       @default(false)
-  startsAt              DateTime?
-  endsAt                DateTime?
-  createdAt             DateTime                      @default(now())
-  updatedAt             DateTime                      @updatedAt
-  funnel                AcquisitionFunnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
-  boundaries            AcquisitionCampaignBoundary[]
-  countyCoverage        CampaignCountyCoverage[]
-  opportunities         CampaignOpportunity[]
-  agentAssignments      CampaignAgentAssignment[]
-  costs                 CampaignCostEntry[]
-  goals                 CampaignGoalVersion[]
+  id                     String                        @id @default(cuid())
+  funnelId               String?
+  type                   AcquisitionCampaignType
+  status                 AcquisitionCampaignStatus     @default(DRAFT)
+  name                   String
+  jurisdictionState      String
+  requiresOwnerApproval  Boolean                       @default(true)
+  ownerApprovedAt        DateTime?
+  ownerApprovedBy        String?
+  outboundEnabled        Boolean                       @default(false)
+  startsAt               DateTime?
+  endsAt                 DateTime?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+  funnel                 AcquisitionFunnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  boundaries             AcquisitionCampaignBoundary[]
+  countyCoverage         CampaignCountyCoverage[]
+  opportunities          CampaignOpportunity[]
+  agentAssignments       CampaignAgentAssignment[]
+  costs                  CampaignCostEntry[]
+  goals                  CampaignGoalVersion[]
+  outreachAuthorizations OutreachAuthorization[]
 
   @@index([status, startsAt, endsAt])
   @@index([funnelId])
+}
+
+model OutreachAuthorization {
+  id                           String                       @id @default(cuid())
+  campaignId                   String
+  status                       String                       @default("DRAFT")
+  audience                     String
+  allowedChannels              EngagementChannel[]
+  approvedPropertyIds          String[]
+  approvedDeveloperIds         String[]
+  maximumMessagesPerDay        Int                          @default(10)
+  maximumMessagesPerRecipient  Int                          @default(3)
+  maximumFollowUpsPerRecipient Int                          @default(2)
+  sellerOfferCeilingCents      BigInt?
+  requiredDisclosure           String?
+  prohibitedClaims             String[]
+  escalationTriggers           String[]
+  startsAt                     DateTime
+  expiresAt                    DateTime
+  approvalFingerprint          String
+  ownerApprovedAt              DateTime
+  ownerApprovedBy              String
+  activatedAt                  DateTime?
+  pausedAt                     DateTime?
+  revokedAt                    DateTime?
+  createdAt                    DateTime                     @default(now())
+  updatedAt                    DateTime                     @updatedAt
+  campaign                     AcquisitionCampaign          @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  deliveries                   AutonomousOutreachDelivery[]
+
+  @@index([campaignId, status, startsAt, expiresAt])
+  @@index([approvalFingerprint])
+}
+
+model AutonomousOutreachDelivery {
+  id                String                @id @default(cuid())
+  authorizationId   String
+  messageApprovalId String
+  recipientHash     String
+  contentHash       String
+  channel           EngagementChannel
+  status            String                @default("QUEUED")
+  blockerCodes      String[]              @default([])
+  provider          String?
+  providerReference String?
+  attemptCount      Int                   @default(0)
+  scheduledAt       DateTime              @default(now())
+  attemptedAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  authorization     OutreachAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Restrict)
+  messageApproval   MessageApproval       @relation(fields: [messageApprovalId], references: [id], onDelete: Restrict)
+
+  @@unique([authorizationId, messageApprovalId])
+  @@index([authorizationId, status, scheduledAt])
+  @@index([recipientHash, channel, createdAt])
 }
 
 enum CountyCoverageStatus {

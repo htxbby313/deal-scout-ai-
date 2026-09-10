@@ -140,9 +140,16 @@ export async function pauseCampaign(input: {
   });
   if (!campaign || campaign.status !== "ACTIVE")
     throw new Error("Only an active campaign can be paused.");
-  return getPrisma().acquisitionCampaign.update({
-    where: { id: input.campaignId },
-    data: { status: "PAUSED", outboundEnabled: false },
+  return getPrisma().$transaction(async (tx) => {
+    const paused = await tx.acquisitionCampaign.update({
+      where: { id: input.campaignId },
+      data: { status: "PAUSED", outboundEnabled: false },
+    });
+    await tx.outreachAuthorization.updateMany({
+      where: { campaignId: input.campaignId, status: "ACTIVE" },
+      data: { status: "PAUSED", pausedAt: new Date() },
+    });
+    return paused;
   });
 }
 export async function assignCampaignOpportunity(input: {

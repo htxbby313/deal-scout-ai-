@@ -18,14 +18,17 @@ import { synchronizeCountyCoverageTargets } from "@/lib/county-source-service";
 import { runFunnelExpirationCycle } from "@/lib/funnel-automation";
 import { runCountyAccessibilityChecks } from "@/lib/county-accessibility-service";
 import { synchronizeCampaignCountyCoverage } from "@/lib/campaign-service";
+import { runAutonomousOutreachCycle } from "@/lib/autonomous-outreach-service";
 
 export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
   const cycle = await beginAgentSchedulerCycle(trigger);
   try {
-    const conversationVoice = await refreshPendingConversationVoice().catch((error) => {
-      logOperation("warn", "conversation_voice_refresh_deferred", { error });
-      return { status: "deferred" as const };
-    });
+    const conversationVoice = await refreshPendingConversationVoice().catch(
+      (error) => {
+        logOperation("warn", "conversation_voice_refresh_deferred", { error });
+        return { status: "deferred" as const };
+      },
+    );
     const recovery = await recoverAutomaticResearchWork();
     const research = await runAutomaticResearchCycle();
     const [funnels, counties] = await Promise.all([
@@ -41,6 +44,7 @@ export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
     const seeded = await seedAgentWork();
     const agents = await runAgentTeamBatch();
     const conversationDrafts = await runConversationDraftBacklog();
+    const autonomousOutreach = await runAutonomousOutreachCycle();
     await finishAgentSchedulerCycle({
       cycleId: cycle.id,
       status: "COMPLETED",
@@ -54,10 +58,17 @@ export async function executeDealScoutOperations(trigger: AgentCycleTrigger) {
         funnelExpirations,
         countyAccessibility,
         campaignCountyCoverage,
+        autonomousOutreach,
       },
       seed: seeded,
     });
-    return { cycleId: cycle.id, agents, conversationDrafts, conversationVoice };
+    return {
+      cycleId: cycle.id,
+      agents,
+      conversationDrafts,
+      conversationVoice,
+      autonomousOutreach,
+    };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Agent operations cycle failed.";

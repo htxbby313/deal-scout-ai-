@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import type { CampaignCostType } from "@prisma/client";
+import type { EngagementChannel } from "@prisma/client";
 import { requireOwner } from "@/lib/auth";
 import { parseMoneyToCents } from "@/lib/financial-truth";
 import {
@@ -12,6 +13,11 @@ import {
   pauseCampaign,
   recordCampaignCost,
 } from "@/lib/campaign-service";
+import {
+  activateBoundedOutreach,
+  pauseBoundedOutreach,
+  runAutonomousOutreachCycle,
+} from "@/lib/autonomous-outreach-service";
 const text = (d: FormData, k: string) => String(d.get(k) ?? "").trim();
 const date = (d: FormData, k: string) => new Date(text(d, k));
 const number = (d: FormData, k: string) =>
@@ -92,4 +98,45 @@ export async function pauseCampaignAction(data: FormData) {
   await pauseCampaign({ campaignId: text(data, "campaignId"), actor: "owner" });
   revalidatePath("/campaigns");
   revalidatePath("/pipeline");
+}
+
+export async function activateBoundedOutreachAction(data: FormData) {
+  await requireOwner();
+  const channels = data.getAll("channels").map(String) as EngagementChannel[];
+  await activateBoundedOutreach({
+    campaignId: text(data, "campaignId"),
+    audience: text(data, "audience") as "SELLER" | "BUYER" | "BOTH",
+    allowedChannels: channels,
+    maximumMessagesPerDay: number(data, "maximumMessagesPerDay") ?? 10,
+    maximumMessagesPerRecipient:
+      number(data, "maximumMessagesPerRecipient") ?? 3,
+    maximumFollowUpsPerRecipient:
+      number(data, "maximumFollowUpsPerRecipient") ?? 2,
+    sellerOfferCeilingCents: money(data, "sellerOfferCeiling"),
+    requiredDisclosure: text(data, "requiredDisclosure"),
+    prohibitedClaims: text(data, "prohibitedClaims").split("\n"),
+    escalationTriggers: text(data, "escalationTriggers").split("\n"),
+    startsAt: date(data, "startsAt"),
+    expiresAt: date(data, "expiresAt"),
+    actor: "owner",
+  });
+  revalidatePath("/campaigns");
+  revalidatePath("/owner-queue");
+}
+
+export async function pauseBoundedOutreachAction(data: FormData) {
+  await requireOwner();
+  await pauseBoundedOutreach({
+    authorizationId: text(data, "authorizationId"),
+    actor: "owner",
+  });
+  revalidatePath("/campaigns");
+}
+
+export async function runBoundedOutreachNowAction() {
+  await requireOwner();
+  await runAutonomousOutreachCycle();
+  revalidatePath("/campaigns");
+  revalidatePath("/message-center");
+  revalidatePath("/owner-queue");
 }

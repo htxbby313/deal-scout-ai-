@@ -1151,6 +1151,7 @@ export async function generateDraftApproval(
       const approval = await tx.messageApproval.create({
         data: {
           leadId,
+          propertyId: lead.propertyId,
           templateId,
           channel: template.channel,
           recipientLabel: lead.ownerName,
@@ -1196,6 +1197,7 @@ export async function generateDeveloperRelationshipDraft(developerId: string) {
   return db.$transaction(async (tx) => {
     const approval = await tx.messageApproval.create({
       data: {
+        developerId,
         channel: plan.channel,
         recipientLabel: developer.companyName,
         subject,
@@ -1266,6 +1268,8 @@ export async function generateDeveloperPricingRequest(
       const approval = await tx.messageApproval.create({
         data: {
           leadId: lead?.id,
+          propertyId,
+          developerId,
           channel: plan.channel,
           recipientLabel: developer.companyName,
           subject,

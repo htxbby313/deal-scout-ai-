@@ -9,6 +9,8 @@ import { requireOwner } from "@/lib/auth";
 import { buildCampaignKpis } from "@/lib/campaign-economics";
 import { readCampaignWorkspace } from "@/lib/campaign-service";
 import { CampaignLifecycleControls } from "@/app/campaigns/campaign-lifecycle-controls";
+import { BoundedOutreachControls } from "@/app/campaigns/bounded-outreach-controls";
+import { readOutreachAuthorizations } from "@/lib/autonomous-outreach-service";
 export const dynamic = "force-dynamic";
 const field = "rounded-lg border px-3 py-2 text-sm";
 const money = (v: bigint) =>
@@ -17,7 +19,10 @@ const money = (v: bigint) =>
   );
 export default async function CampaignsPage() {
   await requireOwner();
-  const [campaigns, funnels, agents] = await readCampaignWorkspace();
+  const [[campaigns, funnels, agents], authorizations] = await Promise.all([
+    readCampaignWorkspace(),
+    readOutreachAuthorizations(),
+  ]);
   return (
     <WorkspaceShell active="campaigns">
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6">
@@ -32,6 +37,10 @@ export default async function CampaignsPage() {
           </p>
         </header>
         <CampaignLifecycleControls campaigns={campaigns} />
+        <BoundedOutreachControls
+          campaigns={campaigns}
+          authorizations={authorizations}
+        />
         <section className="mt-6 grid gap-5">
           {campaigns.map((c) => {
             const k = buildCampaignKpis({

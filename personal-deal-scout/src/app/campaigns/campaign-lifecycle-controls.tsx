@@ -52,9 +52,9 @@ export function CampaignLifecycleControls({
         {control("ACTIVE", pauseCampaignAction, "Pause campaign", "Pause")}
       </section>
       <p className="mt-2 text-xs text-slate-500">
-        Lifecycle changes never enable outbound delivery. Activation requires
-        owner approval, live dates, a current boundary, and persisted county
-        coverage.
+        Campaign activation alone never enables delivery. Outbound requires a
+        separate bounded outreach authorization with a locked audience, property
+        and buyer snapshot, channels, limits, and expiration.
       </p>
     </>
   );
