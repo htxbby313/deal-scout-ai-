@@ -7,6 +7,7 @@ import {
 } from "@/app/deal-desk-actions";
 import { DealAnalysisCalculator } from "@/app/deals/[propertyId]/deal-analysis-calculator";
 import { DealBoxSellerPanel } from "@/app/deals/[propertyId]/deal-box-seller";
+import { LandDealWatchCard } from "@/app/deals/[propertyId]/land-deal-watch-card";
 import { requireOwner } from "@/lib/auth";
 import { evaluateComparableSales } from "@/lib/comp-engine";
 import { analyzeDealStrategy, computeWholesaleMao } from "@/lib/deal-analysis";
@@ -375,6 +376,25 @@ export default async function DealDeskPage({
             Generate Deal Package
           </Link>
         </header>
+        <LandDealWatchCard input={{
+          address: property.address,
+          ownerName: property.ownerName,
+          contactName: property.contactName,
+          contactPhone: property.contactPhone,
+          contactEmail: property.contactEmail,
+          contactUrl: property.contactUrl,
+          askingPriceCents: property.estimatedValue == null ? null : BigInt(property.estimatedValue) * BigInt(100),
+          findings: property.researchFindings.map((finding) => ({ topic: finding.topic, label: finding.label, value: finding.value, status: finding.status, sourceUrl: finding.sourceUrl, notes: finding.notes })),
+          closedCompValueLowCents: comps.valueLowCents,
+          closedCompValueBaseCents: comps.valueBaseCents,
+          closedCompValueHighCents: comps.valueHighCents,
+          closedCompCount: comps.selected.length,
+          buyerNames: buyerMatches.map((match) => match.developer.companyName),
+          buyerValueBaseCents: projection?.buyerPriceBaseCents,
+          sellerSafeMaximumCents: projection?.sellerSafeMaximumCents,
+          projectedSpreadCents: projection?.feeBaseCents,
+          conversationSummaries: engagement?.conversations.map((conversation) => conversation.summary) ?? [],
+        }} />
         <nav
           aria-label="Deal Desk sections"
           className="mt-5 flex gap-2 overflow-x-auto pb-2"
