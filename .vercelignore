@@ -5,3 +5,10 @@
 **/.env.*
 **/*.log
 personal-deal-scout/.novu
+DealScout Legal Templates
+rendered_acquisition_crm_spec
+.agents
+.codex
+Acquisition CRM MVP - Developer Build Spec.docx
+audit_acquisition_crm_spec.py
+build_acquisition_crm_spec.py

@@ -457,6 +457,37 @@ enum TransactionDocumentStatus {
   VOIDED
 }
 
+enum ContractPacketStructure {
+  ASSIGNMENT
+  DOUBLE_CLOSE
+  DIRECT_PURCHASE
+}
+
+enum TitleCompanyStatus {
+  UNCONTACTED
+  CONTACTED
+  VERIFIED
+  USED_SUCCESSFULLY
+  PREFERRED
+  INACTIVE
+}
+
+enum TitleCompanyPriority {
+  PRIMARY
+  BACKUP
+  UNASSIGNED
+}
+
+enum TitleOpeningStatus {
+  PREPARING
+  OPENED
+  TITLE_REVIEW
+  CURATIVE
+  CLEAR_TO_CLOSE
+  CLOSED
+  CANCELLED
+}
+
 model DeveloperResearchRun {
   id              String    @id @default(cuid())
   developerId     String
@@ -797,10 +828,119 @@ model DealTransaction {
   outcomes             TransactionOutcome[]
   settlementArtifacts  SettlementArtifact[]
   acquisitionFunnel    AcquisitionFunnel?
+  contractPackets      ContractPacket[]
+  titleOpenings        TitleOpening[]
 
   @@index([status, controlStatus])
   @@index([propertyId, createdAt])
   @@index([developerId])
+}
+
+model ContractPacket {
+  id                         String                  @id @default(cuid())
+  transactionId              String
+  structure                  ContractPacketStructure
+  status                     TransactionDocumentStatus @default(DRAFT)
+  version                    Int                     @default(1)
+  effectiveDate              DateTime?
+  closingDate                DateTime
+  feasibilityDays            Int
+  accessNoticeHours          Int
+  earnestMoneyCents          BigInt
+  feasibilityFeeCents        BigInt
+  purchasePriceCents         BigInt
+  assignmentFeeCents         BigInt?
+  assignmentDepositCents     BigInt?
+  assigneeDiligenceDeadline  DateTime?
+  proofOfFundsDueAt          DateTime?
+  sellerLegalName            String
+  buyerLegalName             String
+  assigneeLegalName          String?
+  legalDescription           String
+  propertyType               String
+  costAllocation             String
+  sellerNoticeInformation    String
+  buyerNoticeInformation     String
+  brokerDisclosure           String
+  assignmentContingency      String?
+  titleCompanyId             String?
+  purchaseAgreement          String
+  assignmentAgreement        String?
+  equitableInterestDisclosure String
+  generatedBy                String
+  generatedAt                DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+  transaction                DealTransaction         @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  titleCompany               TitleCompany?           @relation(fields: [titleCompanyId], references: [id], onDelete: SetNull)
+
+  @@unique([transactionId, version])
+  @@index([transactionId, status])
+  @@index([titleCompanyId])
+}
+
+model TitleCompany {
+  id                               String               @id @default(cuid())
+  name                             String               @unique
+  website                          String?
+  status                           TitleCompanyStatus   @default(UNCONTACTED)
+  priority                         TitleCompanyPriority @default(UNASSIGNED)
+  serviceAreas                     String[]
+  counties                         String[]
+  assignmentAcceptance            Boolean?
+  doubleCloseCapability            Boolean?
+  transactionalFundingCoordination Boolean?
+  eClosing                         Boolean?
+  earnestMoneyInstructions         String?
+  typicalTurnaround                String?
+  requiredDocuments                String[]
+  notes                            String?
+  verifiedAt                       DateTime?
+  verifiedBy                       String?
+  createdAt                        DateTime             @default(now())
+  updatedAt                        DateTime             @updatedAt
+  contacts                         TitleCompanyContact[]
+  openings                         TitleOpening[]
+  contractPackets                  ContractPacket[]
+
+  @@index([status, priority])
+}
+
+model TitleCompanyContact {
+  id             String       @id @default(cuid())
+  titleCompanyId String
+  name           String
+  role           String?
+  email          String?
+  phone          String?
+  office         String?
+  primary        Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  titleCompany   TitleCompany @relation(fields: [titleCompanyId], references: [id], onDelete: Cascade)
+
+  @@index([titleCompanyId, primary])
+}
+
+model TitleOpening {
+  id             String             @id @default(cuid())
+  transactionId  String
+  titleCompanyId String
+  status         TitleOpeningStatus @default(PREPARING)
+  fileNumber     String?
+  escrowOfficer  String?
+  openedAt       DateTime?
+  targetCloseAt  DateTime?
+  earnestMoneyDueAt DateTime?
+  requirements   String[]
+  notes          String?
+  createdBy      String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  transaction    DealTransaction    @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  titleCompany   TitleCompany       @relation(fields: [titleCompanyId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId, status])
+  @@index([titleCompanyId, status])
 }
 
 model TransactionDocument {

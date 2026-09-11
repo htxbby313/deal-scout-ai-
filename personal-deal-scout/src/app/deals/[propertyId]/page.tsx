@@ -206,6 +206,8 @@ export default async function DealDeskPage({
       })
     : null;
   const documents = transaction?.documents ?? [];
+  const latestPacket = transaction?.contractPackets[0];
+  const latestTitle = transaction?.titleOpenings[0];
   const analysisBrief = buildDealAnalysisBrief({
     verdict,
     dealScoreExplanation: dealScore.explanation,
@@ -375,6 +377,9 @@ export default async function DealDeskPage({
           >
             Generate Deal Package
           </Link>
+          {transaction ? <section className="mt-5 rounded-2xl border border-border bg-slate-950 p-5 text-white">
+            <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Move this deal forward</p><h2 className="mt-1 text-xl font-bold">Contract → title → buyer → close</h2><p className="mt-2 text-sm text-slate-300">{latestPacket ? `Packet v${latestPacket.version} is ${latestPacket.status.toLowerCase()}.` : "No contract packet yet."} {latestTitle ? `${latestTitle.titleCompany.name} is ${latestTitle.status.replaceAll("_", " ").toLowerCase()}.` : "Title has not been opened."}</p></div><div className="flex flex-wrap gap-2"><Link className="rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-950" href={`/contracts?transaction=${transaction.id}`}>{latestPacket ? "Update contract packet" : "Generate contracts"}</Link><Link className="rounded-xl border border-slate-600 px-4 py-2.5 text-sm font-bold text-white" href={`/title-companies?transaction=${transaction.id}`}>{latestTitle ? "Manage title" : "Open title"}</Link></div></div>
+          </section> : null}
         </header>
         <LandDealWatchCard input={{
           address: property.address,

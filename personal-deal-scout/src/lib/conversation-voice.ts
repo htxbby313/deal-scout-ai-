@@ -35,8 +35,8 @@ export function currentBuiltInTemplate(body: string) {
 }
 
 export function sellerIntroduction(input: { address: string; name?: string | null; hasPhone: boolean }) {
-  return `${greeting(input.name)} I'm ${senderName} with ${companyName}. I wanted to ask about ${input.address}. ${input.hasPhone
-    ? "Would you be open to talking about your plans for it?"
+  return `${greeting(input.name)} I'm ${senderName} with ${companyName}. ${input.hasPhone
+    ? `I wanted to ask about your plans for ${input.address}. Would you be open to talking about your plans for it?`
     : "Who would be the best person to speak with about it, and is there a number I could reach them on?"}`;
 }
 

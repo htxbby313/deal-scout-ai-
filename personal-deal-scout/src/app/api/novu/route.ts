@@ -3,6 +3,11 @@ import { dealScout } from "@/novu/agents";
 
 export const runtime = "nodejs";
 
-export const { GET, POST, OPTIONS } = serve({
+function handlers() { return serve({
   agents: [dealScout],
-});
+}); }
+
+type NovuHandlers = ReturnType<typeof handlers>;
+export const GET = (...args: Parameters<NovuHandlers["GET"]>) => handlers().GET(...args);
+export const POST = (...args: Parameters<NovuHandlers["POST"]>) => handlers().POST(...args);
+export const OPTIONS = (...args: Parameters<NovuHandlers["OPTIONS"]>) => handlers().OPTIONS(...args);

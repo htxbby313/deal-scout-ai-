@@ -74,6 +74,8 @@ const dealPropertyInclude = {
       },
       financialProjections: { orderBy: { version: "desc" as const }, take: 1 },
       outcomes: { orderBy: { version: "desc" as const }, take: 1 },
+      contractPackets: { orderBy: { version: "desc" as const }, take: 3 },
+      titleOpenings: { include: { titleCompany: true }, orderBy: { updatedAt: "desc" as const }, take: 3 },
       acquisitionFunnel: {
         include: {
           gates: true,
