@@ -62,3 +62,5 @@ npm run build
 ## Deployment requirements
 
 Use a persistent PostgreSQL database, HTTPS, secure environment-secret storage, Node.js 20.9+, migration execution before application start, and a process/runtime capable of serving Next.js. Keep the application private. Do not enable outbound messaging until a provider is selected, credentials are verified, compliance requirements are satisfied, and the adapter has been reviewed and tested.
+
+Vercel builds use an explicit environment-aware migration policy: production builds run `prisma migrate deploy` when `DATABASE_URL` or `DIRECT_URL` is configured, while preview builds skip migrations. The Neon pull-request workflow creates and migrates the preview branch before the preview is used, so a preview build does not depend on an unrelated or unreachable database host. Local and non-Vercel builds retain the existing behavior: migrations run when a database URL is configured and are skipped when it is not.
