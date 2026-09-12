@@ -1,8 +1,13 @@
 const { spawnSync } = require("node:child_process");
 
 function directDatabaseUrl() {
-  const configured = process.env.DIRECT_URL || process.env.DATABASE_URL;
-  if (!configured) throw new Error("DIRECT_URL or DATABASE_URL is required for Prisma migrations.");
+  const configured = process.env.NEON_POSTGRES_URL_NON_POOLING
+    || process.env.NEON_DATABASE_URL_UNPOOLED
+    || process.env.DATABASE_POSTGRES_URL_NON_POOLING
+    || process.env.DATABASE_URL_UNPOOLED
+    || process.env.DIRECT_URL
+    || process.env.DATABASE_URL;
+  if (!configured) throw new Error("A direct or pooled database URL is required for Prisma migrations.");
   const url = new URL(configured);
   if (url.hostname.endsWith(".neon.tech")) url.hostname = url.hostname.replace(/-pooler(?=\.)/, "");
   url.searchParams.delete("pgbouncer");

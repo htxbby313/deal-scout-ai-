@@ -2,6 +2,15 @@ import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
+type DatabaseEnvironment = Record<string, string | undefined>;
+
+export function runtimeDatabaseUrl(environment: DatabaseEnvironment = process.env) {
+  return environment.NEON_POSTGRES_PRISMA_URL
+    || environment.NEON_DATABASE_URL
+    || environment.DATABASE_POSTGRES_PRISMA_URL
+    || environment.DATABASE_URL;
+}
+
 function boundedInteger(raw: string | undefined, fallback: number, minimum: number, maximum: number) {
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
@@ -19,7 +28,7 @@ export function pooledDatabaseUrl(raw: string | undefined, environment = process
 export function getPrisma() {
   if (!globalForPrisma.prisma) {
     globalForPrisma.prisma = new PrismaClient({
-      datasourceUrl: pooledDatabaseUrl(process.env.DATABASE_URL),
+      datasourceUrl: pooledDatabaseUrl(runtimeDatabaseUrl()),
       log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
       errorFormat: process.env.NODE_ENV === "development" ? "pretty" : "minimal",
     });
