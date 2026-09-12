@@ -435,9 +435,12 @@ async function refreshDeveloperQualification(
   });
 }
 
-export async function readDatabase(): Promise<Database> {
+export async function readDatabase(
+  options: { propertiesOnly?: boolean } = {},
+): Promise<Database> {
   try {
     const db = getPrisma();
+    const propertiesOnly = options.propertiesOnly === true;
     const [setting, providers] = await db.$transaction(async (tx) => {
       const systemSetting = await tx.systemSetting.upsert({
         where: { id: "singleton" },
@@ -465,8 +468,12 @@ export async function readDatabase(): Promise<Database> {
           researchRuns: { orderBy: { startedAt: "desc" }, take: 1 },
         },
       }),
-      db.lead.findMany({ orderBy: { createdAt: "desc" } }),
-      db.task.findMany({ orderBy: { createdAt: "desc" } }),
+      propertiesOnly
+        ? Promise.resolve([])
+        : db.lead.findMany({ orderBy: { createdAt: "desc" } }),
+      propertiesOnly
+        ? Promise.resolve([])
+        : db.task.findMany({ orderBy: { createdAt: "desc" } }),
     ]);
     const [developers, developerProjects, templates] = await Promise.all([
       db.developer.findMany({
@@ -474,11 +481,17 @@ export async function readDatabase(): Promise<Database> {
         include: { researchRuns: { orderBy: { startedAt: "desc" }, take: 1 } },
       }),
       db.developerProject.findMany({ orderBy: { createdAt: "desc" } }),
-      db.messageTemplate.findMany({ orderBy: { createdAt: "desc" } }),
+      propertiesOnly
+        ? Promise.resolve([])
+        : db.messageTemplate.findMany({ orderBy: { createdAt: "desc" } }),
     ]);
     const [approvals, logs] = await Promise.all([
-      db.messageApproval.findMany({ orderBy: { createdAt: "desc" } }),
-      db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
+      propertiesOnly
+        ? Promise.resolve([])
+        : db.messageApproval.findMany({ orderBy: { createdAt: "desc" } }),
+      propertiesOnly
+        ? Promise.resolve([])
+        : db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
     ]);
     const enabledProviders = new Map(
       providers.map((provider) => [provider.provider, provider.enabled]),
