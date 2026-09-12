@@ -49,7 +49,7 @@ function Field({
 
 export default async function PropertiesPage() {
   await requireOwner();
-  const db = await readDatabase();
+  const db = await readDatabase({ propertiesOnly: true });
   const [countyEvidence, funnels, buyBoxes] = await Promise.all([
     getPrisma().countyFactObservation.findMany({
       where: { propertyId: { not: null } },

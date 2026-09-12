@@ -648,8 +648,16 @@ export function PropertyBrowser({
     [regionFiltered, view, sort],
   );
   const selected = properties.find((property) => property.id === selectedId);
-  const actionableCount = properties.filter(actionable).length;
-  const motivatedCount = properties.filter((property) => scoreMotivatedSeller(property).eligible).length;
+  const actionableCount = useMemo(
+    () => properties.filter(actionable).length,
+    [properties],
+  );
+  const motivatedCount = useMemo(
+    () =>
+      properties.filter((property) => scoreMotivatedSeller(property).eligible)
+        .length,
+    [properties],
+  );
   useEffect(() => {
     if (!selected) return;
     const previousOverflow = document.body.style.overflow;
