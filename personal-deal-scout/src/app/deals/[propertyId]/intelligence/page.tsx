@@ -60,7 +60,7 @@ export default async function PropertyIntelligencePage({
     where: { id: propertyId },
     include: {
       researchFindings: { orderBy: { observedAt: "desc" } },
-      discoveryReferences: { orderBy: { createdAt: "desc" }, take: 10 },
+      discoveryReferences: { orderBy: { submittedAt: "desc" }, take: 10 },
     },
   });
   if (!property) notFound();
@@ -165,7 +165,7 @@ export default async function PropertyIntelligencePage({
           <Section title="Utilities & Identifiers">
             <Fact label="Utilities" value={intelligence?.utilities} />
             <Fact label="APN" value={intelligence?.apn} />
-            <Fact label="Zillow reference" value={zillow?.submittedUrl || "—"} />
+            <Fact label="Zillow reference" value={zillow?.originalUrl || "—"} />
             <Fact label="MLS ID" value="Not available from the current source" />
           </Section>
 
