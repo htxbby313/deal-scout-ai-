@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WorkspaceShell } from "@/app/workspace-shell";
 import { requireOwner } from "@/lib/auth";
-import { enformionConfigured } from "@/lib/enformion-property";
 import { getPrisma } from "@/lib/prisma";
-import { getLatestPropertyIntelligence } from "@/lib/property-intelligence";
+import {
+  getLatestPropertyIntelligence,
+  propertyIntelligenceConfigured,
+} from "@/lib/property-intelligence";
 import { refreshPropertyIntelligenceAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +69,7 @@ export default async function PropertyIntelligencePage({
 
   const snapshot = await getLatestPropertyIntelligence(propertyId);
   const intelligence = snapshot?.result;
-  const configured = enformionConfigured();
+  const configured = propertyIntelligenceConfigured();
   const zillow = property.discoveryReferences.find((item) =>
     item.providerKey.toLowerCase().includes("zillow"),
   );
@@ -113,7 +115,7 @@ export default async function PropertyIntelligencePage({
         ) : null}
         {!configured ? (
           <p className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-            The full property source is not configured in this environment. Existing Deal Scout research remains available below.
+            No full property source is configured in this environment. Existing Deal Scout research remains available below.
           </p>
         ) : null}
 
@@ -194,7 +196,7 @@ export default async function PropertyIntelligencePage({
               </p>
             ) : (
               <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                Run full intelligence once to capture the richer assessor, owner, tax, parcel, and structure fields. The result is cached so opening this page does not consume another lookup.
+                Run full intelligence once to capture richer owner, tax, parcel, and structure fields. RentCast is tried first when configured, and the result is cached so simply opening this page does not consume another lookup.
               </p>
             )}
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
