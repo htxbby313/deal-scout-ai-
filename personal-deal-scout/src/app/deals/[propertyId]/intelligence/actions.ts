@@ -7,8 +7,14 @@ import { refreshPropertyIntelligence } from "@/lib/property-intelligence";
 
 export async function refreshPropertyIntelligenceAction(propertyId: string) {
   await requireOwner();
-  await refreshPropertyIntelligence(propertyId);
   const path = `/deals/${propertyId}/intelligence`;
-  revalidatePath(path);
+  try {
+    await refreshPropertyIntelligence(propertyId);
+    revalidatePath(path);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Property intelligence refresh failed.";
+    redirect(`${path}?error=${encodeURIComponent(message)}`);
+  }
   redirect(`${path}?refreshed=1`);
 }
