@@ -1,30 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { contextualNavigation, moreNavigation, primaryNavigation } from "@/lib/workspace-nav";
-
-type WorkspaceSection =
-  | "owner-queue"
-  | "governance"
-  | "contracts"
-  | "executive"
-  | "profitability"
-  | "profit-priority"
-  | "campaigns"
-  | "seller-crm"
-  | "county-coverage"
-  | "pipeline"
-  | "agents"
-  | "buyer-evidence"
-  | "transactions"
-  | "title-companies"
-  | "operations"
-  | "disposition"
-  | "research"
-  | "developers"
-  | "properties"
-  | "settings"
-  | "deals"
-  | "message-center";
+import { contextualGroupFor, contextualNavigation, moreNavigation, primaryNavigation, type WorkspaceSection } from "@/lib/workspace-nav";
 
 export function WorkspaceShell({
   active = "properties",
@@ -70,19 +46,19 @@ export function WorkspaceShell({
           })}
 
           {(() => {
-            const group = active === "seller-crm" || active === "developers" || active === "buyer-evidence" || active === "disposition" ? "people" : active === "message-center" || active === "campaigns" ? "communications" : active === "transactions" || active === "contracts" || active === "title-companies" ? "transactions" : active === "owner-queue" ? null : "deals";
+            const group = contextualGroupFor(active);
             const tabs = group ? contextualNavigation[group] : [];
-            return tabs.length ? <div className="mx-3 mb-4 rounded-xl border border-border/70 bg-muted/30 p-2"><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Workspace</p>{tabs.map(([href, label]) => <Link className="block rounded-lg px-2 py-2 text-xs font-semibold text-muted-foreground hover:bg-card hover:text-foreground" href={href} key={href}>{label}</Link>)}</div> : null;
+            return tabs.length ? <div className="col-span-5 mx-3 mb-2 hidden rounded-xl border border-border/70 bg-muted/30 p-2 lg:block"><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Workspace</p>{tabs.map((tab) => { const selected=(tab.active as readonly string[]).includes(active); return <Link aria-current={selected ? "page" : undefined} className={`block rounded-lg px-2 py-2 text-xs font-semibold ${selected ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:bg-card hover:text-foreground"}`} href={tab.href} key={tab.href}>{tab.label}</Link>; })}</div> : null;
           })()}
 
-          <details className="mx-3 mt-4 hidden border-t border-border/70 pt-3 lg:block">
+          <details className="col-span-5 mx-1 border-t border-border/70 pt-2 lg:mx-3 lg:mt-4 lg:pt-3">
             <summary className="cursor-pointer px-2 py-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">More</summary>
-            <div className="mt-1 space-y-1">{moreNavigation.map(([href, label]) => <Link className="block rounded-lg px-2 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground" href={href} key={href}>{label}</Link>)}</div>
+            <div className="mt-1 grid grid-cols-2 gap-1 lg:block lg:space-y-1">{moreNavigation.map(([href, label]) => <Link aria-current={href.slice(1) === active ? "page" : undefined} className={`block rounded-lg px-2 py-2 text-xs font-semibold ${href.slice(1) === active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`} href={href} key={href}>{label}</Link>)}</div>
           </details>
         </nav>
       </aside>
 
-      <main className="min-w-0" id="main-content">{children}</main>
+      <main className="min-w-0" id="main-content" tabIndex={-1}>{children}</main>
     </div>
   );
 }

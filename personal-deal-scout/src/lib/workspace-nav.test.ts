@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moreNavigation, primaryNavigation } from "@/lib/workspace-nav";
+import { contextualGroupFor, contextualNavigation, moreNavigation, primaryNavigation } from "@/lib/workspace-nav";
 
 describe("workspace navigation", () => {
   it("uses wholesaler cockpit labels on primary nav", () => {
@@ -10,6 +10,12 @@ describe("workspace navigation", () => {
       "Communications",
       "Transactions",
     ]);
+  });
+
+  it("maps sections to typed contextual groups and identifies title companies", () => {
+    expect(contextualGroupFor("title-companies")).toBe("transactions");
+    expect(contextualNavigation.transactions.find((item) => item.href === "/title-companies")?.active).toContain("title-companies");
+    expect(contextualGroupFor("owner-queue")).toBeNull();
   });
 
   it("keeps engine tools in More instead of equal-weight tabs", () => {

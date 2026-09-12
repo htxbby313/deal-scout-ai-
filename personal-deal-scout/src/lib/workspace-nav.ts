@@ -7,10 +7,30 @@ export const primaryNavigation = [
 ] as const;
 
 export const contextualNavigation = {
-  deals: [["/opportunities", "Opportunities"], ["/properties", "Properties"], ["/pipeline", "Pipeline"], ["/research", "Map"]],
-  people: [["/seller-crm", "All Contacts"], ["/seller-crm?view=sellers", "Sellers"], ["/developers", "Buyers & Developers"]],
-  communications: [["/message-center", "Message Center"], ["/message-center?view=templates", "Templates"], ["/seller-crm?view=activity", "Activity"]],
-  transactions: [["/transactions", "Offers"], ["/contracts", "Contracts"], ["/disposition", "Assignments"], ["/title-companies", "Title Companies"], ["/transactions?view=closing", "Closing"]],
+  deals: [{ href: "/opportunities", label: "Opportunities", active: ["deals"] }, { href: "/properties", label: "Properties", active: ["properties"] }, { href: "/pipeline", label: "Pipeline", active: ["pipeline", "operations", "county-coverage"] }, { href: "/research", label: "Map", active: ["research"] }],
+  people: [{ href: "/seller-crm", label: "All Contacts", active: ["seller-crm"] }, { href: "/seller-crm?view=sellers", label: "Sellers", active: [] }, { href: "/developers", label: "Buyers & Developers", active: ["developers", "buyer-evidence", "disposition"] }],
+  communications: [{ href: "/message-center", label: "Message Center", active: ["message-center"] }, { href: "/message-center?view=templates", label: "Templates", active: [] }, { href: "/seller-crm?view=activity", label: "Activity", active: ["campaigns"] }],
+  transactions: [{ href: "/transactions", label: "Offers", active: ["transactions"] }, { href: "/contracts", label: "Contracts", active: ["contracts"] }, { href: "/disposition", label: "Assignments", active: [] }, { href: "/title-companies", label: "Title Companies", active: ["title-companies"] }, { href: "/transactions?view=closing", label: "Closing", active: [] }],
 } as const;
 
+export type ContextualGroup = keyof typeof contextualNavigation;
+
+const contextualGroupBySection: Partial<Record<WorkspaceSection, ContextualGroup>> = {
+  properties: "deals", pipeline: "deals", research: "deals", operations: "deals", "county-coverage": "deals", deals: "deals",
+  "seller-crm": "people", developers: "people", "buyer-evidence": "people", disposition: "people",
+  "message-center": "communications", campaigns: "communications",
+  transactions: "transactions", contracts: "transactions", "title-companies": "transactions",
+};
+
+export function contextualGroupFor(section: WorkspaceSection) {
+  return contextualGroupBySection[section] ?? null;
+}
+
 export const moreNavigation = [["/agents", "Agent activity"], ["/executive", "Reports"], ["/profitability", "Profitability"], ["/settings", "Settings"]] as const;
+export type WorkspaceSection =
+  | "owner-queue" | "governance" | "contracts" | "executive"
+  | "profitability" | "profit-priority" | "campaigns" | "seller-crm"
+  | "county-coverage" | "pipeline" | "agents" | "buyer-evidence"
+  | "transactions" | "title-companies" | "operations" | "disposition"
+  | "research" | "developers" | "properties" | "settings" | "deals"
+  | "message-center";
