@@ -1,6 +1,7 @@
 const { spawnSync } = require("node:child_process");
+const { directDatabaseUrl, runtimeDatabaseUrl } = require("./database-env.cjs");
 
-const hasDatabaseUrl = Boolean(process.env.DIRECT_URL || process.env.DATABASE_URL);
+const hasDatabaseUrl = Boolean(directDatabaseUrl() || runtimeDatabaseUrl());
 const isVercelPreview = process.env.VERCEL_ENV === "preview";
 
 if (isVercelPreview) {
@@ -19,7 +20,7 @@ if (isVercelPreview) {
   }
 } else {
   console.log(
-    "Skipping Prisma migrations: no DATABASE_URL or DIRECT_URL is available during the build.",
+    "Skipping Prisma migrations: no supported PostgreSQL connection variable is available during the build.",
   );
 }
 

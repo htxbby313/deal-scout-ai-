@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 
 import { getPrisma } from "@/lib/prisma";
+import { resolveIntegrationEnvironment } from "@/lib/integration-env";
 import { canSendOutbound, propertyReadiness } from "@/lib/domain";
 import { logOperation } from "@/lib/operational-logging";
 import { developerRelationshipQualification } from "@/lib/developer-qualification";
@@ -1338,7 +1339,8 @@ export async function attemptProviderSend(approvalId: string) {
           configured: false,
         },
       });
-      const envConfigured = approval.channel === "EMAIL" ? Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) : approval.channel === "SMS" ? Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) : false;
+      const integrations = resolveIntegrationEnvironment();
+      const envConfigured = approval.channel === "EMAIL" ? Boolean(integrations.email.apiKey && integrations.email.from) : approval.channel === "SMS" ? Boolean(integrations.sms.accountSid && integrations.sms.authToken && integrations.sms.from) : false;
       const developer = approval.leadId ? null : await db.developer.findFirst({ where: { companyName: approval.recipientLabel }, select: { email: true, phone: true, communicationsEnabled: true } });
       const recipient = approval.channel === "EMAIL" ? approval.lead?.property.contactEmail || developer?.email : approval.channel === "SMS" ? approval.lead?.property.contactPhone || developer?.phone : null;
       const productionEmailEnabled = approval.channel === "EMAIL" && process.env.EMAIL_PROVIDER_ENABLED === "true" && process.env.DEAL_SCOUT_OUTBOUND_MODE === "ACTIVE";

@@ -1,12 +1,13 @@
 import { getPrisma } from "@/lib/prisma";
 import { ownerIsAuthenticated } from "@/lib/auth";
 import { evaluateGoogleVisualContextEnvironment } from "@/lib/google-visual-context";
+import { resolveIntegrationEnvironment } from "@/lib/integration-env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function googleApiKey() {
-  return process.env.GOOGLE_MAPS_SERVER_API_KEY?.trim() || "";
+  return resolveIntegrationEnvironment().googleMaps.serverApiKey || "";
 }
 
 function placeholder(message: string, status = 404) {

@@ -1,3 +1,5 @@
+import { resolveIntegrationEnvironment } from "@/lib/integration-env";
+
 export function evaluateGoogleVisualContext(input: {
   enabled: boolean;
   browserKeyConfigured: boolean;
@@ -51,7 +53,7 @@ export function evaluateGoogleVisualContextEnvironment(options?: {
   return evaluateGoogleVisualContext({
     enabled: enabled("GOOGLE_MAPS_ENABLED"),
     browserKeyConfigured: Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
-    serverKeyConfigured: Boolean(process.env.GOOGLE_MAPS_SERVER_API_KEY),
+    serverKeyConfigured: Boolean(resolveIntegrationEnvironment().googleMaps.serverApiKey),
     serverFeaturesRequired: options?.serverFeaturesRequired,
     serverApiRestrictionsVerified: enabled(
       "GOOGLE_MAPS_SERVER_API_RESTRICTIONS_VERIFIED",

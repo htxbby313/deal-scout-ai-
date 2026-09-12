@@ -1,14 +1,12 @@
 import { PrismaClient } from "@prisma/client";
+import { resolveIntegrationEnvironment } from "@/lib/integration-env";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 type DatabaseEnvironment = Record<string, string | undefined>;
 
 export function runtimeDatabaseUrl(environment: DatabaseEnvironment = process.env) {
-  return environment.NEON_POSTGRES_PRISMA_URL
-    || environment.NEON_DATABASE_URL
-    || environment.DATABASE_POSTGRES_PRISMA_URL
-    || environment.DATABASE_URL;
+  return resolveIntegrationEnvironment(environment).database.runtimeUrl;
 }
 
 function boundedInteger(raw: string | undefined, fallback: number, minimum: number, maximum: number) {

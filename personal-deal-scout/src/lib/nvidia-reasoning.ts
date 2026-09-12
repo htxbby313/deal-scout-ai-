@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { fetchWithRetry } from "@/lib/research-runtime";
+import { resolveIntegrationEnvironment } from "@/lib/integration-env";
 
 const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b";
@@ -54,9 +55,9 @@ function parseModelJson(content: string) {
 }
 
 export async function analyzeEvidenceWithNvidia(input: NvidiaEvidenceInput): Promise<NvidiaReasoningResult> {
-  const apiKey = process.env.NVIDIA_API_KEY?.trim();
+  const { apiKey, model: configuredModel } = resolveIntegrationEnvironment().nvidia;
   if (!apiKey) return { status: "unavailable", reason: "NVIDIA reasoning is not configured." };
-  const model = process.env.NVIDIA_REASONING_MODEL?.trim() || DEFAULT_MODEL;
+  const model = configuredModel || DEFAULT_MODEL;
   try {
     const response = await fetchWithRetry(NVIDIA_CHAT_URL, {
       method: "POST",

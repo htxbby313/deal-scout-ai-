@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { fetchValidatedJson, stableUnique } from "@/lib/research-runtime";
 import { isSafePublicEvidenceUrl } from "@/lib/research-freshness";
+import { resolveIntegrationEnvironment } from "@/lib/integration-env";
 
 const FIRECRAWL_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape";
 const FIRECRAWL_SEARCH_URL = "https://api.firecrawl.dev/v2/search";
@@ -54,7 +55,7 @@ export type FirecrawlPropertyPage = {
 export function firecrawlConfigured() {
   return (
     process.env.FIRECRAWL_ENABLED === "true" &&
-    Boolean(process.env.FIRECRAWL_API_KEY?.trim())
+    Boolean(resolveIntegrationEnvironment().firecrawl.apiKey)
   );
 }
 
@@ -69,7 +70,7 @@ export function firecrawlMaxRequestsPerRun() {
 export async function searchPropertySourcesWithFirecrawl(query: string) {
   if (!firecrawlConfigured())
     throw new Error("Firecrawl property research is not configured.");
-  const key = process.env.FIRECRAWL_API_KEY?.trim();
+  const key = resolveIntegrationEnvironment().firecrawl.apiKey;
   if (!key) throw new Error("Firecrawl property research is not configured.");
   const response = await fetchValidatedJson(FIRECRAWL_SEARCH_URL, firecrawlSearchSchema, {
     method: "POST",
@@ -99,7 +100,7 @@ export async function scrapePropertySourceWithFirecrawl(
   if (!isSafePublicEvidenceUrl(rawUrl))
     throw new Error("Firecrawl sources must be safe public HTTPS URLs.");
 
-  const key = process.env.FIRECRAWL_API_KEY?.trim();
+  const key = resolveIntegrationEnvironment().firecrawl.apiKey;
   if (!key) throw new Error("Firecrawl property research is not configured.");
 
   const response = await fetchValidatedJson(

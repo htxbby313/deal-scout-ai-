@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { fetchValidatedJson } from "@/lib/research-runtime";
+import { resolveIntegrationEnvironment } from "@/lib/integration-env";
 
 const ENDPOINT = "https://devapi.enformion.com/PropertyV2Search";
 export const ENFORMION_SOURCE_URL = "https://go.enformion.com/developer-apis/property-search/";
@@ -99,12 +100,12 @@ export function parseEnformionProperty(input: EnformionPropertyInput, payload: u
 }
 
 export function enformionConfigured() {
-  return Boolean(process.env.ENFORMION_ACCESS_PROFILE_NAME?.trim() && process.env.ENFORMION_ACCESS_PROFILE_PASSWORD?.trim());
+  const { username, password } = resolveIntegrationEnvironment().enformion;
+  return Boolean(username && password);
 }
 
 export async function researchPropertyWithEnformion(input: EnformionPropertyInput) {
-  const name = process.env.ENFORMION_ACCESS_PROFILE_NAME?.trim();
-  const password = process.env.ENFORMION_ACCESS_PROFILE_PASSWORD?.trim();
+  const { username: name, password } = resolveIntegrationEnvironment().enformion;
   if (!name || !password) return null;
   const payload = await fetchValidatedJson(ENDPOINT, responseSchema, {
     method: "POST",
