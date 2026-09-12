@@ -1,8 +1,13 @@
 const { spawnSync } = require("node:child_process");
 
 const hasDatabaseUrl = Boolean(process.env.DIRECT_URL || process.env.DATABASE_URL);
+const isVercelPreview = process.env.VERCEL_ENV === "preview";
 
-if (hasDatabaseUrl) {
+if (isVercelPreview) {
+  console.log(
+    "Skipping Prisma migrations: Vercel preview builds use the PR's Neon branch, which is migrated by CI.",
+  );
+} else if (hasDatabaseUrl) {
   const migration = spawnSync(
     process.execPath,
     ["--env-file-if-exists=.env", "scripts/prisma-direct.cjs", "migrate", "deploy"],
