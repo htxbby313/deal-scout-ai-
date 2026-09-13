@@ -59,6 +59,10 @@ export function resolveIntegrationEnvironment(environment: IntegrationEnvironmen
       apiKey: firstConfigured(environment, ["FIRECRAWL_API_KEY", "FIRECRAWL_KEY"])
         || firstProviderPrefixed(environment, "FIRECRAWL_API_KEY"),
     },
+    rentcast: {
+      apiKey: firstConfigured(environment, ["RENTCAST_API_KEY", "RENTCAST_KEY"])
+        || firstProviderPrefixed(environment, "RENTCAST_API_KEY"),
+    },
     enformion: {
       username: firstConfigured(environment, ["ENFORMION_ACCESS_PROFILE_NAME", "ENFORMION_USERNAME"]),
       password: firstConfigured(environment, ["ENFORMION_ACCESS_PROFILE_PASSWORD", "ENFORMION_PASSWORD"]),
